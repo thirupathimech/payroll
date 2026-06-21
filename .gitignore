@@ -1,0 +1,22 @@
+.DS_Store
+Thumbs.db
+
+# Java
+backend/target/
+backend/.mvn/wrapper/maven-wrapper.jar
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
+
+# Environment
+.env
+*.local
+
+# IDE
+.idea/
+.vscode/

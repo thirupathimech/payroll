@@ -1,0 +1,168 @@
+export type RoleName = "ADMIN" | "HR" | "MANAGER" | "EMPLOYEE";
+export type EmploymentStatus = "ACTIVE" | "ON_LEAVE" | "PROBATION" | "TERMINATED";
+export type LeaveStatus = "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
+export type LeaveType = "ANNUAL" | "SICK" | "CASUAL" | "MATERNITY" | "PATERNITY" | "UNPAID";
+
+export interface PageResponse<T> {
+  content: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  last: boolean;
+}
+
+export interface UserSummary {
+  id: number;
+  email: string;
+  fullName: string;
+  role: RoleName;
+}
+
+export interface AuthResponse {
+  token: string;
+  tokenType: string;
+  expiresIn: number;
+  user: UserSummary;
+}
+
+export interface Department {
+  id: number;
+  name: string;
+  code: string;
+  description?: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DepartmentPayload {
+  name: string;
+  code: string;
+  description?: string;
+  active: boolean;
+}
+
+export interface Designation {
+  id: number;
+  title: string;
+  code: string;
+  description?: string;
+  departmentId: number;
+  departmentName: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DesignationPayload {
+  title: string;
+  code: string;
+  description?: string;
+  departmentId: number;
+  active: boolean;
+}
+
+export interface Employee {
+  id: number;
+  employeeCode: string;
+  firstName: string;
+  lastName: string;
+  fullName: string;
+  email: string;
+  phone?: string;
+  dateOfBirth?: string;
+  joiningDate: string;
+  baseSalary: number;
+  bankAccountNumber?: string;
+  taxIdentificationNumber?: string;
+  address?: string;
+  status: EmploymentStatus;
+  departmentId: number;
+  departmentName: string;
+  designationId: number;
+  designationTitle: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EmployeePayload {
+  employeeCode: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone?: string;
+  dateOfBirth?: string;
+  joiningDate: string;
+  baseSalary: number;
+  bankAccountNumber?: string;
+  taxIdentificationNumber?: string;
+  address?: string;
+  status: EmploymentStatus;
+  departmentId: number;
+  designationId: number;
+}
+
+export interface LeaveRequest {
+  id: number;
+  employeeId: number;
+  employeeCode: string;
+  employeeName: string;
+  leaveType: LeaveType;
+  status: LeaveStatus;
+  startDate: string;
+  endDate: string;
+  days: number;
+  reason: string;
+  reviewerEmail?: string;
+  reviewerComment?: string;
+  reviewedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LeavePayload {
+  employeeId: number;
+  leaveType: LeaveType;
+  startDate: string;
+  endDate: string;
+  reason: string;
+}
+
+export interface CompanySettings {
+  id: number;
+  companyName: string;
+  legalName?: string;
+  taxId?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  currency: string;
+  timezone: string;
+  payrollCutoffDay: number;
+  updatedAt: string;
+}
+
+export interface DashboardSummary {
+  totalEmployees: number;
+  activeEmployees: number;
+  activeDepartments: number;
+  pendingLeaves: number;
+  approvedLeavesThisMonth: number;
+  recentLeaves: LeaveRequest[];
+}
+
+export interface AuditLog {
+  id: number;
+  actorEmail?: string;
+  action: string;
+  entityName?: string;
+  entityId?: string;
+  details?: string;
+  createdAt: string;
+}
+
+export interface ApiError {
+  message: string;
+  fieldErrors?: Record<string, string>;
+}
