@@ -26,6 +26,7 @@ public class EmployeeService {
     private final EmployeeRepository employeeRepository;
     private final DepartmentRepository departmentRepository;
     private final DesignationRepository designationRepository;
+    private final EmployeeDocumentService employeeDocumentService;
     private final AuditService auditService;
 
     @Transactional(readOnly = true)
@@ -64,6 +65,9 @@ public class EmployeeService {
     @Transactional
     public EmployeeResponse update(Long id, EmployeeRequest request) {
         Employee employee = findEmployee(id);
+        if (!employee.getEmployeeCode().equalsIgnoreCase(request.employeeCode().trim())) {
+            throw new BadRequestException("Employee code cannot be changed after creation");
+        }
         ensureUniqueEmployee(request.employeeCode(), request.email(), id);
         Department department = findDepartment(request.departmentId());
         Designation designation = findDesignation(request.designationId());
@@ -155,6 +159,7 @@ public class EmployeeService {
                 employee.getDepartment().getName(),
                 employee.getDesignation().getId(),
                 employee.getDesignation().getTitle(),
+                employeeDocumentService.hasProfilePhoto(employee.getId()),
                 employee.getCreatedAt(),
                 employee.getUpdatedAt()
         );

@@ -4,9 +4,10 @@ import { departmentApi, employeeApi } from "../api/payroll";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
+import { EmployeeAutocomplete } from "../components/ui/EmployeeAutocomplete";
 import { Input } from "../components/ui/Input";
 import { Modal } from "../components/ui/Modal";
-import { Select } from "../components/ui/Select";
+import { SearchableSelect } from "../components/ui/SearchableSelect";
 import { formatDate } from "../lib/format";
 import type { Department, Employee } from "../types";
 
@@ -23,6 +24,7 @@ interface EmployeeOption {
   id: number;
   employeeCode: string;
   fullName: string;
+  designationTitle: string;
   departmentId: number;
   departmentName: string;
 }
@@ -95,10 +97,10 @@ const seedDepartments: Department[] = [
 ];
 
 const seedEmployees: EmployeeOption[] = [
-  { id: 1, employeeCode: "EMP-001", fullName: "Aarav Sharma", departmentId: 1, departmentName: "Human Resources" },
-  { id: 2, employeeCode: "EMP-014", fullName: "Meera Iyer", departmentId: 2, departmentName: "Finance" },
-  { id: 3, employeeCode: "EMP-026", fullName: "Kabir Khan", departmentId: 3, departmentName: "Operations" },
-  { id: 4, employeeCode: "EMP-041", fullName: "Nisha Rao", departmentId: 3, departmentName: "Operations" },
+  { id: 1, employeeCode: "EMP-001", fullName: "Aarav Sharma", designationTitle: "HR Executive", departmentId: 1, departmentName: "Human Resources" },
+  { id: 2, employeeCode: "EMP-014", fullName: "Meera Iyer", designationTitle: "Payroll Analyst", departmentId: 2, departmentName: "Finance" },
+  { id: 3, employeeCode: "EMP-026", fullName: "Kabir Khan", designationTitle: "Shift Lead", departmentId: 3, departmentName: "Operations" },
+  { id: 4, employeeCode: "EMP-041", fullName: "Nisha Rao", designationTitle: "Operations Associate", departmentId: 3, departmentName: "Operations" },
 ];
 
 const initialAssignments: ShiftAssignment[] = [
@@ -199,6 +201,7 @@ function employeeToOption(employee: Employee): EmployeeOption {
     id: employee.id,
     employeeCode: employee.employeeCode,
     fullName: employee.fullName,
+    designationTitle: employee.designationTitle,
     departmentId: employee.departmentId,
     departmentName: employee.departmentName,
   };
@@ -226,6 +229,7 @@ export function ShiftAssignmentPage() {
   const [departmentFilter, setDepartmentFilter] = useState("");
   const [employeeSearch, setEmployeeSearch] = useState("");
   const [selectedEmployeeId, setSelectedEmployeeId] = useState(String(seedEmployees[0].id));
+  const [selectedEmployeeCode, setSelectedEmployeeCode] = useState(seedEmployees[0].employeeCode);
   const [currentMonth, setCurrentMonth] = useState(new Date(2026, 5, 1));
   const [assignments, setAssignments] = useState<ShiftAssignment[]>(initialAssignments);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -248,6 +252,7 @@ export function ShiftAssignmentPage() {
           const nextEmployees = employeePage.content.map(employeeToOption);
           setEmployees(nextEmployees);
           setSelectedEmployeeId((current) => current || String(nextEmployees[0]?.id ?? ""));
+          setSelectedEmployeeCode((current) => current || nextEmployees[0]?.employeeCode || "");
           setForm((current) => ({
             ...current,
             employeeId: current.employeeId || String(nextEmployees[0]?.id ?? ""),
@@ -275,6 +280,7 @@ export function ShiftAssignmentPage() {
   useEffect(() => {
     if (visibleEmployees.length > 0 && !visibleEmployees.some((employee) => String(employee.id) === selectedEmployeeId)) {
       setSelectedEmployeeId(String(visibleEmployees[0].id));
+      setSelectedEmployeeCode(visibleEmployees[0].employeeCode);
     }
   }, [selectedEmployeeId, visibleEmployees]);
 
@@ -294,6 +300,13 @@ export function ShiftAssignmentPage() {
     });
     setError("");
     setDialogOpen(true);
+  }
+
+  function chooseEmployee(employeeCode: string) {
+    const employee = employees.find((item) => item.employeeCode === employeeCode);
+    setSelectedEmployeeCode(employeeCode);
+    setSelectedEmployeeId(employee ? String(employee.id) : "");
+    setForm((current) => ({ ...current, employeeId: employee ? String(employee.id) : "" }));
   }
 
   function closeAssignmentDialog() {
@@ -341,6 +354,7 @@ export function ShiftAssignmentPage() {
     });
     setCurrentMonth(parseDateKey(nextForm.startDate));
     setSelectedEmployeeId(nextForm.employeeId);
+    setSelectedEmployeeCode(employees.find((item) => String(item.id) === nextForm.employeeId)?.employeeCode || "");
     setDialogOpen(false);
     setWarningOpen(false);
     setPendingSave(null);
@@ -419,18 +433,12 @@ export function ShiftAssignmentPage() {
         </div>
 
         <div className="mt-6 grid gap-3 lg:grid-cols-[220px_1fr_280px]">
-          <Select
+          <SearchableSelect
             aria-label="Filter by department"
             value={departmentFilter}
-            onChange={(event) => setDepartmentFilter(event.target.value)}
-          >
-            <option value="">All departments</option>
-            {departments.map((department) => (
-              <option key={department.id} value={department.id}>
-                {department.name}
-              </option>
-            ))}
-          </Select>
+            options={[{ value: "", label: "All departments" }, ...departments.map((department) => ({ value: String(department.id), label: department.name, searchText: department.code }))]}
+            onChange={setDepartmentFilter}
+          />
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-ink/35" size={18} />
             <Input
@@ -441,17 +449,13 @@ export function ShiftAssignmentPage() {
               onChange={(event) => setEmployeeSearch(event.target.value)}
             />
           </div>
-          <Select
-            aria-label="Select employee schedule"
-            value={selectedEmployeeId}
-            onChange={(event) => setSelectedEmployeeId(event.target.value)}
-          >
-            {visibleEmployees.map((employee) => (
-              <option key={employee.id} value={employee.id}>
-                {employee.employeeCode} - {employee.fullName}
-              </option>
-            ))}
-          </Select>
+          <EmployeeAutocomplete
+            label=""
+            value={selectedEmployeeCode}
+            employees={visibleEmployees}
+            onChange={chooseEmployee}
+            placeholder="Select employee schedule"
+          />
         </div>
       </Card>
 
@@ -583,25 +587,23 @@ export function ShiftAssignmentPage() {
         description="Select a shift and date range. Each calendar day is stored as a separate assignment."
       >
         <form onSubmit={saveAssignment} className="space-y-4">
-          <Select
+          <EmployeeAutocomplete
             label="Employee"
-            value={form.employeeId}
-            onChange={(event) => setForm({ ...form, employeeId: event.target.value })}
-          >
-            {visibleEmployees.map((employee) => (
-              <option key={employee.id} value={employee.id}>
-                {employee.employeeCode} - {employee.fullName}
-              </option>
-            ))}
-          </Select>
+            value={employees.find((employee) => String(employee.id) === form.employeeId)?.employeeCode || selectedEmployeeCode}
+            employees={visibleEmployees}
+            onChange={chooseEmployee}
+          />
 
-          <Select label="Shift" value={form.shiftId} onChange={(event) => setForm({ ...form, shiftId: event.target.value })}>
-            {shifts.map((shift) => (
-              <option key={shift.id} value={shift.id}>
-                {shift.name} ({shift.startTime} to {shift.endTime})
-              </option>
-            ))}
-          </Select>
+          <SearchableSelect
+            label="Shift"
+            value={form.shiftId}
+            options={shifts.map((shift) => ({
+              value: String(shift.id),
+              label: `${shift.name} (${shift.startTime} to ${shift.endTime})`,
+              searchText: shift.code,
+            }))}
+            onChange={(value) => setForm({ ...form, shiftId: value })}
+          />
 
           <div className="grid gap-4 md:grid-cols-2">
             <Input

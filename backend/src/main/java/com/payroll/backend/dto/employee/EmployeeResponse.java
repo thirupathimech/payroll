@@ -25,6 +25,7 @@ public record EmployeeResponse(
         String departmentName,
         Long designationId,
         String designationTitle,
+        boolean hasProfilePhoto,
         Instant createdAt,
         Instant updatedAt
 ) {

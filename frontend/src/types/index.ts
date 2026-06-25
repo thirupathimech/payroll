@@ -82,6 +82,7 @@ export interface Employee {
   departmentName: string;
   designationId: number;
   designationTitle: string;
+  hasProfilePhoto: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -165,4 +166,19 @@ export interface AuditLog {
 export interface ApiError {
   message: string;
   fieldErrors?: Record<string, string>;
+}
+
+export interface EmployeeDocument {
+  id: number;
+  employeeId: number;
+  fileName: string;
+  originalFileName: string;
+  fileType: string;
+  fileExtension: string;
+  fileSize: number;
+  documentCategory: string;
+  uploadedAt: string;
+  uploadedBy: string;
+  profilePhoto: boolean;
+  previewSupported: boolean;
 }

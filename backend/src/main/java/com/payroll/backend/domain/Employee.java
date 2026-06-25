@@ -30,7 +30,7 @@ public class Employee extends AuditableEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true, length = 40)
+    @Column(nullable = false, unique = true, length = 40, updatable = false)
     private String employeeCode;
 
     @Column(nullable = false, length = 100)

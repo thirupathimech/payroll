@@ -6,9 +6,10 @@ import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { DataTable, type Column } from "../components/ui/DataTable";
+import { EmployeeAutocomplete } from "../components/ui/EmployeeAutocomplete";
 import { Input } from "../components/ui/Input";
 import { Modal } from "../components/ui/Modal";
-import { Select } from "../components/ui/Select";
+import { SearchableSelect } from "../components/ui/SearchableSelect";
 import { Textarea } from "../components/ui/Textarea";
 import { formatDate } from "../lib/format";
 import { useDebounce } from "../hooks/useDebounce";
@@ -43,6 +44,7 @@ export function LeavePage() {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<LeavePayload>(initialForm);
+  const [selectedEmployeeCode, setSelectedEmployeeCode] = useState("");
   const [error, setError] = useState("");
   const debouncedSearch = useDebounce(search);
 
@@ -50,6 +52,7 @@ export function LeavePage() {
     employeeApi.search({ status: "ACTIVE", page: 0, size: 500 }).then((employeePage) => {
       setEmployees(employeePage.content);
       setForm((current) => ({ ...current, employeeId: current.employeeId || employeePage.content[0]?.id || 0 }));
+      setSelectedEmployeeCode((current) => current || employeePage.content[0]?.employeeCode || "");
     });
   }, []);
 
@@ -72,8 +75,15 @@ export function LeavePage() {
 
   function openCreate() {
     setForm({ ...initialForm, employeeId: employees[0]?.id || 0 });
+    setSelectedEmployeeCode(employees[0]?.employeeCode || "");
     setError("");
     setModalOpen(true);
+  }
+
+  function chooseEmployee(employeeCode: string) {
+    const employee = employees.find((item) => item.employeeCode === employeeCode);
+    setSelectedEmployeeCode(employeeCode);
+    setForm({ ...form, employeeId: employee?.id || 0 });
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -180,21 +190,15 @@ export function LeavePage() {
               }}
             />
           </div>
-          <Select
+          <SearchableSelect
             aria-label="Filter by leave status"
             value={statusFilter}
-            onChange={(event) => {
+            options={[{ value: "", label: "All statuses" }, ...leaveStatuses.map((status) => ({ value: status, label: status }))]}
+            onChange={(value) => {
               setPage(0);
-              setStatusFilter(event.target.value);
+              setStatusFilter(value);
             }}
-          >
-            <option value="">All statuses</option>
-            {leaveStatuses.map((status) => (
-              <option key={status} value={status}>
-                {status}
-              </option>
-            ))}
-          </Select>
+          />
         </div>
       </Card>
 
@@ -217,28 +221,18 @@ export function LeavePage() {
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
-            <Select
+            <EmployeeAutocomplete
               label="Employee"
-              value={form.employeeId}
-              onChange={(event) => setForm({ ...form, employeeId: Number(event.target.value) })}
-            >
-              {employees.map((employee) => (
-                <option key={employee.id} value={employee.id}>
-                  {employee.fullName} ({employee.employeeCode})
-                </option>
-              ))}
-            </Select>
-            <Select
+              value={selectedEmployeeCode}
+              employees={employees}
+              onChange={chooseEmployee}
+            />
+            <SearchableSelect
               label="Leave Type"
               value={form.leaveType}
-              onChange={(event) => setForm({ ...form, leaveType: event.target.value as LeaveType })}
-            >
-              {leaveTypes.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </Select>
+              options={leaveTypes.map((type) => ({ value: type, label: type }))}
+              onChange={(value) => setForm({ ...form, leaveType: value as LeaveType })}
+            />
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             <Input label="Start Date" type="date" value={form.startDate} onChange={(event) => setForm({ ...form, startDate: event.target.value })} />

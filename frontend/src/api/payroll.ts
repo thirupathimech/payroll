@@ -9,6 +9,7 @@ import type {
   Designation,
   DesignationPayload,
   Employee,
+  EmployeeDocument,
   EmployeePayload,
   EmploymentStatus,
   LeavePayload,
@@ -105,6 +106,62 @@ export const employeeApi = {
   },
   terminate: async (id: number) => {
     const { data } = await api.delete<{ message: string }>(`/employees/${id}`);
+    return data;
+  },
+  documents: async (id: number) => {
+    const { data } = await api.get<EmployeeDocument[]>(`/employees/${id}/documents`);
+    return data;
+  },
+  uploadDocument: async (
+    id: number,
+    payload: { file: File; documentCategory: string; replace?: boolean },
+    onUploadProgress?: (progress: number) => void,
+  ) => {
+    const formData = new FormData();
+    formData.append("file", payload.file);
+    formData.append("documentCategory", payload.documentCategory);
+    formData.append("replace", String(Boolean(payload.replace)));
+    const { data } = await api.post<EmployeeDocument>(`/employees/${id}/documents`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+      onUploadProgress: (event) => {
+        if (event.total && onUploadProgress) {
+          onUploadProgress(Math.round((event.loaded * 100) / event.total));
+        }
+      },
+    });
+    return data;
+  },
+  deleteDocument: async (employeeId: number, documentId: number) => {
+    const { data } = await api.delete<{ message: string }>(`/employees/${employeeId}/documents/${documentId}`);
+    return data;
+  },
+  downloadDocument: async (employeeId: number, documentId: number) => {
+    const { data } = await api.get<Blob>(`/employees/${employeeId}/documents/${documentId}/download`, { responseType: "blob" });
+    return data;
+  },
+  previewDocument: async (employeeId: number, documentId: number) => {
+    const { data } = await api.get<Blob>(`/employees/${employeeId}/documents/${documentId}/preview`, { responseType: "blob" });
+    return data;
+  },
+  uploadProfilePhoto: async (id: number, file: File, onUploadProgress?: (progress: number) => void) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const { data } = await api.post<EmployeeDocument>(`/employees/${id}/profile-photo`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+      onUploadProgress: (event) => {
+        if (event.total && onUploadProgress) {
+          onUploadProgress(Math.round((event.loaded * 100) / event.total));
+        }
+      },
+    });
+    return data;
+  },
+  getProfilePhoto: async (id: number) => {
+    const { data } = await api.get<Blob>(`/employees/${id}/profile-photo`, { responseType: "blob" });
+    return data;
+  },
+  deleteProfilePhoto: async (id: number) => {
+    const { data } = await api.delete<{ message: string }>(`/employees/${id}/profile-photo`);
     return data;
   },
 };
