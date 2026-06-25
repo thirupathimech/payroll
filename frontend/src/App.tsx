@@ -9,6 +9,8 @@ import { EmployeesPage } from "./pages/EmployeesPage";
 import { LeavePage } from "./pages/LeavePage";
 import { LoginPage } from "./pages/LoginPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { ShiftAssignmentPage } from "./pages/ShiftAssignmentPage";
+import { ShiftManagementPage } from "./pages/ShiftManagementPage";
 
 export default function App() {
   return (
@@ -20,6 +22,8 @@ export default function App() {
           <Route path="/employees" element={<EmployeesPage />} />
           <Route path="/departments" element={<DepartmentsPage />} />
           <Route path="/designations" element={<DesignationsPage />} />
+          <Route path="/shifts" element={<ShiftManagementPage />} />
+          <Route path="/shift-assignments" element={<ShiftAssignmentPage />} />
           <Route path="/leaves" element={<LeavePage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/audit-logs" element={<AuditLogsPage />} />

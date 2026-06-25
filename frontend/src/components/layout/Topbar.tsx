@@ -8,6 +8,8 @@ const mobileItems = [
   { label: "Dashboard", path: "/" },
   { label: "Employees", path: "/employees" },
   { label: "Departments", path: "/departments" },
+  { label: "Shifts", path: "/shifts" },
+  { label: "Assignments", path: "/shift-assignments" },
   { label: "Leaves", path: "/leaves" },
   { label: "Settings", path: "/settings" },
 ];
