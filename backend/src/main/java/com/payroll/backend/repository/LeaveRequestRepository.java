@@ -10,18 +10,23 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long> {
-    long countByStatus(LeaveStatus status);
+    long countByOrgCodeAndStatus(String orgCode, LeaveStatus status);
 
-    long countByStatusAndStartDateBetween(LeaveStatus status, LocalDate startDate, LocalDate endDate);
+    long countByOrgCodeAndStatusAndStartDateBetween(String orgCode, LeaveStatus status, LocalDate startDate, LocalDate endDate);
 
-    List<LeaveRequest> findTop5ByOrderByCreatedAtDesc();
+    List<LeaveRequest> findTop5ByOrgCodeOrderByCreatedAtDesc(String orgCode);
+
+    Optional<LeaveRequest> findByOrgCodeAndId(String orgCode, Long id);
 
     @Query("""
         select l from LeaveRequest l
         join l.employee e
-        where (:employeeId is null or e.id = :employeeId)
+        where l.orgCode = :orgCode
+          and e.orgCode = :orgCode
+          and (:employeeId is null or e.id = :employeeId)
           and (:status is null or l.status = :status)
           and (:search is null
             or lower(e.employeeCode) like lower(concat('%', :search, '%'))
@@ -29,6 +34,7 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long
             or lower(e.lastName) like lower(concat('%', :search, '%')))
         """)
     Page<LeaveRequest> search(
+            @Param("orgCode") String orgCode,
             @Param("search") String search,
             @Param("employeeId") Long employeeId,
             @Param("status") LeaveStatus status,

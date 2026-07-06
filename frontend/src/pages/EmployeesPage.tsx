@@ -1,5 +1,5 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { Download, Edit3, Eye, Plus, Search, Settings, Trash2, UploadCloud } from "lucide-react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AlertCircle, Download, Edit3, Eye, Plus, Search, Settings, Trash2, UploadCloud } from "lucide-react";
 import { getErrorMessage } from "../api/client";
 import { departmentApi, designationApi, employeeApi } from "../api/payroll";
 import { Badge } from "../components/ui/Badge";
@@ -356,6 +356,7 @@ export function EmployeesPage() {
   const [settingsMessage, setSettingsMessage] = useState("");
   const [thumbnailUrls, setThumbnailUrls] = useState<Record<number, string>>({});
   const [fileMessage, setFileMessage] = useState("");
+  const errorAlertRef = useRef<HTMLDivElement>(null);
   const debouncedSearch = useDebounce(search);
 
   const loadEmployeeDirectory = useCallback(() => {
@@ -471,6 +472,14 @@ export function EmployeesPage() {
     return allEmployees.some(
       (employee) => employee.employeeCode.toLowerCase() === code.trim().toLowerCase() && employee.id !== editing?.id,
     );
+  }
+
+  function showFormError(message: string) {
+    setError(message);
+    window.setTimeout(() => {
+      errorAlertRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      errorAlertRef.current?.focus({ preventScroll: true });
+    }, 0);
   }
 
   function createInitialForm(departmentId: number, designationId: number): EmployeeForm {
@@ -727,45 +736,45 @@ export function EmployeesPage() {
     const employeeCode = settings.codeMode === "AUTO" && !editing ? generatedCode : form.employeeCode.trim();
 
     if (!employeeCode || !form.firstName.trim() || !form.lastName.trim() || !form.officialEmail.trim()) {
-      setError("Employee code, first name, last name, and official email are required.");
+      showFormError("Employee code, first name, last name, and official email are required.");
       return;
     }
     if (!validateEmail(form.officialEmail) || (form.personalEmail && !validateEmail(form.personalEmail))) {
-      setError("Enter valid official and personal email addresses.");
+      showFormError("Enter valid official and personal email addresses.");
       return;
     }
     if (!validateMobile(form.mobileNumber) || (form.alternateMobileNumber && !validateMobile(form.alternateMobileNumber))) {
-      setError("Mobile numbers must be valid 10-digit Indian mobile numbers.");
+      showFormError("Mobile numbers must be valid 10-digit Indian mobile numbers.");
       return;
     }
     if (form.aadhaarNumber && !validateAadhaar(form.aadhaarNumber)) {
-      setError("Aadhaar number must contain exactly 12 digits.");
+      showFormError("Aadhaar number must contain exactly 12 digits.");
       return;
     }
     if (form.panNumber && !validatePan(form.panNumber)) {
-      setError("PAN number must follow the format ABCDE1234F.");
+      showFormError("PAN number must follow the format ABCDE1234F.");
       return;
     }
     if (form.ifscCode && !validateIfsc(form.ifscCode)) {
-      setError("IFSC code must follow the standard format, for example HDFC0001234.");
+      showFormError("IFSC code must follow the standard format, for example HDFC0001234.");
       return;
     }
     if (codeExists(employeeCode)) {
-      setError("Employee Code must be unique. Duplicate Employee Codes are not allowed.");
+      showFormError("Employee Code must be unique. Duplicate Employee Codes are not allowed.");
       return;
     }
     if (!form.departmentId || !form.designationId) {
-      setError("Department and designation are required.");
+      showFormError("Department and designation are required.");
       return;
     }
     if (!form.baseSalary || Number(form.baseSalary) <= 0) {
-      setError("Base salary must be greater than zero.");
+      showFormError("Base salary must be greater than zero.");
       return;
     }
     const pendingDocumentTypes = form.documents.filter((item) => item.file).map((item) => item.type.toLowerCase());
     const duplicatePendingType = pendingDocumentTypes.find((type, index) => pendingDocumentTypes.indexOf(type) !== index);
     if (duplicatePendingType) {
-      setError("Each uploaded document must use a unique document type. Change the document type before saving.");
+      showFormError("Each uploaded document must use a unique document type. Change the document type before saving.");
       return;
     }
 
@@ -813,7 +822,7 @@ export function EmployeesPage() {
       loadEmployees();
       loadEmployeeDirectory();
     } catch (apiError) {
-      setError(getErrorMessage(apiError));
+      showFormError(getErrorMessage(apiError));
     }
   }
 
@@ -1018,6 +1027,17 @@ export function EmployeesPage() {
         description="Employee data powers payroll, leave, shift, and reporting workflows."
       >
         <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <div
+              ref={errorAlertRef}
+              role="alert"
+              tabIndex={-1}
+              className="sticky top-0 z-20 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 shadow-sm outline-none"
+            >
+              <AlertCircle className="mt-0.5 shrink-0" size={18} />
+              <span>{error}</span>
+            </div>
+          )}
           <Section title="Personal Information" defaultOpen>
             <div className="grid gap-4 md:grid-cols-3">
               <Input
@@ -1336,7 +1356,6 @@ export function EmployeesPage() {
             </Section>
           )}
 
-          {error && <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
           <div className="sticky bottom-0 flex justify-end gap-3 border-t border-moss/10 bg-shell/95 py-4">
             <Button type="button" variant="secondary" onClick={() => setModalOpen(false)}>
               Cancel

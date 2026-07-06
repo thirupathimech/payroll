@@ -18,10 +18,7 @@ Open:
 - Backend API: http://localhost:8080
 - Swagger UI: http://localhost:8080/swagger-ui.html
 
-Default login:
-
-- Email: `admin@payroll.local`
-- Password: `Admin@123`
+Use the Register option on the login page to create the first organization. Registration generates a three-letter org code that is required for future logins.
 
 ## Run Separately
 
@@ -60,6 +57,8 @@ payroll/
 ## Features Implemented
 
 - JWT authentication and authorization
+- Organization registration with three-letter org code login
+- Org-scoped data isolation across application tables
 - Employee management
 - Department management
 - Designation management

@@ -2,6 +2,7 @@ package com.payroll.backend.controller;
 
 import com.payroll.backend.dto.auth.AuthResponse;
 import com.payroll.backend.dto.auth.LoginRequest;
+import com.payroll.backend.dto.auth.RegisterRequest;
 import com.payroll.backend.dto.auth.UserSummary;
 import com.payroll.backend.security.UserPrincipal;
 import com.payroll.backend.service.AuthService;
@@ -24,6 +25,11 @@ public class AuthController {
     @PostMapping("/login")
     public AuthResponse login(@Valid @RequestBody LoginRequest request) {
         return authService.login(request);
+    }
+
+    @PostMapping("/register")
+    public AuthResponse register(@Valid @RequestBody RegisterRequest request) {
+        return authService.register(request);
     }
 
     @GetMapping("/me")

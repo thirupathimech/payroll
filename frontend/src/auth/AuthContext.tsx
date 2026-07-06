@@ -8,7 +8,8 @@ interface AuthContextValue {
   user: UserSummary | null;
   token: string | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (orgCode: string, email: string, password: string) => Promise<void>;
+  register: (payload: { companyName: string; fullName: string; email: string; password: string }) => Promise<void>;
   logout: () => void;
 }
 
@@ -58,8 +59,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [token]);
 
-  async function login(email: string, password: string) {
-    const response = await authApi.login(email, password);
+  async function login(orgCode: string, email: string, password: string) {
+    const response = await authApi.login(orgCode, email, password);
+    localStorage.setItem(AUTH_TOKEN_KEY, response.token);
+    localStorage.setItem(AUTH_USER_KEY, JSON.stringify(response.user));
+    setToken(response.token);
+    setUser(response.user);
+  }
+
+  async function register(payload: { companyName: string; fullName: string; email: string; password: string }) {
+    const response = await authApi.register(payload);
     localStorage.setItem(AUTH_TOKEN_KEY, response.token);
     localStorage.setItem(AUTH_USER_KEY, JSON.stringify(response.user));
     setToken(response.token);
@@ -74,7 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const value = useMemo(
-    () => ({ user, token, loading, login, logout }),
+    () => ({ user, token, loading, login, register, logout }),
     [user, token, loading],
   );
 

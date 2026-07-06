@@ -23,12 +23,13 @@ public class DesignationService {
     private final DesignationRepository designationRepository;
     private final DepartmentRepository departmentRepository;
     private final AuditService auditService;
+    private final CurrentOrgService currentOrgService;
 
     @Transactional(readOnly = true)
     public PageResponse<DesignationResponse> search(String search, Long departmentId, Boolean active, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "title"));
         return PageResponse.from(designationRepository
-                .search(blankToNull(search), departmentId, active, pageable)
+                .search(currentOrgService.orgCode(), blankToNull(search), departmentId, active, pageable)
                 .map(this::toResponse));
     }
 
@@ -43,6 +44,7 @@ public class DesignationService {
         Department department = findDepartment(request.departmentId());
 
         Designation designation = new Designation();
+        designation.setOrgCode(currentOrgService.orgCode());
         apply(request, designation, department);
         Designation saved = designationRepository.save(designation);
         auditService.log("DESIGNATION_CREATED", "Designation", saved.getId(), saved.getTitle());
@@ -78,7 +80,7 @@ public class DesignationService {
     }
 
     private void ensureUniqueCode(String code, Long currentId) {
-        designationRepository.findByCodeIgnoreCase(code).ifPresent(existing -> {
+        designationRepository.findByOrgCodeAndCodeIgnoreCase(currentOrgService.orgCode(), code).ifPresent(existing -> {
             if (!existing.getId().equals(currentId)) {
                 throw new BadRequestException("Designation code already exists");
             }
@@ -86,12 +88,12 @@ public class DesignationService {
     }
 
     private Department findDepartment(Long id) {
-        return departmentRepository.findById(id)
+        return departmentRepository.findByOrgCodeAndId(currentOrgService.orgCode(), id)
                 .orElseThrow(() -> new ResourceNotFoundException("Department not found"));
     }
 
     private Designation findDesignation(Long id) {
-        return designationRepository.findById(id)
+        return designationRepository.findByOrgCodeAndId(currentOrgService.orgCode(), id)
                 .orElseThrow(() -> new ResourceNotFoundException("Designation not found"));
     }
 

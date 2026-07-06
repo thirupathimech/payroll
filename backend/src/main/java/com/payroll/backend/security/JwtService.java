@@ -43,6 +43,7 @@ public class JwtService {
                 .subject(principal.getUsername())
                 .claims(Map.of(
                         "userId", principal.id(),
+                        "orgCode", principal.orgCode(),
                         "fullName", principal.fullName(),
                         "role", role
                 ))
@@ -54,6 +55,10 @@ public class JwtService {
 
     public String extractUsername(String token) {
         return extractAllClaims(token).getSubject();
+    }
+
+    public String extractOrgCode(String token) {
+        return extractAllClaims(token).get("orgCode", String.class);
     }
 
     public boolean isTokenValid(String token, UserDetails userDetails) {

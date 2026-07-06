@@ -9,6 +9,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -17,14 +18,20 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @Entity
-@Table(name = "app_users")
+@Table(
+        name = "app_users",
+        uniqueConstraints = @UniqueConstraint(name = "uk_app_users_org_email", columnNames = {"org_code", "email"})
+)
 public class AppUser extends AuditableEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true, length = 160)
+    @Column(name = "org_code", nullable = false, length = 3)
+    private String orgCode;
+
+    @Column(nullable = false, length = 160)
     private String email;
 
     @Column(nullable = false, length = 160)

@@ -14,6 +14,7 @@ export interface PageResponse<T> {
 
 export interface UserSummary {
   id: number;
+  orgCode: string;
   email: string;
   fullName: string;
   role: RoleName;

@@ -55,108 +55,17 @@ interface PendingSave {
   conflicts: ShiftAssignment[];
 }
 
-const shifts: ShiftOption[] = [
-  {
-    id: 1,
-    name: "Morning Shift",
-    code: "MOR",
-    startTime: "06:00 AM",
-    endTime: "02:00 PM",
-    tone: "bg-emerald-100 text-emerald-800 border-emerald-200",
-  },
-  {
-    id: 2,
-    name: "Evening Shift",
-    code: "EVE",
-    startTime: "02:00 PM",
-    endTime: "10:00 PM",
-    tone: "bg-amber-100 text-amber-800 border-amber-200",
-  },
-  {
-    id: 3,
-    name: "Night Shift",
-    code: "NGT",
-    startTime: "10:00 PM",
-    endTime: "06:00 AM (Next Day)",
-    tone: "bg-lagoon/10 text-lagoon border-lagoon/20",
-  },
-  {
-    id: 4,
-    name: "Weekend Support",
-    code: "WKS",
-    startTime: "08:30 AM",
-    endTime: "02:30 PM",
-    tone: "bg-oat text-ink border-moss/10",
-  },
-];
+const shifts: ShiftOption[] = [];
 
-const seedDepartments: Department[] = [
-  { id: 1, name: "Human Resources", code: "HR", active: true, createdAt: "", updatedAt: "" },
-  { id: 2, name: "Finance", code: "FIN", active: true, createdAt: "", updatedAt: "" },
-  { id: 3, name: "Operations", code: "OPS", active: true, createdAt: "", updatedAt: "" },
-];
+const initialDepartments: Department[] = [];
 
-const seedEmployees: EmployeeOption[] = [
-  { id: 1, employeeCode: "EMP-001", fullName: "Aarav Sharma", designationTitle: "HR Executive", departmentId: 1, departmentName: "Human Resources" },
-  { id: 2, employeeCode: "EMP-014", fullName: "Meera Iyer", designationTitle: "Payroll Analyst", departmentId: 2, departmentName: "Finance" },
-  { id: 3, employeeCode: "EMP-026", fullName: "Kabir Khan", designationTitle: "Shift Lead", departmentId: 3, departmentName: "Operations" },
-  { id: 4, employeeCode: "EMP-041", fullName: "Nisha Rao", designationTitle: "Operations Associate", departmentId: 3, departmentName: "Operations" },
-];
+const initialEmployees: EmployeeOption[] = [];
 
-const initialAssignments: ShiftAssignment[] = [
-  {
-    id: 1,
-    employeeId: 1,
-    employeeCode: "EMP-001",
-    employeeName: "Aarav Sharma",
-    departmentId: 1,
-    departmentName: "Human Resources",
-    shiftId: 1,
-    shiftName: "Morning Shift",
-    shiftCode: "MOR",
-    date: "2026-06-10",
-  },
-  {
-    id: 2,
-    employeeId: 1,
-    employeeCode: "EMP-001",
-    employeeName: "Aarav Sharma",
-    departmentId: 1,
-    departmentName: "Human Resources",
-    shiftId: 3,
-    shiftName: "Night Shift",
-    shiftCode: "NGT",
-    date: "2026-06-11",
-  },
-  {
-    id: 3,
-    employeeId: 2,
-    employeeCode: "EMP-014",
-    employeeName: "Meera Iyer",
-    departmentId: 2,
-    departmentName: "Finance",
-    shiftId: 2,
-    shiftName: "Evening Shift",
-    shiftCode: "EVE",
-    date: "2026-06-12",
-  },
-  {
-    id: 4,
-    employeeId: 3,
-    employeeCode: "EMP-026",
-    employeeName: "Kabir Khan",
-    departmentId: 3,
-    departmentName: "Operations",
-    shiftId: 3,
-    shiftName: "Night Shift",
-    shiftCode: "NGT",
-    date: "2026-06-15",
-  },
-];
+const initialAssignments: ShiftAssignment[] = [];
 
 const initialForm: AssignmentForm = {
-  employeeId: String(seedEmployees[0].id),
-  shiftId: String(shifts[0].id),
+  employeeId: "",
+  shiftId: "",
   startDate: new Date().toISOString().slice(0, 10),
   endDate: new Date().toISOString().slice(0, 10),
 };
@@ -224,13 +133,13 @@ function buildCalendarDays(monthDate: Date) {
 }
 
 export function ShiftAssignmentPage() {
-  const [departments, setDepartments] = useState<Department[]>(seedDepartments);
-  const [employees, setEmployees] = useState<EmployeeOption[]>(seedEmployees);
+  const [departments, setDepartments] = useState<Department[]>(initialDepartments);
+  const [employees, setEmployees] = useState<EmployeeOption[]>(initialEmployees);
   const [departmentFilter, setDepartmentFilter] = useState("");
   const [employeeSearch, setEmployeeSearch] = useState("");
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState(String(seedEmployees[0].id));
-  const [selectedEmployeeCode, setSelectedEmployeeCode] = useState(seedEmployees[0].employeeCode);
-  const [currentMonth, setCurrentMonth] = useState(new Date(2026, 5, 1));
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
+  const [selectedEmployeeCode, setSelectedEmployeeCode] = useState("");
+  const [currentMonth, setCurrentMonth] = useState(new Date());
   const [assignments, setAssignments] = useState<ShiftAssignment[]>(initialAssignments);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [warningOpen, setWarningOpen] = useState(false);
@@ -294,7 +203,7 @@ export function ShiftAssignmentPage() {
   function openAssignmentDialog(dateKey: string) {
     setForm({
       employeeId: selectedEmployeeId,
-      shiftId: String(shifts[0].id),
+      shiftId: shifts[0] ? String(shifts[0].id) : "",
       startDate: dateKey,
       endDate: dateKey,
     });

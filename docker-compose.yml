@@ -27,8 +27,6 @@ services:
       DB_PASSWORD: payroll
       JWT_SECRET: local-compose-secret-key-local-compose-secret-key
       CORS_ALLOWED_ORIGINS: http://localhost:5173,http://localhost:3000
-      ADMIN_EMAIL: admin@payroll.local
-      ADMIN_PASSWORD: Admin@123
     ports:
       - "8080:8080"
     depends_on:

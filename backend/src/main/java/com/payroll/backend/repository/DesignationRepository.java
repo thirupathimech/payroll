@@ -10,20 +10,23 @@ import org.springframework.data.repository.query.Param;
 import java.util.Optional;
 
 public interface DesignationRepository extends JpaRepository<Designation, Long> {
-    boolean existsByCodeIgnoreCase(String code);
+    Optional<Designation> findByOrgCodeAndId(String orgCode, Long id);
 
-    Optional<Designation> findByCodeIgnoreCase(String code);
+    Optional<Designation> findByOrgCodeAndCodeIgnoreCase(String orgCode, String code);
 
     @Query("""
         select g from Designation g
         join g.department d
-        where (:search is null
+        where g.orgCode = :orgCode
+          and d.orgCode = :orgCode
+          and (:search is null
             or lower(g.title) like lower(concat('%', :search, '%'))
             or lower(g.code) like lower(concat('%', :search, '%')))
           and (:departmentId is null or d.id = :departmentId)
           and (:active is null or g.active = :active)
         """)
     Page<Designation> search(
+            @Param("orgCode") String orgCode,
             @Param("search") String search,
             @Param("departmentId") Long departmentId,
             @Param("active") Boolean active,

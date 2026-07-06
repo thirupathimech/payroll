@@ -19,4 +19,10 @@ public class CustomUserDetailsService implements UserDetailsService {
                 .map(UserPrincipal::from)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
     }
+
+    public UserDetails loadUserByEmailAndOrgCode(String email, String orgCode) throws UsernameNotFoundException {
+        return userRepository.findByOrgCodeAndEmailIgnoreCase(orgCode, email)
+                .map(UserPrincipal::from)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+    }
 }

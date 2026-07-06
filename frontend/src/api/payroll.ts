@@ -20,8 +20,12 @@ import type {
 } from "../types";
 
 export const authApi = {
-  login: async (email: string, password: string) => {
-    const { data } = await api.post<AuthResponse>("/auth/login", { email, password });
+  login: async (orgCode: string, email: string, password: string) => {
+    const { data } = await api.post<AuthResponse>("/auth/login", { orgCode, email, password });
+    return data;
+  },
+  register: async (payload: { companyName: string; fullName: string; email: string; password: string }) => {
+    const { data } = await api.post<AuthResponse>("/auth/register", payload);
     return data;
   },
   me: async () => {

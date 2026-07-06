@@ -6,6 +6,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -14,12 +15,18 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @Entity
-@Table(name = "company_settings")
+@Table(
+        name = "company_settings",
+        uniqueConstraints = @UniqueConstraint(name = "uk_company_settings_org", columnNames = "org_code")
+)
 public class CompanySetting extends AuditableEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(name = "org_code", nullable = false, length = 3)
+    private String orgCode;
 
     @Column(nullable = false, length = 180)
     private String companyName;

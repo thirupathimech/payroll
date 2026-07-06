@@ -24,6 +24,9 @@ public class AuditLog {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "org_code", nullable = false, length = 3)
+    private String orgCode;
+
     @Column(length = 160)
     private String actorEmail;
 

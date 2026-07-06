@@ -10,6 +10,7 @@ import java.util.List;
 
 public record UserPrincipal(
         Long id,
+        String orgCode,
         String email,
         String fullName,
         String password,
@@ -20,6 +21,7 @@ public record UserPrincipal(
     public static UserPrincipal from(AppUser user) {
         return new UserPrincipal(
                 user.getId(),
+                user.getOrgCode(),
                 user.getEmail(),
                 user.getFullName(),
                 user.getPasswordHash(),

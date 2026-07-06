@@ -32,12 +32,7 @@ interface EndTimeResult {
   nextDay: boolean;
 }
 
-const initialShifts: Shift[] = [
-  { id: 1, name: "General Shift", code: "GEN", startTime: "09:00", durationHours: 8, durationMinutes: 0, active: true },
-  { id: 2, name: "Evening Shift", code: "EVE", startTime: "14:00", durationHours: 8, durationMinutes: 30, active: true },
-  { id: 3, name: "Night Shift", code: "NGT", startTime: "22:00", durationHours: 5, durationMinutes: 0, active: true },
-  { id: 4, name: "Weekend Support", code: "WKS", startTime: "08:30", durationHours: 6, durationMinutes: 0, active: false },
-];
+const initialShifts: Shift[] = [];
 
 const initialForm: ShiftForm = {
   name: "",

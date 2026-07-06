@@ -28,6 +28,7 @@ public class EmployeeService {
     private final DesignationRepository designationRepository;
     private final EmployeeDocumentService employeeDocumentService;
     private final AuditService auditService;
+    private final CurrentOrgService currentOrgService;
 
     @Transactional(readOnly = true)
     public PageResponse<EmployeeResponse> search(
@@ -39,7 +40,7 @@ public class EmployeeService {
     ) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "firstName"));
         return PageResponse.from(employeeRepository
-                .search(blankToNull(search), status, departmentId, pageable)
+                .search(currentOrgService.orgCode(), blankToNull(search), status, departmentId, pageable)
                 .map(this::toResponse));
     }
 
@@ -56,6 +57,7 @@ public class EmployeeService {
         ensureDesignationBelongsToDepartment(designation, department);
 
         Employee employee = new Employee();
+        employee.setOrgCode(currentOrgService.orgCode());
         apply(request, employee, department, designation);
         Employee saved = employeeRepository.save(employee);
         auditService.log("EMPLOYEE_CREATED", "Employee", saved.getId(), saved.getEmployeeCode());
@@ -105,12 +107,13 @@ public class EmployeeService {
     }
 
     private void ensureUniqueEmployee(String employeeCode, String email, Long currentId) {
-        employeeRepository.findByEmployeeCodeIgnoreCase(employeeCode).ifPresent(existing -> {
+        String orgCode = currentOrgService.orgCode();
+        employeeRepository.findByOrgCodeAndEmployeeCodeIgnoreCase(orgCode, employeeCode).ifPresent(existing -> {
             if (!existing.getId().equals(currentId)) {
                 throw new BadRequestException("Employee code already exists");
             }
         });
-        employeeRepository.findByEmailIgnoreCase(email).ifPresent(existing -> {
+        employeeRepository.findByOrgCodeAndEmailIgnoreCase(orgCode, email).ifPresent(existing -> {
             if (!existing.getId().equals(currentId)) {
                 throw new BadRequestException("Employee email already exists");
             }
@@ -124,17 +127,17 @@ public class EmployeeService {
     }
 
     private Department findDepartment(Long id) {
-        return departmentRepository.findById(id)
+        return departmentRepository.findByOrgCodeAndId(currentOrgService.orgCode(), id)
                 .orElseThrow(() -> new ResourceNotFoundException("Department not found"));
     }
 
     private Designation findDesignation(Long id) {
-        return designationRepository.findById(id)
+        return designationRepository.findByOrgCodeAndId(currentOrgService.orgCode(), id)
                 .orElseThrow(() -> new ResourceNotFoundException("Designation not found"));
     }
 
     private Employee findEmployee(Long id) {
-        return employeeRepository.findById(id)
+        return employeeRepository.findByOrgCodeAndId(currentOrgService.orgCode(), id)
                 .orElseThrow(() -> new ResourceNotFoundException("Employee not found"));
     }
 

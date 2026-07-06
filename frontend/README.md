@@ -61,12 +61,7 @@ Open:
 http://localhost:5173
 ```
 
-Default login:
-
-```text
-Email: admin@payroll.local
-Password: Admin@123
-```
+Use Register to create a new organization. The generated three-letter org code is required with email and password when logging in.
 
 ## Available Scripts
 

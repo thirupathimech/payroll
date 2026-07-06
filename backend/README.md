@@ -27,7 +27,7 @@ backend/
 │   ├── dto/             # Request/response DTOs
 │   ├── security/        # JWT and Spring Security
 │   ├── exception/       # Global error handling
-│   └── config/          # Security, seed data, app config
+│   └── config/          # Security and app config
 └── src/main/resources/
     ├── application.yml
     └── db/migration/    # Flyway schema
@@ -68,12 +68,7 @@ Swagger:
 http://localhost:8080/swagger-ui.html
 ```
 
-Default seeded admin:
-
-```text
-Email: admin@payroll.local
-Password: Admin@123
-```
+Create the first admin from `POST /api/v1/auth/register` or the frontend Register option. The response includes a generated three-letter `orgCode` required by `POST /api/v1/auth/login`.
 
 ## Environment Variables
 
@@ -86,6 +81,7 @@ $env:DB_URL="jdbc:mysql://localhost:3306/payroll?createDatabaseIfNotExist=true&u
 $env:DB_USERNAME="payroll"
 $env:DB_PASSWORD="payroll"
 $env:JWT_SECRET="change-this-to-a-long-strong-production-secret-at-least-32-characters"
+$env:HIBERNATE_DDL_AUTO="update"
 mvn spring-boot:run
 ```
 
@@ -93,6 +89,7 @@ mvn spring-boot:run
 
 Authentication:
 
+- `POST /api/v1/auth/register`
 - `POST /api/v1/auth/login`
 - `GET /api/v1/auth/me`
 
@@ -158,6 +155,11 @@ Tables:
 - `leave_requests`
 - `company_settings`
 - `audit_logs`
+- `employee_documents`
+
+Organization-owned tables include `org_code` and authenticated API reads/writes are scoped to the logged-in org.
+
+By default, Hibernate runs with `ddl-auto=update`, so missing tables and new entity columns are created automatically when the app starts. Column/table drops should still be handled with Flyway migrations to avoid accidental data loss.
 
 ## Docker Run
 

@@ -14,6 +14,7 @@ public class CompanySettingsService {
 
     private final CompanySettingRepository companySettingRepository;
     private final AuditService auditService;
+    private final CurrentOrgService currentOrgService;
 
     @Transactional(readOnly = true)
     public CompanySettingsResponse get() {
@@ -39,15 +40,12 @@ public class CompanySettingsService {
     }
 
     private CompanySetting firstOrDefault() {
-        return companySettingRepository.findAll().stream()
-                .findFirst()
+        String orgCode = currentOrgService.orgCode();
+        return companySettingRepository.findByOrgCode(orgCode)
                 .orElseGet(() -> {
                     CompanySetting setting = new CompanySetting();
-                    setting.setCompanyName("Acme Payroll");
-                    setting.setLegalName("Acme Payroll Private Limited");
-                    setting.setEmail("hr@acmepayroll.local");
-                    setting.setPhone("+1 555 0100");
-                    setting.setAddress("100 Market Street, Suite 500");
+                    setting.setOrgCode(orgCode);
+                    setting.setCompanyName("New Organization");
                     setting.setCurrency("USD");
                     setting.setTimezone("UTC");
                     setting.setPayrollCutoffDay(25);

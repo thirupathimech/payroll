@@ -36,8 +36,8 @@ export function Sidebar() {
           <BadgeDollarSign size={24} />
         </div>
         <div>
-          <p className="font-display text-xl font-extrabold">Northstar</p>
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/45">Payroll OS</p>
+          <p className="font-display text-xl font-extrabold">Payroll</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/45">{user?.orgCode ?? "ORG"}</p>
         </div>
       </div>
 

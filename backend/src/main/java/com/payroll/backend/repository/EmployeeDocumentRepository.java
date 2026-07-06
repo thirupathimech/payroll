@@ -8,13 +8,13 @@ import java.util.List;
 import java.util.Optional;
 
 public interface EmployeeDocumentRepository extends JpaRepository<EmployeeDocument, Long> {
-    List<EmployeeDocument> findByEmployeeIdAndProfilePhotoFalseOrderByUploadedAtDesc(Long employeeId);
+    List<EmployeeDocument> findByOrgCodeAndEmployeeIdAndProfilePhotoFalseOrderByUploadedAtDesc(String orgCode, Long employeeId);
 
-    Optional<EmployeeDocument> findByEmployeeIdAndId(Long employeeId, Long id);
+    Optional<EmployeeDocument> findByOrgCodeAndEmployeeIdAndId(String orgCode, Long employeeId, Long id);
 
-    Optional<EmployeeDocument> findByEmployeeIdAndDocumentCategoryIgnoreCaseAndProfilePhotoFalse(Long employeeId, String documentCategory);
+    Optional<EmployeeDocument> findByOrgCodeAndEmployeeIdAndDocumentCategoryIgnoreCaseAndProfilePhotoFalse(String orgCode, Long employeeId, String documentCategory);
 
-    Optional<EmployeeDocument> findByEmployeeIdAndProfilePhotoTrue(Long employeeId);
+    Optional<EmployeeDocument> findByOrgCodeAndEmployeeIdAndProfilePhotoTrue(String orgCode, Long employeeId);
 
-    void deleteByEmployeeAndProfilePhotoTrue(Employee employee);
+    void deleteByOrgCodeAndEmployeeAndProfilePhotoTrue(String orgCode, Employee employee);
 }

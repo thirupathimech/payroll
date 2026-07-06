@@ -22,16 +22,17 @@ public class DepartmentService {
 
     private final DepartmentRepository departmentRepository;
     private final AuditService auditService;
+    private final CurrentOrgService currentOrgService;
 
     @Transactional(readOnly = true)
     public PageResponse<DepartmentResponse> search(String search, Boolean active, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "name"));
-        return PageResponse.from(departmentRepository.search(blankToNull(search), active, pageable).map(this::toResponse));
+        return PageResponse.from(departmentRepository.search(currentOrgService.orgCode(), blankToNull(search), active, pageable).map(this::toResponse));
     }
 
     @Transactional(readOnly = true)
     public List<DepartmentResponse> listActive() {
-        return departmentRepository.search(null, true, PageRequest.of(0, 500, Sort.by("name")))
+        return departmentRepository.search(currentOrgService.orgCode(), null, true, PageRequest.of(0, 500, Sort.by("name")))
                 .map(this::toResponse)
                 .getContent();
     }
@@ -45,6 +46,7 @@ public class DepartmentService {
     public DepartmentResponse create(DepartmentRequest request) {
         ensureUniqueNameAndCode(request.name(), request.code(), null);
         Department department = new Department();
+        department.setOrgCode(currentOrgService.orgCode());
         apply(request, department);
         Department saved = departmentRepository.save(department);
         auditService.log("DEPARTMENT_CREATED", "Department", saved.getId(), saved.getName());
@@ -71,6 +73,7 @@ public class DepartmentService {
 
     private Department findDepartment(Long id) {
         return departmentRepository.findById(id)
+                .filter(department -> department.getOrgCode().equals(currentOrgService.orgCode()))
                 .orElseThrow(() -> new ResourceNotFoundException("Department not found"));
     }
 
@@ -82,12 +85,13 @@ public class DepartmentService {
     }
 
     private void ensureUniqueNameAndCode(String name, String code, Long currentId) {
-        departmentRepository.findByNameIgnoreCase(name).ifPresent(existing -> {
+        String orgCode = currentOrgService.orgCode();
+        departmentRepository.findByOrgCodeAndNameIgnoreCase(orgCode, name).ifPresent(existing -> {
             if (!existing.getId().equals(currentId)) {
                 throw new BadRequestException("Department name already exists");
             }
         });
-        departmentRepository.findByCodeIgnoreCase(code).ifPresent(existing -> {
+        departmentRepository.findByOrgCodeAndCodeIgnoreCase(orgCode, code).ifPresent(existing -> {
             if (!existing.getId().equals(currentId)) {
                 throw new BadRequestException("Department code already exists");
             }

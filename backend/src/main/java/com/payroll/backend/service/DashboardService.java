@@ -20,18 +20,20 @@ public class DashboardService {
     private final DepartmentRepository departmentRepository;
     private final LeaveRequestRepository leaveRequestRepository;
     private final LeaveService leaveService;
+    private final CurrentOrgService currentOrgService;
 
     @Transactional(readOnly = true)
     public DashboardSummaryResponse summary() {
         LocalDate monthStart = LocalDate.now().withDayOfMonth(1);
         LocalDate monthEnd = monthStart.plusMonths(1).minusDays(1);
+        String orgCode = currentOrgService.orgCode();
 
         return new DashboardSummaryResponse(
-                employeeRepository.count(),
-                employeeRepository.countByStatus(EmploymentStatus.ACTIVE),
-                departmentRepository.countByActiveTrue(),
-                leaveRequestRepository.countByStatus(LeaveStatus.PENDING),
-                leaveRequestRepository.countByStatusAndStartDateBetween(LeaveStatus.APPROVED, monthStart, monthEnd),
+                employeeRepository.countByOrgCode(orgCode),
+                employeeRepository.countByOrgCodeAndStatus(orgCode, EmploymentStatus.ACTIVE),
+                departmentRepository.countByOrgCodeAndActiveTrue(orgCode),
+                leaveRequestRepository.countByOrgCodeAndStatus(orgCode, LeaveStatus.PENDING),
+                leaveRequestRepository.countByOrgCodeAndStatusAndStartDateBetween(orgCode, LeaveStatus.APPROVED, monthStart, monthEnd),
                 leaveService.recent()
         );
     }

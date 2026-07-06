@@ -11,21 +11,26 @@ import org.springframework.data.repository.query.Param;
 import java.util.Optional;
 
 public interface EmployeeRepository extends JpaRepository<Employee, Long> {
-    boolean existsByEmployeeCodeIgnoreCase(String employeeCode);
+    Optional<Employee> findByOrgCodeAndId(String orgCode, Long id);
 
-    boolean existsByEmailIgnoreCase(String email);
+    boolean existsByOrgCodeAndId(String orgCode, Long id);
 
-    Optional<Employee> findByEmployeeCodeIgnoreCase(String employeeCode);
+    Optional<Employee> findByOrgCodeAndEmployeeCodeIgnoreCase(String orgCode, String employeeCode);
 
-    Optional<Employee> findByEmailIgnoreCase(String email);
+    Optional<Employee> findByOrgCodeAndEmailIgnoreCase(String orgCode, String email);
 
-    long countByStatus(EmploymentStatus status);
+    long countByOrgCode(String orgCode);
+
+    long countByOrgCodeAndStatus(String orgCode, EmploymentStatus status);
 
     @Query("""
         select e from Employee e
         join e.department d
         join e.designation g
-        where (:search is null
+        where e.orgCode = :orgCode
+          and d.orgCode = :orgCode
+          and g.orgCode = :orgCode
+          and (:search is null
             or lower(e.employeeCode) like lower(concat('%', :search, '%'))
             or lower(e.firstName) like lower(concat('%', :search, '%'))
             or lower(e.lastName) like lower(concat('%', :search, '%'))
@@ -34,6 +39,7 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
           and (:departmentId is null or d.id = :departmentId)
         """)
     Page<Employee> search(
+            @Param("orgCode") String orgCode,
             @Param("search") String search,
             @Param("status") EmploymentStatus status,
             @Param("departmentId") Long departmentId,

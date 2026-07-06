@@ -13,6 +13,7 @@ import com.payroll.backend.exception.ResourceNotFoundException;
 import com.payroll.backend.repository.AppUserRepository;
 import com.payroll.backend.repository.EmployeeRepository;
 import com.payroll.backend.repository.LeaveRequestRepository;
+import com.payroll.backend.security.UserPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -34,18 +35,19 @@ public class LeaveService {
     private final EmployeeRepository employeeRepository;
     private final AppUserRepository appUserRepository;
     private final AuditService auditService;
+    private final CurrentOrgService currentOrgService;
 
     @Transactional(readOnly = true)
     public PageResponse<LeaveResponse> search(String search, Long employeeId, LeaveStatus status, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         return PageResponse.from(leaveRequestRepository
-                .search(blankToNull(search), employeeId, status, pageable)
+                .search(currentOrgService.orgCode(), blankToNull(search), employeeId, status, pageable)
                 .map(this::toResponse));
     }
 
     @Transactional(readOnly = true)
     public List<LeaveResponse> recent() {
-        return leaveRequestRepository.findTop5ByOrderByCreatedAtDesc().stream()
+        return leaveRequestRepository.findTop5ByOrgCodeOrderByCreatedAtDesc(currentOrgService.orgCode()).stream()
                 .map(this::toResponse)
                 .toList();
     }
@@ -58,10 +60,12 @@ public class LeaveService {
     @Transactional
     public LeaveResponse create(LeaveCreateRequest request) {
         validateDates(request.startDate(), request.endDate());
-        Employee employee = employeeRepository.findById(request.employeeId())
+        String orgCode = currentOrgService.orgCode();
+        Employee employee = employeeRepository.findByOrgCodeAndId(orgCode, request.employeeId())
                 .orElseThrow(() -> new ResourceNotFoundException("Employee not found"));
 
         LeaveRequest leaveRequest = new LeaveRequest();
+        leaveRequest.setOrgCode(orgCode);
         leaveRequest.setEmployee(employee);
         leaveRequest.setLeaveType(request.leaveType());
         leaveRequest.setStartDate(request.startDate());
@@ -100,15 +104,15 @@ public class LeaveService {
 
     private AppUser currentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null) {
+        if (authentication == null || !(authentication.getPrincipal() instanceof UserPrincipal principal)) {
             throw new BadRequestException("Reviewer is not authenticated");
         }
-        return appUserRepository.findByEmail(authentication.getName())
+        return appUserRepository.findByOrgCodeAndEmailIgnoreCase(principal.orgCode(), authentication.getName())
                 .orElseThrow(() -> new ResourceNotFoundException("Reviewer not found"));
     }
 
     private LeaveRequest findLeave(Long id) {
-        return leaveRequestRepository.findById(id)
+        return leaveRequestRepository.findByOrgCodeAndId(currentOrgService.orgCode(), id)
                 .orElseThrow(() -> new ResourceNotFoundException("Leave request not found"));
     }
 

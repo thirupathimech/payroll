@@ -49,11 +49,12 @@ public class EmployeeDocumentService {
     private final EmployeeRepository employeeRepository;
     private final EmployeeDocumentRepository employeeDocumentRepository;
     private final AuditService auditService;
+    private final CurrentOrgService currentOrgService;
 
     @Transactional(readOnly = true)
     public List<EmployeeDocumentResponse> listDocuments(Long employeeId) {
         ensureEmployeeExists(employeeId);
-        return employeeDocumentRepository.findByEmployeeIdAndProfilePhotoFalseOrderByUploadedAtDesc(employeeId)
+        return employeeDocumentRepository.findByOrgCodeAndEmployeeIdAndProfilePhotoFalseOrderByUploadedAtDesc(currentOrgService.orgCode(), employeeId)
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -72,7 +73,7 @@ public class EmployeeDocumentService {
         String category = normalizeCategory(documentCategory);
 
         employeeDocumentRepository
-                .findByEmployeeIdAndDocumentCategoryIgnoreCaseAndProfilePhotoFalse(employeeId, category)
+                .findByOrgCodeAndEmployeeIdAndDocumentCategoryIgnoreCaseAndProfilePhotoFalse(currentOrgService.orgCode(), employeeId, category)
                 .ifPresent(existing -> {
                     if (!replace) {
                         throw new BadRequestException("Document type already exists. Confirm replacement to upload a new version.");
@@ -88,7 +89,7 @@ public class EmployeeDocumentService {
 
     @Transactional(readOnly = true)
     public EmployeeDocument getDocument(Long employeeId, Long documentId) {
-        return employeeDocumentRepository.findByEmployeeIdAndId(employeeId, documentId)
+        return employeeDocumentRepository.findByOrgCodeAndEmployeeIdAndId(currentOrgService.orgCode(), employeeId, documentId)
                 .filter(document -> !document.isProfilePhoto())
                 .orElseThrow(() -> new ResourceNotFoundException("Employee document not found"));
     }
@@ -104,7 +105,7 @@ public class EmployeeDocumentService {
     public EmployeeDocumentResponse uploadProfilePhoto(Long employeeId, MultipartFile file, UserPrincipal principal) {
         Employee employee = findEmployee(employeeId);
         validateFile(file, MAX_PROFILE_PHOTO_SIZE, ALLOWED_PROFILE_TYPES);
-        employeeDocumentRepository.deleteByEmployeeAndProfilePhotoTrue(employee);
+        employeeDocumentRepository.deleteByOrgCodeAndEmployeeAndProfilePhotoTrue(currentOrgService.orgCode(), employee);
         employeeDocumentRepository.flush();
 
         EmployeeDocument saved = employeeDocumentRepository.save(toDocument(employee, file, "PROFILE_PHOTO", true, principal));
@@ -115,20 +116,20 @@ public class EmployeeDocumentService {
     @Transactional(readOnly = true)
     public EmployeeDocument getProfilePhoto(Long employeeId) {
         ensureEmployeeExists(employeeId);
-        return employeeDocumentRepository.findByEmployeeIdAndProfilePhotoTrue(employeeId)
+        return employeeDocumentRepository.findByOrgCodeAndEmployeeIdAndProfilePhotoTrue(currentOrgService.orgCode(), employeeId)
                 .orElseThrow(() -> new ResourceNotFoundException("Employee profile photo not found"));
     }
 
     @Transactional
     public void deleteProfilePhoto(Long employeeId) {
         Employee employee = findEmployee(employeeId);
-        employeeDocumentRepository.deleteByEmployeeAndProfilePhotoTrue(employee);
+        employeeDocumentRepository.deleteByOrgCodeAndEmployeeAndProfilePhotoTrue(currentOrgService.orgCode(), employee);
         auditService.log("EMPLOYEE_PROFILE_PHOTO_DELETED", "Employee", employee.getId(), employee.getEmployeeCode());
     }
 
     @Transactional(readOnly = true)
     public boolean hasProfilePhoto(Long employeeId) {
-        return employeeDocumentRepository.findByEmployeeIdAndProfilePhotoTrue(employeeId).isPresent();
+        return employeeDocumentRepository.findByOrgCodeAndEmployeeIdAndProfilePhotoTrue(currentOrgService.orgCode(), employeeId).isPresent();
     }
 
     public boolean isPreviewSupported(EmployeeDocument document) {
@@ -148,6 +149,7 @@ public class EmployeeDocumentService {
             String storedName = UUID.randomUUID() + (extension.isBlank() ? "" : "." + extension);
 
             EmployeeDocument document = new EmployeeDocument();
+            document.setOrgCode(employee.getOrgCode());
             document.setEmployee(employee);
             document.setFileName(storedName);
             document.setOriginalFileName(originalFileName);
@@ -194,13 +196,13 @@ public class EmployeeDocumentService {
     }
 
     private void ensureEmployeeExists(Long employeeId) {
-        if (!employeeRepository.existsById(employeeId)) {
+        if (!employeeRepository.existsByOrgCodeAndId(currentOrgService.orgCode(), employeeId)) {
             throw new ResourceNotFoundException("Employee not found");
         }
     }
 
     private Employee findEmployee(Long employeeId) {
-        return employeeRepository.findById(employeeId)
+        return employeeRepository.findByOrgCodeAndId(currentOrgService.orgCode(), employeeId)
                 .orElseThrow(() -> new ResourceNotFoundException("Employee not found"));
     }
 

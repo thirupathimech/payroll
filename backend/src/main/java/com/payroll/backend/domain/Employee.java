@@ -12,6 +12,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -23,14 +24,23 @@ import java.time.LocalDate;
 @Setter
 @NoArgsConstructor
 @Entity
-@Table(name = "employees")
+@Table(
+        name = "employees",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_employees_org_code", columnNames = {"org_code", "employee_code"}),
+                @UniqueConstraint(name = "uk_employees_org_email", columnNames = {"org_code", "email"})
+        }
+)
 public class Employee extends AuditableEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true, length = 40, updatable = false)
+    @Column(name = "org_code", nullable = false, length = 3)
+    private String orgCode;
+
+    @Column(nullable = false, length = 40, updatable = false)
     private String employeeCode;
 
     @Column(nullable = false, length = 100)
@@ -39,7 +49,7 @@ public class Employee extends AuditableEntity {
     @Column(nullable = false, length = 100)
     private String lastName;
 
-    @Column(nullable = false, unique = true, length = 160)
+    @Column(nullable = false, length = 160)
     private String email;
 
     @Column(length = 40)

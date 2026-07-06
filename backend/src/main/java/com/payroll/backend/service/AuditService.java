@@ -4,6 +4,7 @@ import com.payroll.backend.domain.AuditLog;
 import com.payroll.backend.dto.audit.AuditLogResponse;
 import com.payroll.backend.dto.common.PageResponse;
 import com.payroll.backend.repository.AuditLogRepository;
+import com.payroll.backend.security.UserPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -22,7 +23,17 @@ public class AuditService {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void log(String action, String entityName, Object entityId, String details) {
+        save(currentOrgCode(), action, entityName, entityId, details);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logForOrg(String orgCode, String action, String entityName, Object entityId, String details) {
+        save(orgCode, action, entityName, entityId, details);
+    }
+
+    private void save(String orgCode, String action, String entityName, Object entityId, String details) {
         AuditLog auditLog = new AuditLog();
+        auditLog.setOrgCode(orgCode);
         auditLog.setActorEmail(currentActorEmail());
         auditLog.setAction(action);
         auditLog.setEntityName(entityName);
@@ -34,7 +45,7 @@ public class AuditService {
     @Transactional(readOnly = true)
     public PageResponse<AuditLogResponse> list(int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        return PageResponse.from(auditLogRepository.findAllByOrderByCreatedAtDesc(pageable).map(this::toResponse));
+        return PageResponse.from(auditLogRepository.findByOrgCodeOrderByCreatedAtDesc(currentOrgCode(), pageable).map(this::toResponse));
     }
 
     private String currentActorEmail() {
@@ -43,6 +54,14 @@ public class AuditService {
             return "system";
         }
         return authentication.getName();
+    }
+
+    private String currentOrgCode() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof UserPrincipal principal)) {
+            return "SYS";
+        }
+        return principal.orgCode();
     }
 
     private AuditLogResponse toResponse(AuditLog auditLog) {

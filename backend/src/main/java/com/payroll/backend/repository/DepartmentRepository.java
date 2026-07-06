@@ -10,24 +10,24 @@ import org.springframework.data.repository.query.Param;
 import java.util.Optional;
 
 public interface DepartmentRepository extends JpaRepository<Department, Long> {
-    boolean existsByNameIgnoreCase(String name);
+    long countByOrgCodeAndActiveTrue(String orgCode);
 
-    boolean existsByCodeIgnoreCase(String code);
+    Optional<Department> findByOrgCodeAndId(String orgCode, Long id);
 
-    long countByActiveTrue();
+    Optional<Department> findByOrgCodeAndNameIgnoreCase(String orgCode, String name);
 
-    Optional<Department> findByNameIgnoreCase(String name);
-
-    Optional<Department> findByCodeIgnoreCase(String code);
+    Optional<Department> findByOrgCodeAndCodeIgnoreCase(String orgCode, String code);
 
     @Query("""
         select d from Department d
-        where (:search is null
+        where d.orgCode = :orgCode
+          and (:search is null
             or lower(d.name) like lower(concat('%', :search, '%'))
             or lower(d.code) like lower(concat('%', :search, '%')))
           and (:active is null or d.active = :active)
         """)
     Page<Department> search(
+            @Param("orgCode") String orgCode,
             @Param("search") String search,
             @Param("active") Boolean active,
             Pageable pageable

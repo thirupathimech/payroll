@@ -7,9 +7,13 @@ import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 
 export function LoginPage() {
-  const { login, token } = useAuth();
-  const [email, setEmail] = useState("admin@payroll.local");
-  const [password, setPassword] = useState("Admin@123");
+  const { login, register, token } = useAuth();
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [orgCode, setOrgCode] = useState("");
+  const [companyName, setCompanyName] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -21,14 +25,23 @@ export function LoginPage() {
     event.preventDefault();
     setError("");
 
-    if (!email || !password) {
-      setError("Email and password are required.");
+    if (mode === "login" && (!orgCode || !email || !password)) {
+      setError("Org code, email, and password are required.");
+      return;
+    }
+
+    if (mode === "register" && (!companyName || !fullName || !email || !password)) {
+      setError("Company name, full name, email, and password are required.");
       return;
     }
 
     setSubmitting(true);
     try {
-      await login(email, password);
+      if (mode === "login") {
+        await login(orgCode, email, password);
+      } else {
+        await register({ companyName, fullName, email, password });
+      }
     } catch (apiError) {
       setError(getErrorMessage(apiError));
     } finally {
@@ -44,10 +57,10 @@ export function LoginPage() {
             <BadgeDollarSign size={28} />
           </div>
           <p className="mt-8 max-w-xl font-display text-6xl font-extrabold leading-[1.02]">
-            Payroll control room for modern teams.
+            Payroll workspace for every organization.
           </p>
           <p className="mt-6 max-w-lg text-lg leading-8 text-white/62">
-            Manage people records, leave workflows, payroll settings, and audit trails from one secure workspace.
+            Register your company, receive a three-letter org code, and keep people records separated by workspace.
           </p>
         </div>
 
@@ -63,13 +76,56 @@ export function LoginPage() {
 
       <section className="flex items-center justify-center px-2 py-10 sm:px-8">
         <form onSubmit={handleSubmit} className="w-full max-w-md animate-rise rounded-[2rem] bg-white/78 p-8 shadow-card backdrop-blur-xl">
-          <p className="text-xs font-bold uppercase tracking-[0.24em] text-fern">Northstar Payroll</p>
-          <h1 className="mt-3 font-display text-4xl font-extrabold text-ink">Welcome back</h1>
+          <p className="text-xs font-bold uppercase tracking-[0.24em] text-fern">Payroll</p>
+          <h1 className="mt-3 font-display text-4xl font-extrabold text-ink">
+            {mode === "login" ? "Welcome back" : "Create workspace"}
+          </h1>
           <p className="mt-2 text-sm leading-6 text-ink/58">
-            Default seeded login is ready for local development.
+            {mode === "login"
+              ? "Sign in with your organization code."
+              : "Your organization code is generated automatically after registration."}
           </p>
 
+          <div className="mt-6 grid grid-cols-2 rounded-2xl bg-oat/70 p-1">
+            <button
+              type="button"
+              className={`rounded-xl px-4 py-2 text-sm font-bold transition ${mode === "login" ? "bg-white text-ink shadow-sm" : "text-ink/60"}`}
+              onClick={() => {
+                setMode("login");
+                setError("");
+              }}
+            >
+              Login
+            </button>
+            <button
+              type="button"
+              className={`rounded-xl px-4 py-2 text-sm font-bold transition ${mode === "register" ? "bg-white text-ink shadow-sm" : "text-ink/60"}`}
+              onClick={() => {
+                setMode("register");
+                setError("");
+              }}
+            >
+              Register
+            </button>
+          </div>
+
           <div className="mt-8 space-y-4">
+            {mode === "register" && (
+              <>
+                <Input
+                  label="Company name"
+                  name="companyName"
+                  value={companyName}
+                  onChange={(event) => setCompanyName(event.target.value)}
+                />
+                <Input
+                  label="Full name"
+                  name="fullName"
+                  value={fullName}
+                  onChange={(event) => setFullName(event.target.value)}
+                />
+              </>
+            )}
             <Input
               label="Email"
               name="email"
@@ -84,19 +140,22 @@ export function LoginPage() {
               value={password}
               onChange={(event) => setPassword(event.target.value)}
             />
+            {mode === "login" && (
+              <Input
+                label="Org code"
+                name="orgCode"
+                value={orgCode}
+                maxLength={3}
+                onChange={(event) => setOrgCode(event.target.value.toUpperCase())}
+              />
+            )}
           </div>
 
           {error && <p className="mt-4 rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
 
           <Button type="submit" className="mt-6 w-full py-3" disabled={submitting}>
-            {submitting ? "Signing in..." : "Sign in securely"}
+            {submitting ? "Please wait..." : mode === "login" ? "Sign in securely" : "Register organization"}
           </Button>
-
-          <div className="mt-5 rounded-2xl bg-oat/70 p-4 text-sm text-ink/65">
-            <p className="font-bold text-ink">Demo credentials</p>
-            <p>Email: admin@payroll.local</p>
-            <p>Password: Admin@123</p>
-          </div>
         </form>
       </section>
     </main>
