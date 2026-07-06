@@ -2,6 +2,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "re
 import { AlertCircle, Download, Edit3, Eye, Plus, Search, Settings, Trash2, UploadCloud } from "lucide-react";
 import { getErrorMessage } from "../api/client";
 import { branchApi, departmentApi, designationApi, employeeApi, employeeSettingsApi } from "../api/payroll";
+import { useAuth } from "../auth/AuthContext";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
@@ -14,6 +15,7 @@ import { Select } from "../components/ui/Select";
 import { Textarea } from "../components/ui/Textarea";
 import { formatCurrency, formatDate } from "../lib/format";
 import { useDebounce } from "../hooks/useDebounce";
+import { ADMIN_ROLES, HR_ROLES, hasRoleAccess } from "../lib/access";
 import type {
   Branch,
   Department,
@@ -332,6 +334,7 @@ function Section({
 }
 
 export function EmployeesPage() {
+  const { user } = useAuth();
   const [employees, setEmployees] = useState(emptyPage);
   const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -460,6 +463,8 @@ export function EmployeesPage() {
   );
 
   const generatedPreview = useMemo(() => employeeCodePattern(settings), [settings]);
+  const canManageEmployees = hasRoleAccess(user, HR_ROLES);
+  const canTerminateEmployees = hasRoleAccess(user, ADMIN_ROLES);
 
   function codeExists(code: string) {
     return allEmployees.some(
@@ -924,12 +929,20 @@ export function EmployeesPage() {
       header: "Actions",
       cell: (employee) => (
         <div className="flex gap-2">
-          <Button type="button" variant="secondary" className="px-3" onClick={() => openEdit(employee)}>
-            <Edit3 size={15} />
-          </Button>
-          <Button type="button" variant="danger" className="px-3" onClick={() => terminate(employee.id)}>
-            <Trash2 size={15} />
-          </Button>
+          {canManageEmployees ? (
+            <>
+              <Button type="button" variant="secondary" className="px-3" onClick={() => openEdit(employee)}>
+                <Edit3 size={15} />
+              </Button>
+              {canTerminateEmployees && (
+                <Button type="button" variant="danger" className="px-3" onClick={() => terminate(employee.id)}>
+                  <Trash2 size={15} />
+                </Button>
+              )}
+            </>
+          ) : (
+            <span className="text-sm font-semibold text-ink/45">View only</span>
+          )}
         </div>
       ),
     },
@@ -943,15 +956,17 @@ export function EmployeesPage() {
             <p className="text-sm font-bold uppercase tracking-[0.18em] text-fern">People</p>
             <h2 className="mt-2 font-display text-3xl font-extrabold text-ink">Employees</h2>
           </div>
-          <div className="flex flex-wrap gap-3">
-            <Button type="button" variant="secondary" className="px-3" onClick={() => setSettingsOpen(true)} aria-label="Employee settings">
-              <Settings size={18} />
-            </Button>
-            <Button type="button" onClick={openCreate}>
-              <Plus size={18} />
-              New Employee
-            </Button>
-          </div>
+          {canManageEmployees && (
+            <div className="flex flex-wrap gap-3">
+              <Button type="button" variant="secondary" className="px-3" onClick={() => setSettingsOpen(true)} aria-label="Employee settings">
+                <Settings size={18} />
+              </Button>
+              <Button type="button" onClick={openCreate}>
+                <Plus size={18} />
+                New Employee
+              </Button>
+            </div>
+          )}
         </div>
 
         <div className="mt-6 grid gap-3 lg:grid-cols-[1fr_210px_240px]">

@@ -1,17 +1,21 @@
 import { LogOut, Menu } from "lucide-react";
-import { Link, NavLink } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
+import { ADMIN_ROLES, HR_ROLES, MANAGER_ROLES, hasRoleAccess } from "../../lib/access";
 import { initials } from "../../lib/format";
 import { Button } from "../ui/Button";
 
 const mobileItems = [
   { label: "Dashboard", path: "/" },
   { label: "Employees", path: "/employees" },
-  { label: "Departments", path: "/departments" },
-  { label: "Shifts", path: "/shifts" },
-  { label: "Assignments", path: "/shift-assignments" },
-  { label: "Leaves", path: "/leaves" },
-  { label: "Settings", path: "/settings" },
+  { label: "Departments", path: "/departments", allowedRoles: HR_ROLES },
+  { label: "Designations", path: "/designations", allowedRoles: HR_ROLES },
+  { label: "Shifts", path: "/shifts", allowedRoles: HR_ROLES },
+  { label: "Assignments", path: "/shift-assignments", allowedRoles: MANAGER_ROLES },
+  { label: "Leaves", path: "/leaves", allowedRoles: MANAGER_ROLES },
+  { label: "Settings", path: "/settings", allowedRoles: ADMIN_ROLES },
+  { label: "Users", path: "/users", allowedRoles: ADMIN_ROLES },
+  { label: "Audit Logs", path: "/audit-logs", allowedRoles: ADMIN_ROLES },
 ];
 
 export function Topbar() {
@@ -46,30 +50,19 @@ export function Topbar() {
           Menu
         </summary>
         <div className="mt-3 grid gap-2 sm:grid-cols-3">
-          {mobileItems.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              className={({ isActive }) =>
-                `rounded-xl px-3 py-2 text-sm font-bold ${isActive ? "bg-moss text-white" : "bg-white text-moss"}`
-              }
-            >
-              {item.label}
-            </NavLink>
-          ))}
-          <Link to="/designations" className="rounded-xl bg-white px-3 py-2 text-sm font-bold text-moss">
-            Designations
-          </Link>
-          {user?.role === "ADMIN" && (
-            <Link to="/users" className="rounded-xl bg-white px-3 py-2 text-sm font-bold text-moss">
-              Users
-            </Link>
-          )}
-          {user?.role === "ADMIN" && (
-            <Link to="/audit-logs" className="rounded-xl bg-white px-3 py-2 text-sm font-bold text-moss">
-              Audit Logs
-            </Link>
-          )}
+          {mobileItems
+            .filter((item) => hasRoleAccess(user, item.allowedRoles))
+            .map((item) => (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                className={({ isActive }) =>
+                  `rounded-xl px-3 py-2 text-sm font-bold ${isActive ? "bg-moss text-white" : "bg-white text-moss"}`
+                }
+              >
+                {item.label}
+              </NavLink>
+            ))}
           <button className="rounded-xl bg-red-50 px-3 py-2 text-left text-sm font-bold text-red-700" onClick={logout}>
             Logout
           </button>

@@ -1,8 +1,10 @@
 import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
+import { hasRoleAccess } from "../../lib/access";
+import type { RoleName } from "../../types";
 
-export function ProtectedRoute() {
-  const { token, loading } = useAuth();
+export function ProtectedRoute({ allowedRoles }: { allowedRoles?: RoleName[] }) {
+  const { token, loading, user } = useAuth();
 
   if (loading) {
     return (
@@ -15,5 +17,9 @@ export function ProtectedRoute() {
     );
   }
 
-  return token ? <Outlet /> : <Navigate to="/login" replace />;
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return hasRoleAccess(user, allowedRoles) ? <Outlet /> : <Navigate to="/" replace />;
 }

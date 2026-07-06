@@ -12,6 +12,7 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { ShiftAssignmentPage } from "./pages/ShiftAssignmentPage";
 import { ShiftManagementPage } from "./pages/ShiftManagementPage";
 import { UsersPage } from "./pages/UsersPage";
+import { ADMIN_ROLES, HR_ROLES, MANAGER_ROLES } from "./lib/access";
 
 export default function App() {
   return (
@@ -21,14 +22,20 @@ export default function App() {
         <Route element={<AppShell />}>
           <Route index element={<DashboardPage />} />
           <Route path="/employees" element={<EmployeesPage />} />
-          <Route path="/users" element={<UsersPage />} />
-          <Route path="/departments" element={<DepartmentsPage />} />
-          <Route path="/designations" element={<DesignationsPage />} />
-          <Route path="/shifts" element={<ShiftManagementPage />} />
-          <Route path="/shift-assignments" element={<ShiftAssignmentPage />} />
-          <Route path="/leaves" element={<LeavePage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/audit-logs" element={<AuditLogsPage />} />
+          <Route element={<ProtectedRoute allowedRoles={ADMIN_ROLES} />}>
+            <Route path="/users" element={<UsersPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/audit-logs" element={<AuditLogsPage />} />
+          </Route>
+          <Route element={<ProtectedRoute allowedRoles={HR_ROLES} />}>
+            <Route path="/departments" element={<DepartmentsPage />} />
+            <Route path="/designations" element={<DesignationsPage />} />
+            <Route path="/shifts" element={<ShiftManagementPage />} />
+          </Route>
+          <Route element={<ProtectedRoute allowedRoles={MANAGER_ROLES} />}>
+            <Route path="/shift-assignments" element={<ShiftAssignmentPage />} />
+            <Route path="/leaves" element={<LeavePage />} />
+          </Route>
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

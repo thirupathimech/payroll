@@ -13,23 +13,25 @@ import {
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
+import { ADMIN_ROLES, HR_ROLES, MANAGER_ROLES, hasRoleAccess } from "../../lib/access";
+import type { RoleName } from "../../types";
 
-const navItems = [
+const navItems: Array<{ label: string; path: string; icon: typeof LayoutDashboard; allowedRoles?: RoleName[] }> = [
   { label: "Dashboard", path: "/", icon: LayoutDashboard },
   { label: "Employees", path: "/employees", icon: Users },
-  { label: "Users", path: "/users", icon: UserCog, adminOnly: true },
-  { label: "Departments", path: "/departments", icon: Building2 },
-  { label: "Designations", path: "/designations", icon: ClipboardList },
-  { label: "Shift Management", path: "/shifts", icon: Clock3 },
-  { label: "Shift Assignment", path: "/shift-assignments", icon: CalendarDays },
-  { label: "Leaves", path: "/leaves", icon: CalendarDays },
-  { label: "Settings", path: "/settings", icon: Settings },
-  { label: "Audit Logs", path: "/audit-logs", icon: ShieldCheck, adminOnly: true },
+  { label: "Users", path: "/users", icon: UserCog, allowedRoles: ADMIN_ROLES },
+  { label: "Departments", path: "/departments", icon: Building2, allowedRoles: HR_ROLES },
+  { label: "Designations", path: "/designations", icon: ClipboardList, allowedRoles: HR_ROLES },
+  { label: "Shift Management", path: "/shifts", icon: Clock3, allowedRoles: HR_ROLES },
+  { label: "Shift Assignment", path: "/shift-assignments", icon: CalendarDays, allowedRoles: MANAGER_ROLES },
+  { label: "Leaves", path: "/leaves", icon: CalendarDays, allowedRoles: MANAGER_ROLES },
+  { label: "Settings", path: "/settings", icon: Settings, allowedRoles: ADMIN_ROLES },
+  { label: "Audit Logs", path: "/audit-logs", icon: ShieldCheck, allowedRoles: ADMIN_ROLES },
 ];
 
 export function Sidebar() {
   const { user } = useAuth();
-  const visibleItems = navItems.filter((item) => !item.adminOnly || user?.role === "ADMIN");
+  const visibleItems = navItems.filter((item) => hasRoleAccess(user, item.allowedRoles));
 
   return (
     <aside className="hidden min-h-screen w-72 shrink-0 border-r border-white/60 bg-ink px-5 py-6 text-white lg:block">
