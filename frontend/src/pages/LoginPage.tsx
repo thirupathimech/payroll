@@ -12,7 +12,7 @@ export function LoginPage() {
   const [orgCode, setOrgCode] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -25,12 +25,12 @@ export function LoginPage() {
     event.preventDefault();
     setError("");
 
-    if (mode === "login" && (!orgCode || !email || !password)) {
-      setError("Org code, email, and password are required.");
+    if (mode === "login" && (!orgCode || !identifier || !password)) {
+      setError("Org code, username or email, and password are required.");
       return;
     }
 
-    if (mode === "register" && (!companyName || !fullName || !email || !password)) {
+    if (mode === "register" && (!companyName || !fullName || !identifier || !password)) {
       setError("Company name, full name, email, and password are required.");
       return;
     }
@@ -38,9 +38,9 @@ export function LoginPage() {
     setSubmitting(true);
     try {
       if (mode === "login") {
-        await login(orgCode, email, password);
+        await login(orgCode, identifier, password);
       } else {
-        await register({ companyName, fullName, email, password });
+        await register({ companyName, fullName, email: identifier, password });
       }
     } catch (apiError) {
       setError(getErrorMessage(apiError));
@@ -127,11 +127,11 @@ export function LoginPage() {
               </>
             )}
             <Input
-              label="Email"
-              name="email"
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              label={mode === "login" ? "Username or Email" : "Email"}
+              name="identifier"
+              type={mode === "login" ? "text" : "email"}
+              value={identifier}
+              onChange={(event) => setIdentifier(event.target.value)}
             />
             <Input
               label="Password"

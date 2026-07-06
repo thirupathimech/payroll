@@ -20,7 +20,11 @@ import lombok.Setter;
 @Entity
 @Table(
         name = "app_users",
-        uniqueConstraints = @UniqueConstraint(name = "uk_app_users_org_email", columnNames = {"org_code", "email"})
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_app_users_org_username", columnNames = {"org_code", "username"}),
+                @UniqueConstraint(name = "uk_app_users_org_email", columnNames = {"org_code", "email"}),
+                @UniqueConstraint(name = "uk_app_users_org_employee_code", columnNames = {"org_code", "employee_code"})
+        }
 )
 public class AppUser extends AuditableEntity {
 
@@ -31,8 +35,14 @@ public class AppUser extends AuditableEntity {
     @Column(name = "org_code", nullable = false, length = 3)
     private String orgCode;
 
+    @Column(nullable = false, length = 80)
+    private String username;
+
     @Column(nullable = false, length = 160)
     private String email;
+
+    @Column(name = "employee_code", length = 40)
+    private String employeeCode;
 
     @Column(nullable = false, length = 160)
     private String fullName;

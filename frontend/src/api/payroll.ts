@@ -1,5 +1,7 @@
 import { api } from "./client";
 import type {
+  AppUser,
+  AppUserPayload,
   AuditLog,
   AuthResponse,
   Branch,
@@ -276,6 +278,25 @@ export const shiftAssignmentApi = {
   },
   delete: async (id: number) => {
     const { data } = await api.delete<{ message: string }>(`/shift-assignments/${id}`);
+    return data;
+  },
+};
+
+export const userApi = {
+  search: async (params: { search?: string; enabled?: boolean; page?: number; size?: number }) => {
+    const { data } = await api.get<PageResponse<AppUser>>("/users", { params });
+    return data;
+  },
+  create: async (payload: AppUserPayload) => {
+    const { data } = await api.post<AppUser>("/users", payload);
+    return data;
+  },
+  update: async (id: number, payload: AppUserPayload) => {
+    const { data } = await api.put<AppUser>(`/users/${id}`, payload);
+    return data;
+  },
+  resetPassword: async (id: number) => {
+    const { data } = await api.post<{ message: string }>(`/users/${id}/reset-password`);
     return data;
   },
 };

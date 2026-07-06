@@ -3,13 +3,17 @@ CREATE TABLE app_users (
     org_code VARCHAR(3) NOT NULL,
     created_at DATETIME(6) NOT NULL,
     updated_at DATETIME(6) NOT NULL,
+    username VARCHAR(80) NOT NULL,
     email VARCHAR(160) NOT NULL,
+    employee_code VARCHAR(40),
     full_name VARCHAR(160) NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     role VARCHAR(40) NOT NULL,
     enabled BOOLEAN NOT NULL DEFAULT TRUE,
     PRIMARY KEY (id),
-    CONSTRAINT uk_app_users_org_email UNIQUE (org_code, email)
+    CONSTRAINT uk_app_users_org_username UNIQUE (org_code, username),
+    CONSTRAINT uk_app_users_org_email UNIQUE (org_code, email),
+    CONSTRAINT uk_app_users_org_employee_code UNIQUE (org_code, employee_code)
 );
 
 CREATE TABLE departments (

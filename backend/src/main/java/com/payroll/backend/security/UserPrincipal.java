@@ -11,6 +11,7 @@ import java.util.List;
 public record UserPrincipal(
         Long id,
         String orgCode,
+        String username,
         String email,
         String fullName,
         String password,
@@ -22,6 +23,7 @@ public record UserPrincipal(
         return new UserPrincipal(
                 user.getId(),
                 user.getOrgCode(),
+                user.getUsername(),
                 user.getEmail(),
                 user.getFullName(),
                 user.getPasswordHash(),
@@ -37,7 +39,7 @@ public record UserPrincipal(
 
     @Override
     public String getUsername() {
-        return email;
+        return username;
     }
 
     @Override

@@ -11,6 +11,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { ShiftAssignmentPage } from "./pages/ShiftAssignmentPage";
 import { ShiftManagementPage } from "./pages/ShiftManagementPage";
+import { UsersPage } from "./pages/UsersPage";
 
 export default function App() {
   return (
@@ -20,6 +21,7 @@ export default function App() {
         <Route element={<AppShell />}>
           <Route index element={<DashboardPage />} />
           <Route path="/employees" element={<EmployeesPage />} />
+          <Route path="/users" element={<UsersPage />} />
           <Route path="/departments" element={<DepartmentsPage />} />
           <Route path="/designations" element={<DesignationsPage />} />
           <Route path="/shifts" element={<ShiftManagementPage />} />

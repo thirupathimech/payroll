@@ -61,6 +61,11 @@ export function Topbar() {
             Designations
           </Link>
           {user?.role === "ADMIN" && (
+            <Link to="/users" className="rounded-xl bg-white px-3 py-2 text-sm font-bold text-moss">
+              Users
+            </Link>
+          )}
+          {user?.role === "ADMIN" && (
             <Link to="/audit-logs" className="rounded-xl bg-white px-3 py-2 text-sm font-bold text-moss">
               Audit Logs
             </Link>

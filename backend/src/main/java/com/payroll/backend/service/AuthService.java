@@ -41,8 +41,9 @@ public class AuthService {
     @Transactional
     public AuthResponse login(LoginRequest request) {
         String orgCode = normalizeOrgCode(request.orgCode());
-        String email = request.email().trim().toLowerCase(Locale.ROOT);
-        AppUser user = userRepository.findByOrgCodeAndEmailIgnoreCase(orgCode, email)
+        String identifier = request.email().trim().toLowerCase(Locale.ROOT);
+        AppUser user = userRepository.findByOrgCodeAndUsernameIgnoreCase(orgCode, identifier)
+                .or(() -> userRepository.findByOrgCodeAndEmailIgnoreCase(orgCode, identifier))
                 .orElseThrow(() -> new org.springframework.security.authentication.BadCredentialsException("Invalid credentials"));
         if (!user.isEnabled() || !passwordEncoder.matches(request.password(), user.getPasswordHash())) {
             throw new org.springframework.security.authentication.BadCredentialsException("Invalid credentials");
@@ -72,7 +73,9 @@ public class AuthService {
 
         AppUser admin = new AppUser();
         admin.setOrgCode(orgCode);
+        admin.setUsername(email);
         admin.setEmail(email);
+        admin.setEmployeeCode("ADMIN");
         admin.setFullName(request.fullName().trim());
         admin.setPasswordHash(passwordEncoder.encode(request.password()));
         admin.setRole(RoleName.ADMIN);
@@ -108,7 +111,7 @@ public class AuthService {
 
     @Transactional(readOnly = true)
     public UserSummary me(UserPrincipal principal) {
-        AppUser user = userRepository.findByOrgCodeAndEmailIgnoreCase(principal.orgCode(), principal.email())
+        AppUser user = userRepository.findByOrgCodeAndUsernameIgnoreCase(principal.orgCode(), principal.username())
                 .orElseThrow(() -> new IllegalStateException("Authenticated user not found"));
         return toSummary(user);
     }

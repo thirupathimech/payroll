@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   Settings,
   ShieldCheck,
+  UserCog,
   Users,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
@@ -16,6 +17,7 @@ import { useAuth } from "../../auth/AuthContext";
 const navItems = [
   { label: "Dashboard", path: "/", icon: LayoutDashboard },
   { label: "Employees", path: "/employees", icon: Users },
+  { label: "Users", path: "/users", icon: UserCog, adminOnly: true },
   { label: "Departments", path: "/departments", icon: Building2 },
   { label: "Designations", path: "/designations", icon: ClipboardList },
   { label: "Shift Management", path: "/shifts", icon: Clock3 },

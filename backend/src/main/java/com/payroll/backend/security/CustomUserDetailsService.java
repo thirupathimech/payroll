@@ -20,8 +20,8 @@ public class CustomUserDetailsService implements UserDetailsService {
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
     }
 
-    public UserDetails loadUserByEmailAndOrgCode(String email, String orgCode) throws UsernameNotFoundException {
-        return userRepository.findByOrgCodeAndEmailIgnoreCase(orgCode, email)
+    public UserDetails loadUserByUsernameAndOrgCode(String username, String orgCode) throws UsernameNotFoundException {
+        return userRepository.findByOrgCodeAndUsernameIgnoreCase(orgCode, username)
                 .map(UserPrincipal::from)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
     }

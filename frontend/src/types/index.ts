@@ -20,6 +20,24 @@ export interface UserSummary {
   role: RoleName;
 }
 
+export interface AppUser {
+  id: number;
+  username: string;
+  employeeCode: string;
+  fullName: string;
+  role: RoleName;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AppUserPayload {
+  username: string;
+  employeeCode: string;
+  role: RoleName;
+  enabled: boolean;
+}
+
 export interface AuthResponse {
   token: string;
   tokenType: string;
