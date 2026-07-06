@@ -1,5 +1,7 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Clock3, Edit3, Plus, Trash2 } from "lucide-react";
+import { getErrorMessage } from "../api/client";
+import { shiftApi } from "../api/payroll";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
@@ -7,16 +9,7 @@ import { DataTable, type Column } from "../components/ui/DataTable";
 import { Input } from "../components/ui/Input";
 import { Modal } from "../components/ui/Modal";
 import { Select } from "../components/ui/Select";
-
-interface Shift {
-  id: number;
-  name: string;
-  code: string;
-  startTime: string;
-  durationHours: number;
-  durationMinutes: number;
-  active: boolean;
-}
+import type { Shift } from "../types";
 
 interface ShiftForm {
   name: string;
@@ -101,6 +94,7 @@ function readDuration(form: ShiftForm) {
 
 export function ShiftManagementPage() {
   const [shifts, setShifts] = useState<Shift[]>(initialShifts);
+  const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Shift | null>(null);
   const [form, setForm] = useState<ShiftForm>(initialForm);
@@ -111,6 +105,19 @@ export function ShiftManagementPage() {
     () => calculateEndTime(form.startTime, hours, minutes),
     [form.startTime, hours, minutes],
   );
+
+  function loadShifts() {
+    setLoading(true);
+    shiftApi
+      .search({ page: 0, size: 500 })
+      .then((page) => setShifts(page.content))
+      .catch((apiError) => setError(getErrorMessage(apiError)))
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    loadShifts();
+  }, []);
 
   function openCreate() {
     setEditing(null);
@@ -131,7 +138,7 @@ export function ShiftManagementPage() {
     setError("");
   }
 
-  function handleSubmit(event: FormEvent) {
+  async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError("");
 
@@ -145,28 +152,39 @@ export function ShiftManagementPage() {
       return;
     }
 
-    const payload: Shift = {
-      id: editing?.id ?? Date.now(),
+    const payload = {
       name: form.name.trim(),
-      code: form.code.trim(),
+      code: form.code.trim().toUpperCase(),
       startTime: form.startTime,
       durationHours: hours,
       durationMinutes: minutes,
       active: form.active,
     };
 
-    setShifts((current) =>
-      editing ? current.map((shift) => (shift.id === editing.id ? payload : shift)) : [payload, ...current],
-    );
-    closeModal();
+    try {
+      if (editing) {
+        await shiftApi.update(editing.id, payload);
+      } else {
+        await shiftApi.create(payload);
+      }
+      closeModal();
+      loadShifts();
+    } catch (apiError) {
+      setError(getErrorMessage(apiError));
+    }
   }
 
-  function deleteShift(shift: Shift) {
+  async function deleteShift(shift: Shift) {
     if (!window.confirm(`Delete ${shift.name}?`)) {
       return;
     }
 
-    setShifts((current) => current.filter((item) => item.id !== shift.id));
+    try {
+      await shiftApi.deactivate(shift.id);
+      loadShifts();
+    } catch (apiError) {
+      setError(getErrorMessage(apiError));
+    }
   }
 
   const columns: Column<Shift>[] = [
@@ -246,7 +264,7 @@ export function ShiftManagementPage() {
       <DataTable
         rows={shifts}
         columns={columns}
-        loading={false}
+        loading={loading}
         emptyTitle="No shifts configured"
         page={0}
         totalPages={shifts.length > 0 ? 1 : 0}

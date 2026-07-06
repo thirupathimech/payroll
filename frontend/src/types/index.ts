@@ -78,6 +78,8 @@ export interface Employee {
   bankAccountNumber?: string;
   taxIdentificationNumber?: string;
   address?: string;
+  branchId?: number;
+  branchName?: string;
   status: EmploymentStatus;
   departmentId: number;
   departmentName: string;
@@ -100,9 +102,44 @@ export interface EmployeePayload {
   bankAccountNumber?: string;
   taxIdentificationNumber?: string;
   address?: string;
+  branchId?: number;
   status: EmploymentStatus;
   departmentId: number;
   designationId: number;
+}
+
+export type EmployeeCodeMode = "AUTO" | "MANUAL";
+
+export interface EmployeeSettings {
+  id: number;
+  codeMode: EmployeeCodeMode;
+  prefix: string;
+  suffix: string;
+  startingNumber: number;
+  padding: number;
+  updatedAt: string;
+}
+
+export interface EmployeeSettingsPayload {
+  codeMode: EmployeeCodeMode;
+  prefix: string;
+  suffix?: string;
+  startingNumber: number;
+  padding: number;
+}
+
+export interface Branch {
+  id: number;
+  name: string;
+  code?: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BranchPayload {
+  name: string;
+  code?: string;
 }
 
 export interface LeaveRequest {
@@ -162,6 +199,53 @@ export interface AuditLog {
   entityId?: string;
   details?: string;
   createdAt: string;
+}
+
+export interface Shift {
+  id: number;
+  name: string;
+  code: string;
+  startTime: string;
+  durationHours: number;
+  durationMinutes: number;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ShiftPayload {
+  name: string;
+  code: string;
+  startTime: string;
+  durationHours: number;
+  durationMinutes: number;
+  active: boolean;
+}
+
+export interface ShiftAssignment {
+  id: number;
+  employeeId: number;
+  employeeCode: string;
+  employeeName: string;
+  departmentId: number;
+  departmentName: string;
+  shiftId: number;
+  shiftName: string;
+  shiftCode: string;
+  startTime: string;
+  durationHours: number;
+  durationMinutes: number;
+  date: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ShiftAssignmentPayload {
+  employeeId: number;
+  shiftId: number;
+  startDate: string;
+  endDate: string;
+  overrideExisting: boolean;
 }
 
 export interface ApiError {

@@ -1,6 +1,7 @@
 package com.payroll.backend.service;
 
 import com.payroll.backend.domain.AppUser;
+import com.payroll.backend.domain.EmployeeSetting;
 import com.payroll.backend.domain.CompanySetting;
 import com.payroll.backend.domain.enums.RoleName;
 import com.payroll.backend.dto.auth.AuthResponse;
@@ -8,6 +9,7 @@ import com.payroll.backend.dto.auth.LoginRequest;
 import com.payroll.backend.dto.auth.RegisterRequest;
 import com.payroll.backend.dto.auth.UserSummary;
 import com.payroll.backend.repository.AppUserRepository;
+import com.payroll.backend.repository.EmployeeSettingRepository;
 import com.payroll.backend.repository.CompanySettingRepository;
 import com.payroll.backend.security.JwtService;
 import com.payroll.backend.security.UserPrincipal;
@@ -31,8 +33,10 @@ public class AuthService {
     private final JwtService jwtService;
     private final AppUserRepository userRepository;
     private final CompanySettingRepository companySettingRepository;
+    private final EmployeeSettingRepository employeeSettingRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuditService auditService;
+    private final BranchService branchService;
 
     @Transactional
     public AuthResponse login(LoginRequest request) {
@@ -84,6 +88,11 @@ public class AuthService {
         setting.setTimezone("UTC");
         setting.setPayrollCutoffDay(25);
         companySettingRepository.save(setting);
+
+        EmployeeSetting employeeSetting = new EmployeeSetting();
+        employeeSetting.setOrgCode(orgCode);
+        employeeSettingRepository.save(employeeSetting);
+        branchService.ensureDefaultBranch(orgCode);
 
         UserPrincipal principal = UserPrincipal.from(savedUser);
         Authentication authentication = new UsernamePasswordAuthenticationToken(

@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
+import java.util.List;
 
 public interface EmployeeRepository extends JpaRepository<Employee, Long> {
     Optional<Employee> findByOrgCodeAndId(String orgCode, Long id);
@@ -18,6 +19,9 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
     Optional<Employee> findByOrgCodeAndEmployeeCodeIgnoreCase(String orgCode, String employeeCode);
 
     Optional<Employee> findByOrgCodeAndEmailIgnoreCase(String orgCode, String email);
+
+    @Query("select e.employeeCode from Employee e where e.orgCode = :orgCode")
+    List<String> findEmployeeCodesByOrgCode(@Param("orgCode") String orgCode);
 
     long countByOrgCode(String orgCode);
 

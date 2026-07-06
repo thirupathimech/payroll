@@ -1,6 +1,7 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, RotateCcw, Search, Trash2 } from "lucide-react";
-import { departmentApi, employeeApi } from "../api/payroll";
+import { getErrorMessage } from "../api/client";
+import { departmentApi, employeeApi, shiftApi, shiftAssignmentApi } from "../api/payroll";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
@@ -9,16 +10,7 @@ import { Input } from "../components/ui/Input";
 import { Modal } from "../components/ui/Modal";
 import { SearchableSelect } from "../components/ui/SearchableSelect";
 import { formatDate } from "../lib/format";
-import type { Department, Employee } from "../types";
-
-interface ShiftOption {
-  id: number;
-  name: string;
-  code: string;
-  startTime: string;
-  endTime: string;
-  tone: string;
-}
+import type { Department, Employee, Shift, ShiftAssignment } from "../types";
 
 interface EmployeeOption {
   id: number;
@@ -27,19 +19,6 @@ interface EmployeeOption {
   designationTitle: string;
   departmentId: number;
   departmentName: string;
-}
-
-interface ShiftAssignment {
-  id: number;
-  employeeId: number;
-  employeeCode: string;
-  employeeName: string;
-  departmentId: number;
-  departmentName: string;
-  shiftId: number;
-  shiftName: string;
-  shiftCode: string;
-  date: string;
 }
 
 interface AssignmentForm {
@@ -54,8 +33,6 @@ interface PendingSave {
   dates: string[];
   conflicts: ShiftAssignment[];
 }
-
-const shifts: ShiftOption[] = [];
 
 const initialDepartments: Department[] = [];
 
@@ -105,6 +82,27 @@ function monthLabel(date: Date) {
   return new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(date);
 }
 
+function toClockLabel(time: string, durationHours = 0, durationMinutes = 0) {
+  const [hours, minutes] = time.split(":").map(Number);
+  const totalMinutes = hours * 60 + minutes + durationHours * 60 + durationMinutes;
+  const normalizedMinutes = ((totalMinutes % 1440) + 1440) % 1440;
+  const hour24 = Math.floor(normalizedMinutes / 60);
+  const minute = normalizedMinutes % 60;
+  const period = hour24 >= 12 ? "PM" : "AM";
+  const hour12 = hour24 % 12 || 12;
+  return `${String(hour12).padStart(2, "0")}:${String(minute).padStart(2, "0")} ${period}${totalMinutes >= 1440 ? " (Next Day)" : ""}`;
+}
+
+function shiftTone(index: number) {
+  const tones = [
+    "bg-emerald-100 text-emerald-800 border-emerald-200",
+    "bg-amber-100 text-amber-800 border-amber-200",
+    "bg-lagoon/10 text-lagoon border-lagoon/20",
+    "bg-oat text-ink border-moss/10",
+  ];
+  return tones[index % tones.length];
+}
+
 function employeeToOption(employee: Employee): EmployeeOption {
   return {
     id: employee.id,
@@ -135,6 +133,7 @@ function buildCalendarDays(monthDate: Date) {
 export function ShiftAssignmentPage() {
   const [departments, setDepartments] = useState<Department[]>(initialDepartments);
   const [employees, setEmployees] = useState<EmployeeOption[]>(initialEmployees);
+  const [shifts, setShifts] = useState<Shift[]>([]);
   const [departmentFilter, setDepartmentFilter] = useState("");
   const [employeeSearch, setEmployeeSearch] = useState("");
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
@@ -151,11 +150,13 @@ export function ShiftAssignmentPage() {
     Promise.all([
       departmentApi.active(),
       employeeApi.search({ status: "ACTIVE", page: 0, size: 500 }),
+      shiftApi.active(),
     ])
-      .then(([departmentItems, employeePage]) => {
+      .then(([departmentItems, employeePage, shiftItems]) => {
         if (departmentItems.length > 0) {
           setDepartments(departmentItems);
         }
+        setShifts(shiftItems);
 
         if (employeePage.content.length > 0) {
           const nextEmployees = employeePage.content.map(employeeToOption);
@@ -195,10 +196,27 @@ export function ShiftAssignmentPage() {
 
   const selectedEmployee = employees.find((employee) => employee.id === Number(selectedEmployeeId));
   const calendarDays = useMemo(() => buildCalendarDays(currentMonth), [currentMonth]);
+  const calendarStart = calendarDays[0]?.dateKey;
+  const calendarEnd = calendarDays[calendarDays.length - 1]?.dateKey;
   const selectedEmployeeAssignments = useMemo(
     () => assignments.filter((assignment) => String(assignment.employeeId) === selectedEmployeeId),
     [assignments, selectedEmployeeId],
   );
+
+  const loadAssignments = useCallback((employeeId = selectedEmployeeId, startDate = calendarStart, endDate = calendarEnd) => {
+    if (!employeeId || !startDate || !endDate) {
+      setAssignments([]);
+      return;
+    }
+    shiftAssignmentApi
+      .search({ employeeId: Number(employeeId), startDate, endDate })
+      .then(setAssignments)
+      .catch((apiError) => setError(getErrorMessage(apiError)));
+  }, [calendarEnd, calendarStart, selectedEmployeeId]);
+
+  useEffect(() => {
+    loadAssignments();
+  }, [loadAssignments]);
 
   function openAssignmentDialog(dateKey: string) {
     setForm({
@@ -227,39 +245,13 @@ export function ShiftAssignmentPage() {
     setCurrentMonth((current) => new Date(current.getFullYear(), current.getMonth() + amount, 1));
   }
 
-  function buildAssignments(nextForm: AssignmentForm, dates: string[]) {
-    const employee = employees.find((item) => item.id === Number(nextForm.employeeId));
-    const shift = shifts.find((item) => item.id === Number(nextForm.shiftId));
-
-    if (!employee || !shift) {
-      return [];
-    }
-
-    return dates.map((date, index) => ({
-      id: Date.now() + index,
-      employeeId: employee.id,
-      employeeCode: employee.employeeCode,
-      employeeName: employee.fullName,
-      departmentId: employee.departmentId,
-      departmentName: employee.departmentName,
-      shiftId: shift.id,
-      shiftName: shift.name,
-      shiftCode: shift.code,
-      date,
-    }));
-  }
-
-  function commitAssignments(nextForm: AssignmentForm, dates: string[]) {
-    const nextAssignments = buildAssignments(nextForm, dates);
-
-    setAssignments((current) => {
-      const dateSet = new Set(dates);
-      const employeeId = Number(nextForm.employeeId);
-      const preservedAssignments = current.filter(
-        (assignment) => assignment.employeeId !== employeeId || !dateSet.has(assignment.date),
-      );
-
-      return [...preservedAssignments, ...nextAssignments].sort((left, right) => left.date.localeCompare(right.date));
+  async function commitAssignments(nextForm: AssignmentForm, overrideExisting: boolean) {
+    await shiftAssignmentApi.create({
+      employeeId: Number(nextForm.employeeId),
+      shiftId: Number(nextForm.shiftId),
+      startDate: nextForm.startDate,
+      endDate: nextForm.endDate,
+      overrideExisting,
     });
     setCurrentMonth(parseDateKey(nextForm.startDate));
     setSelectedEmployeeId(nextForm.employeeId);
@@ -268,9 +260,10 @@ export function ShiftAssignmentPage() {
     setWarningOpen(false);
     setPendingSave(null);
     setError("");
+    loadAssignments(nextForm.employeeId);
   }
 
-  function saveAssignment(event: FormEvent) {
+  async function saveAssignment(event: FormEvent) {
     event.preventDefault();
     setError("");
 
@@ -300,15 +293,23 @@ export function ShiftAssignmentPage() {
       return;
     }
 
-    commitAssignments(form, dates);
+    try {
+      await commitAssignments(form, false);
+    } catch (apiError) {
+      setError(getErrorMessage(apiError));
+    }
   }
 
-  function confirmOverride() {
+  async function confirmOverride() {
     if (!pendingSave) {
       return;
     }
 
-    commitAssignments(pendingSave.form, pendingSave.dates);
+    try {
+      await commitAssignments(pendingSave.form, true);
+    } catch (apiError) {
+      setError(getErrorMessage(apiError));
+    }
   }
 
   function cancelOverride() {
@@ -316,12 +317,17 @@ export function ShiftAssignmentPage() {
     setPendingSave(null);
   }
 
-  function removeAssignment(assignment: ShiftAssignment) {
+  async function removeAssignment(assignment: ShiftAssignment) {
     if (!window.confirm(`Remove ${assignment.shiftName} for ${assignment.employeeName} on ${formatDate(assignment.date)}?`)) {
       return;
     }
 
-    setAssignments((current) => current.filter((item) => item.id !== assignment.id));
+    try {
+      await shiftAssignmentApi.delete(assignment.id);
+      loadAssignments();
+    } catch (apiError) {
+      setError(getErrorMessage(apiError));
+    }
   }
 
   const upcomingAssignments = selectedEmployeeAssignments
@@ -420,12 +426,12 @@ export function ShiftAssignmentPage() {
                   </span>
                   <div className="mt-2 space-y-1">
                     {dayAssignments.map((assignment) => {
-                      const shift = shifts.find((item) => item.id === assignment.shiftId);
+                      const shiftIndex = shifts.findIndex((item) => item.id === assignment.shiftId);
                       return (
                         <span
                           key={assignment.id}
                           className={`block truncate rounded-xl border px-2 py-1 text-xs font-bold ${
-                            shift?.tone ?? "border-slate-200 bg-slate-100 text-slate-700"
+                            shiftIndex >= 0 ? shiftTone(shiftIndex) : "border-slate-200 bg-slate-100 text-slate-700"
                           }`}
                         >
                           {assignment.shiftCode} - {assignment.shiftName}
@@ -504,11 +510,11 @@ export function ShiftAssignmentPage() {
           />
 
           <SearchableSelect
-            label="Shift"
-            value={form.shiftId}
+              label="Shift"
+              value={form.shiftId}
             options={shifts.map((shift) => ({
               value: String(shift.id),
-              label: `${shift.name} (${shift.startTime} to ${shift.endTime})`,
+              label: `${shift.name} (${shift.startTime} to ${toClockLabel(shift.startTime, shift.durationHours, shift.durationMinutes)})`,
               searchText: shift.code,
             }))}
             onChange={(value) => setForm({ ...form, shiftId: value })}

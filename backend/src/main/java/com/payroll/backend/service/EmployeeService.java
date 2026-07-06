@@ -1,5 +1,6 @@
 package com.payroll.backend.service;
 
+import com.payroll.backend.domain.Branch;
 import com.payroll.backend.domain.Department;
 import com.payroll.backend.domain.Designation;
 import com.payroll.backend.domain.Employee;
@@ -11,6 +12,7 @@ import com.payroll.backend.exception.BadRequestException;
 import com.payroll.backend.exception.ResourceNotFoundException;
 import com.payroll.backend.repository.DepartmentRepository;
 import com.payroll.backend.repository.DesignationRepository;
+import com.payroll.backend.repository.BranchRepository;
 import com.payroll.backend.repository.EmployeeRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -29,6 +31,9 @@ public class EmployeeService {
     private final EmployeeDocumentService employeeDocumentService;
     private final AuditService auditService;
     private final CurrentOrgService currentOrgService;
+    private final BranchService branchService;
+    private final BranchRepository branchRepository;
+    private final EmployeeSettingsService employeeSettingsService;
 
     @Transactional(readOnly = true)
     public PageResponse<EmployeeResponse> search(
@@ -51,14 +56,16 @@ public class EmployeeService {
 
     @Transactional
     public EmployeeResponse create(EmployeeRequest request) {
-        ensureUniqueEmployee(request.employeeCode(), request.email(), null);
+        String employeeCode = resolveEmployeeCodeForCreate(request);
+        ensureUniqueEmployee(employeeCode, request.email(), null);
         Department department = findDepartment(request.departmentId());
         Designation designation = findDesignation(request.designationId());
+        Branch branch = findBranch(request.branchId());
         ensureDesignationBelongsToDepartment(designation, department);
 
         Employee employee = new Employee();
         employee.setOrgCode(currentOrgService.orgCode());
-        apply(request, employee, department, designation);
+        apply(request, employee, department, designation, branch, employeeCode);
         Employee saved = employeeRepository.save(employee);
         auditService.log("EMPLOYEE_CREATED", "Employee", saved.getId(), saved.getEmployeeCode());
         return toResponse(saved);
@@ -73,9 +80,10 @@ public class EmployeeService {
         ensureUniqueEmployee(request.employeeCode(), request.email(), id);
         Department department = findDepartment(request.departmentId());
         Designation designation = findDesignation(request.designationId());
+        Branch branch = findBranch(request.branchId());
         ensureDesignationBelongsToDepartment(designation, department);
 
-        apply(request, employee, department, designation);
+        apply(request, employee, department, designation, branch, employee.getEmployeeCode());
         Employee saved = employeeRepository.save(employee);
         auditService.log("EMPLOYEE_UPDATED", "Employee", saved.getId(), saved.getEmployeeCode());
         return toResponse(saved);
@@ -89,8 +97,8 @@ public class EmployeeService {
         auditService.log("EMPLOYEE_TERMINATED", "Employee", employee.getId(), employee.getEmployeeCode());
     }
 
-    private void apply(EmployeeRequest request, Employee employee, Department department, Designation designation) {
-        employee.setEmployeeCode(request.employeeCode().trim().toUpperCase());
+    private void apply(EmployeeRequest request, Employee employee, Department department, Designation designation, Branch branch, String employeeCode) {
+        employee.setEmployeeCode(employeeCode);
         employee.setFirstName(request.firstName().trim());
         employee.setLastName(request.lastName().trim());
         employee.setEmail(request.email().trim().toLowerCase());
@@ -101,9 +109,22 @@ public class EmployeeService {
         employee.setBankAccountNumber(request.bankAccountNumber());
         employee.setTaxIdentificationNumber(request.taxIdentificationNumber());
         employee.setAddress(request.address());
+        employee.setBranch(branch);
         employee.setStatus(request.status());
         employee.setDepartment(department);
         employee.setDesignation(designation);
+    }
+
+    private String resolveEmployeeCodeForCreate(EmployeeRequest request) {
+        String requestedCode = request.employeeCode() == null ? "" : request.employeeCode().trim().toUpperCase();
+        String generatedCode = employeeSettingsService.generateNextEmployeeCode();
+        if (generatedCode != null) {
+            return generatedCode;
+        }
+        if (requestedCode.isBlank()) {
+            throw new BadRequestException("Employee code is required");
+        }
+        return requestedCode;
     }
 
     private void ensureUniqueEmployee(String employeeCode, String email, Long currentId) {
@@ -136,6 +157,14 @@ public class EmployeeService {
                 .orElseThrow(() -> new ResourceNotFoundException("Designation not found"));
     }
 
+    private Branch findBranch(Long id) {
+        if (id == null) {
+            return branchService.ensureDefaultBranch(currentOrgService.orgCode());
+        }
+        return branchRepository.findByOrgCodeAndId(currentOrgService.orgCode(), id)
+                .orElseThrow(() -> new ResourceNotFoundException("Branch not found"));
+    }
+
     private Employee findEmployee(Long id) {
         return employeeRepository.findByOrgCodeAndId(currentOrgService.orgCode(), id)
                 .orElseThrow(() -> new ResourceNotFoundException("Employee not found"));
@@ -157,6 +186,8 @@ public class EmployeeService {
                 employee.getBankAccountNumber(),
                 employee.getTaxIdentificationNumber(),
                 employee.getAddress(),
+                employee.getBranch() == null ? null : employee.getBranch().getId(),
+                employee.getBranch() == null ? null : employee.getBranch().getName(),
                 employee.getStatus(),
                 employee.getDepartment().getId(),
                 employee.getDepartment().getName(),

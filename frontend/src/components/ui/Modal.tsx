@@ -17,7 +17,7 @@ export function Modal({ title, description, open, onClose, children }: ModalProp
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-ink/45 p-4 backdrop-blur-sm">
-      <div className="max-h-[92vh] w-full max-w-6xl animate-rise overflow-y-auto rounded-[2rem] bg-shell p-6 shadow-card">
+      <div data-modal-scroll="true" className="max-h-[92vh] w-full max-w-6xl animate-rise overflow-y-auto rounded-[2rem] bg-shell p-6 shadow-card">
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
             <h2 className="font-display text-2xl font-extrabold text-ink">{title}</h2>

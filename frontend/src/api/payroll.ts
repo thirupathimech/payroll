@@ -2,6 +2,8 @@ import { api } from "./client";
 import type {
   AuditLog,
   AuthResponse,
+  Branch,
+  BranchPayload,
   CompanySettings,
   DashboardSummary,
   Department,
@@ -10,12 +12,18 @@ import type {
   DesignationPayload,
   Employee,
   EmployeeDocument,
+  EmployeeSettings,
+  EmployeeSettingsPayload,
   EmployeePayload,
   EmploymentStatus,
   LeavePayload,
   LeaveRequest,
   LeaveStatus,
   PageResponse,
+  Shift,
+  ShiftAssignment,
+  ShiftAssignmentPayload,
+  ShiftPayload,
   UserSummary,
 } from "../types";
 
@@ -208,6 +216,66 @@ export const settingsApi = {
 export const auditApi = {
   list: async (params: { page?: number; size?: number }) => {
     const { data } = await api.get<PageResponse<AuditLog>>("/audit-logs", { params });
+    return data;
+  },
+};
+
+export const employeeSettingsApi = {
+  get: async () => {
+    const { data } = await api.get<EmployeeSettings>("/settings/employee");
+    return data;
+  },
+  update: async (payload: EmployeeSettingsPayload) => {
+    const { data } = await api.put<EmployeeSettings>("/settings/employee", payload);
+    return data;
+  },
+};
+
+export const branchApi = {
+  active: async () => {
+    const { data } = await api.get<Branch[]>("/branches/active");
+    return data;
+  },
+  create: async (payload: BranchPayload) => {
+    const { data } = await api.post<Branch>("/branches", payload);
+    return data;
+  },
+};
+
+export const shiftApi = {
+  search: async (params: { search?: string; active?: boolean; page?: number; size?: number }) => {
+    const { data } = await api.get<PageResponse<Shift>>("/shifts", { params });
+    return data;
+  },
+  active: async () => {
+    const { data } = await api.get<Shift[]>("/shifts/active");
+    return data;
+  },
+  create: async (payload: ShiftPayload) => {
+    const { data } = await api.post<Shift>("/shifts", payload);
+    return data;
+  },
+  update: async (id: number, payload: ShiftPayload) => {
+    const { data } = await api.put<Shift>(`/shifts/${id}`, payload);
+    return data;
+  },
+  deactivate: async (id: number) => {
+    const { data } = await api.delete<{ message: string }>(`/shifts/${id}`);
+    return data;
+  },
+};
+
+export const shiftAssignmentApi = {
+  search: async (params: { employeeId?: number; startDate?: string; endDate?: string }) => {
+    const { data } = await api.get<ShiftAssignment[]>("/shift-assignments", { params });
+    return data;
+  },
+  create: async (payload: ShiftAssignmentPayload) => {
+    const { data } = await api.post<ShiftAssignment[]>("/shift-assignments", payload);
+    return data;
+  },
+  delete: async (id: number) => {
+    const { data } = await api.delete<{ message: string }>(`/shift-assignments/${id}`);
     return data;
   },
 };

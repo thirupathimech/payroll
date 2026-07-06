@@ -1,7 +1,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, Download, Edit3, Eye, Plus, Search, Settings, Trash2, UploadCloud } from "lucide-react";
 import { getErrorMessage } from "../api/client";
-import { departmentApi, designationApi, employeeApi } from "../api/payroll";
+import { branchApi, departmentApi, designationApi, employeeApi, employeeSettingsApi } from "../api/payroll";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
@@ -15,24 +15,17 @@ import { Textarea } from "../components/ui/Textarea";
 import { formatCurrency, formatDate } from "../lib/format";
 import { useDebounce } from "../hooks/useDebounce";
 import type {
+  Branch,
   Department,
   Designation,
   Employee,
+  EmployeeCodeMode,
   EmployeeDocument as EmployeeDocumentMeta,
+  EmployeeSettings,
   EmployeePayload,
   EmploymentStatus,
   PageResponse,
 } from "../types";
-
-type EmployeeCodeMode = "AUTO" | "MANUAL";
-
-interface EmployeeSettings {
-  codeMode: EmployeeCodeMode;
-  prefix: string;
-  suffix: string;
-  startingNumber: string;
-  padding: string;
-}
 
 interface AddressFields {
   line1: string;
@@ -103,7 +96,7 @@ type EmployeeForm = {
   employmentType: string;
   departmentId: number;
   designationId: number;
-  branch: string;
+  branchId: number;
   reportingManager: string;
   hrManager: string;
   joiningDate: string;
@@ -155,11 +148,13 @@ const emptyAddress: AddressFields = {
 };
 
 const initialSettings: EmployeeSettings = {
+  id: 0,
   codeMode: "MANUAL",
   prefix: "EMP",
   suffix: "",
-  startingNumber: "1",
-  padding: "4",
+  startingNumber: 1,
+  padding: 4,
+  updatedAt: "",
 };
 
 const initialForm: EmployeeForm = {
@@ -184,7 +179,7 @@ const initialForm: EmployeeForm = {
   employmentType: "Permanent",
   departmentId: 0,
   designationId: 0,
-  branch: "",
+  branchId: 0,
   reportingManager: "",
   hrManager: "",
   joiningDate: new Date().toISOString().slice(0, 10),
@@ -237,10 +232,9 @@ const documentTypes = [
   "Other Documents",
 ];
 
-function generateEmployeeCode(settings: EmployeeSettings, offset = 0) {
-  const number = Math.max(0, Number(settings.startingNumber) || 0) + offset;
-  const padding = Math.max(1, Number(settings.padding) || 1);
-  return `${settings.prefix}${String(number).padStart(padding, "0")}${settings.suffix}`;
+function employeeCodePattern(settings: EmployeeSettings) {
+  const padding = Math.max(1, settings.padding || 1);
+  return `${settings.prefix}${"0".repeat(padding)}${settings.suffix}`;
 }
 
 function calculateExperience(startDate: string, endDate: string) {
@@ -340,6 +334,7 @@ function Section({
 export function EmployeesPage() {
   const [employees, setEmployees] = useState(emptyPage);
   const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [designations, setDesignations] = useState<Designation[]>([]);
   const [search, setSearch] = useState("");
@@ -356,6 +351,8 @@ export function EmployeesPage() {
   const [settingsMessage, setSettingsMessage] = useState("");
   const [thumbnailUrls, setThumbnailUrls] = useState<Record<number, string>>({});
   const [fileMessage, setFileMessage] = useState("");
+  const [branchName, setBranchName] = useState("");
+  const [branchCode, setBranchCode] = useState("");
   const errorAlertRef = useRef<HTMLDivElement>(null);
   const debouncedSearch = useDebounce(search);
 
@@ -365,19 +362,23 @@ export function EmployeesPage() {
 
   useEffect(() => {
     Promise.all([
+      branchApi.active(),
       departmentApi.active(),
       designationApi.search({ active: true, page: 0, size: 500 }),
       employeeApi.search({ page: 0, size: 1000 }),
-    ]).then(([departmentItems, designationPage, employeePage]) => {
+      employeeSettingsApi.get(),
+    ]).then(([branchItems, departmentItems, designationPage, employeePage, employeeSettings]) => {
+      setBranches(branchItems);
       setDepartments(departmentItems);
       setDesignations(designationPage.content);
       setAllEmployees(employeePage.content);
+      setSettings(employeeSettings);
       const departmentId = departmentItems[0]?.id || 0;
       const designationId =
         designationPage.content.find((designation) => designation.departmentId === departmentId)?.id ||
         designationPage.content[0]?.id ||
         0;
-      setForm((current) => ({ ...current, departmentId, designationId }));
+      setForm((current) => ({ ...current, departmentId, designationId, branchId: branchItems[0]?.id || 0 }));
     });
   }, []);
 
@@ -454,19 +455,11 @@ export function EmployeesPage() {
     [],
   );
   const branchOptions = useMemo(
-    () =>
-      ["Head Office", "Regional Office", "Plant", "Remote", "Client Location"].map((branch) => ({
-        value: branch,
-        label: branch,
-      })),
-    [],
+    () => branches.map((branch) => ({ value: String(branch.id), label: branch.name, searchText: branch.code ?? "" })),
+    [branches],
   );
 
-  const generatedCode = useMemo(() => generateEmployeeCode(settings), [settings]);
-  const generatedPreview = useMemo(
-    () => [0, 1, 2].map((offset) => generateEmployeeCode(settings, offset)).join("  "),
-    [settings],
-  );
+  const generatedPreview = useMemo(() => employeeCodePattern(settings), [settings]);
 
   function codeExists(code: string) {
     return allEmployees.some(
@@ -477,17 +470,21 @@ export function EmployeesPage() {
   function showFormError(message: string) {
     setError(message);
     window.setTimeout(() => {
-      errorAlertRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      const modalScrollContainer = errorAlertRef.current?.closest("[data-modal-scroll='true']");
+      if (modalScrollContainer instanceof HTMLElement) {
+        modalScrollContainer.scrollTo({ top: 0, behavior: "smooth" });
+      }
       errorAlertRef.current?.focus({ preventScroll: true });
     }, 0);
   }
 
-  function createInitialForm(departmentId: number, designationId: number): EmployeeForm {
+  function createInitialForm(departmentId: number, designationId: number, branchId: number): EmployeeForm {
     return {
       ...initialForm,
-      employeeCode: settings.codeMode === "AUTO" ? generatedCode : "",
+      employeeCode: "",
       departmentId,
       designationId,
+      branchId,
     };
   }
 
@@ -495,8 +492,9 @@ export function EmployeesPage() {
     const departmentId = departments[0]?.id || 0;
     const designationId =
       designations.find((designation) => designation.departmentId === departmentId)?.id || designations[0]?.id || 0;
+    const branchId = branches[0]?.id || 0;
     setEditing(null);
-    setForm(createInitialForm(departmentId, designationId));
+    setForm(createInitialForm(departmentId, designationId, branchId));
     setError("");
     setFileMessage("");
     setModalOpen(true);
@@ -517,6 +515,7 @@ export function EmployeesPage() {
       baseSalary: String(employee.baseSalary),
       bankAccountNumber: employee.bankAccountNumber ?? "",
       panNumber: employee.taxIdentificationNumber ?? "",
+      branchId: employee.branchId ?? branches[0]?.id ?? 0,
       currentAddress: address,
       permanentAddress: address,
       profilePhotoPreviewUrl: "",
@@ -724,6 +723,7 @@ export function EmployeesPage() {
       bankAccountNumber: form.bankAccountNumber || undefined,
       taxIdentificationNumber: form.panNumber || undefined,
       address: addressToText(form.currentAddress) || undefined,
+      branchId: form.branchId || undefined,
       status: form.status,
       departmentId: form.departmentId,
       designationId: form.designationId,
@@ -733,9 +733,13 @@ export function EmployeesPage() {
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError("");
-    const employeeCode = settings.codeMode === "AUTO" && !editing ? generatedCode : form.employeeCode.trim();
+    const employeeCode = editing
+      ? form.employeeCode.trim()
+      : settings.codeMode === "AUTO"
+        ? ""
+        : form.employeeCode.trim();
 
-    if (!employeeCode || !form.firstName.trim() || !form.lastName.trim() || !form.officialEmail.trim()) {
+    if ((!employeeCode && (editing || settings.codeMode !== "AUTO")) || !form.firstName.trim() || !form.lastName.trim() || !form.officialEmail.trim()) {
       showFormError("Employee code, first name, last name, and official email are required.");
       return;
     }
@@ -759,7 +763,7 @@ export function EmployeesPage() {
       showFormError("IFSC code must follow the standard format, for example HDFC0001234.");
       return;
     }
-    if (codeExists(employeeCode)) {
+    if (employeeCode && codeExists(employeeCode)) {
       showFormError("Employee Code must be unique. Duplicate Employee Codes are not allowed.");
       return;
     }
@@ -786,7 +790,8 @@ export function EmployeesPage() {
       } else {
         savedEmployee = await employeeApi.create(payload);
         if (settings.codeMode === "AUTO") {
-          setSettings((current) => ({ ...current, startingNumber: String((Number(current.startingNumber) || 0) + 1) }));
+          const latestSettings = await employeeSettingsApi.get();
+          setSettings(latestSettings);
         }
       }
       if (form.deleteProfilePhoto && !form.profilePhotoFile) {
@@ -835,13 +840,46 @@ export function EmployeesPage() {
     loadEmployeeDirectory();
   }
 
-  function saveSettings(event: FormEvent) {
+  async function saveSettings(event: FormEvent) {
     event.preventDefault();
-    if (settings.codeMode === "AUTO" && Number(settings.padding) <= 0) {
+    if (settings.codeMode === "AUTO" && settings.padding <= 0) {
       setSettingsMessage("Number padding must be greater than zero.");
       return;
     }
-    setSettingsMessage("Employee code configuration saved.");
+    try {
+      const saved = await employeeSettingsApi.update({
+        codeMode: settings.codeMode,
+        prefix: settings.prefix,
+        suffix: settings.suffix,
+        startingNumber: settings.startingNumber,
+        padding: settings.padding,
+      });
+      setSettings(saved);
+      setSettingsMessage("Employee code configuration saved.");
+    } catch (apiError) {
+      setSettingsMessage(getErrorMessage(apiError));
+    }
+  }
+
+  async function createBranch() {
+    if (!branchName.trim()) {
+      setSettingsMessage("Branch name is required.");
+      return;
+    }
+    try {
+      const created = await branchApi.create({ name: branchName.trim(), code: branchCode.trim() || undefined });
+      const nextBranches = [...branches, created].sort((left, right) => left.name.localeCompare(right.name));
+      setBranches(nextBranches);
+      setBranchName("");
+      setBranchCode("");
+      setForm((current) => ({
+        ...current,
+        branchId: current.branchId || created.id,
+      }));
+      setSettingsMessage("Branch created successfully.");
+    } catch (apiError) {
+      setSettingsMessage(getErrorMessage(apiError));
+    }
   }
 
   const columns: Column<Employee>[] = [
@@ -993,24 +1031,49 @@ export function EmployeesPage() {
                       type="number"
                       min="0"
                       value={settings.startingNumber}
-                      onChange={(event) => setSettings({ ...settings, startingNumber: event.target.value })}
+                      onChange={(event) => setSettings({ ...settings, startingNumber: Number(event.target.value) || 0 })}
                     />
                     <Input
                       label="Number Padding"
                       type="number"
                       min="1"
                       value={settings.padding}
-                      onChange={(event) => setSettings({ ...settings, padding: event.target.value })}
+                      onChange={(event) => setSettings({ ...settings, padding: Number(event.target.value) || 1 })}
                     />
                   </div>
                   <div className="rounded-3xl bg-oat/70 p-4">
                     <p className="text-xs font-bold uppercase tracking-[0.18em] text-ink/45">Generated Code Preview</p>
-                    <p className="mt-2 font-display text-2xl font-extrabold text-ink">{generatedCode}</p>
-                    <p className="mt-1 text-sm font-semibold text-ink/55">{generatedPreview}</p>
+                    <p className="mt-2 font-display text-2xl font-extrabold text-ink">{generatedPreview}</p>
+                    <p className="mt-1 text-sm font-semibold text-ink/55">Next sequence is calculated from existing employee codes when you save.</p>
                   </div>
                 </>
               )}
               <p className="text-sm font-semibold text-ink/55">Employee Code uniqueness is validated before save.</p>
+            </div>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-[240px_1fr]">
+            <div className="rounded-3xl border border-moss/10 bg-white/70 p-4">
+              <p className="text-sm font-extrabold text-ink">Branches</p>
+              <p className="mt-2 text-sm leading-6 text-ink/55">Main Branch is available by default. Add more branches here when needed.</p>
+            </div>
+            <div className="space-y-4 rounded-3xl border border-moss/10 bg-white/70 p-4">
+              <div className="grid gap-4 md:grid-cols-[1fr_180px_auto]">
+                <Input label="Branch Name" value={branchName} onChange={(event) => setBranchName(event.target.value)} />
+                <Input label="Branch Code" value={branchCode} onChange={(event) => setBranchCode(event.target.value.toUpperCase())} />
+                <div className="flex items-end">
+                  <Button type="button" onClick={createBranch}>
+                    <Plus size={16} />
+                    Add Branch
+                  </Button>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {branches.map((branch) => (
+                  <span key={branch.id} className="rounded-full bg-oat/70 px-3 py-1 text-sm font-semibold text-ink/70">
+                    {branch.name}
+                  </span>
+                ))}
+              </div>
             </div>
           </div>
           {settingsMessage && <p className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">{settingsMessage}</p>}
@@ -1026,13 +1089,13 @@ export function EmployeesPage() {
         title={editing ? "Edit employee" : "Create employee"}
         description="Employee data powers payroll, leave, shift, and reporting workflows."
       >
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="relative space-y-4">
           {error && (
             <div
               ref={errorAlertRef}
               role="alert"
               tabIndex={-1}
-              className="sticky top-0 z-20 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 shadow-sm outline-none"
+              className="pointer-events-none absolute left-0 right-0 top-0 z-20 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50/95 px-4 py-3 text-sm font-semibold text-red-700 shadow-sm outline-none backdrop-blur-sm"
             >
               <AlertCircle className="mt-0.5 shrink-0" size={18} />
               <span>{error}</span>
@@ -1042,8 +1105,9 @@ export function EmployeesPage() {
             <div className="grid gap-4 md:grid-cols-3">
               <Input
                 label="Employee Code"
-                value={settings.codeMode === "AUTO" && !editing ? generatedCode : form.employeeCode}
+                value={settings.codeMode === "AUTO" && !editing ? "" : form.employeeCode}
                 disabled={Boolean(editing) || (settings.codeMode === "AUTO" && !editing)}
+                placeholder={settings.codeMode === "AUTO" && !editing ? "Generated automatically on save" : undefined}
                 onChange={(event) => setForm({ ...form, employeeCode: event.target.value })}
               />
               <Input label="First Name" value={form.firstName} onChange={(event) => setForm({ ...form, firstName: event.target.value })} />
@@ -1122,9 +1186,9 @@ export function EmployeesPage() {
               />
               <SearchableSelect
                 label="Branch"
-                value={form.branch}
+                value={String(form.branchId || "")}
                 options={branchOptions}
-                onChange={(value) => setForm({ ...form, branch: value })}
+                onChange={(value) => setForm({ ...form, branchId: Number(value) })}
               />
               <EmployeeAutocomplete
                 label="Reporting Manager"

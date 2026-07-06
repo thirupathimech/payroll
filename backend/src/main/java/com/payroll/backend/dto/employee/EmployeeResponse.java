@@ -20,6 +20,8 @@ public record EmployeeResponse(
         String bankAccountNumber,
         String taxIdentificationNumber,
         String address,
+        Long branchId,
+        String branchName,
         EmploymentStatus status,
         Long departmentId,
         String departmentName,

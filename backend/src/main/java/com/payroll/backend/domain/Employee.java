@@ -72,6 +72,10 @@ public class Employee extends AuditableEntity {
     @Column(length = 600)
     private String address;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "branch_id")
+    private Branch branch;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 40)
     private EmploymentStatus status = EmploymentStatus.ACTIVE;

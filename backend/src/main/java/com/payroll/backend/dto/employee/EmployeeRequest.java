@@ -11,7 +11,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 public record EmployeeRequest(
-        @NotBlank @Size(max = 40) String employeeCode,
+        @Size(max = 40) String employeeCode,
         @NotBlank @Size(max = 100) String firstName,
         @NotBlank @Size(max = 100) String lastName,
         @Email @NotBlank @Size(max = 160) String email,
@@ -22,6 +22,7 @@ public record EmployeeRequest(
         @Size(max = 80) String bankAccountNumber,
         @Size(max = 80) String taxIdentificationNumber,
         @Size(max = 600) String address,
+        Long branchId,
         @NotNull EmploymentStatus status,
         @NotNull Long departmentId,
         @NotNull Long designationId
