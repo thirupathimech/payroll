@@ -228,9 +228,19 @@ export interface Shift {
   startTime: string;
   durationHours: number;
   durationMinutes: number;
+  segments: ShiftSegment[];
   active: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export type ShiftSegmentType = "WORK" | "BREAK";
+
+export interface ShiftSegment {
+  type: ShiftSegmentType;
+  hours: number;
+  minutes: number;
+  graceMinutes: number;
 }
 
 export interface ShiftPayload {
@@ -239,6 +249,7 @@ export interface ShiftPayload {
   startTime: string;
   durationHours: number;
   durationMinutes: number;
+  segments: ShiftSegment[];
   active: boolean;
 }
 
@@ -255,6 +266,7 @@ export interface ShiftAssignment {
   startTime: string;
   durationHours: number;
   durationMinutes: number;
+  segments?: ShiftSegment[];
   date: string;
   createdAt: string;
   updatedAt: string;

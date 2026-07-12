@@ -45,6 +45,9 @@ public class Shift extends AuditableEntity {
     @Column(nullable = false)
     private Integer durationMinutes;
 
+    @Column(name = "segments_json", columnDefinition = "json")
+    private String segmentsJson;
+
     @Column(nullable = false)
     private boolean active = true;
 }
