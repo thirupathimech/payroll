@@ -2,7 +2,6 @@ package com.payroll.backend.service;
 
 import com.payroll.backend.domain.AppUser;
 import com.payroll.backend.domain.Employee;
-import com.payroll.backend.domain.enums.RoleName;
 import com.payroll.backend.dto.common.PageResponse;
 import com.payroll.backend.dto.user.UserRequest;
 import com.payroll.backend.dto.user.UserResponse;

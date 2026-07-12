@@ -116,14 +116,6 @@ public class AuthService {
         return toSummary(user);
     }
 
-    private RoleName roleFromPrincipal(UserPrincipal principal) {
-        return principal.authorities().stream()
-                .findFirst()
-                .map(authority -> authority.getAuthority().replace("ROLE_", ""))
-                .map(RoleName::valueOf)
-                .orElse(RoleName.EMPLOYEE);
-    }
-
     private UserSummary toSummary(AppUser user) {
         return new UserSummary(user.getId(), user.getOrgCode(), user.getEmail(), user.getFullName(), user.getRole());
     }
