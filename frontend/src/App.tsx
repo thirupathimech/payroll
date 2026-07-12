@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "./components/layout/AppShell";
 import { ProtectedRoute } from "./components/layout/ProtectedRoute";
 import { AuditLogsPage } from "./pages/AuditLogsPage";
+import { BranchesPage } from "./pages/BranchesPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { DepartmentsPage } from "./pages/DepartmentsPage";
 import { DesignationsPage } from "./pages/DesignationsPage";
@@ -28,6 +29,7 @@ export default function App() {
             <Route path="/audit-logs" element={<AuditLogsPage />} />
           </Route>
           <Route element={<ProtectedRoute allowedRoles={HR_ROLES} />}>
+            <Route path="/branches" element={<BranchesPage />} />
             <Route path="/departments" element={<DepartmentsPage />} />
             <Route path="/designations" element={<DesignationsPage />} />
             <Route path="/shifts" element={<ShiftManagementPage />} />

@@ -8,6 +8,7 @@ import { Button } from "../ui/Button";
 const mobileItems = [
   { label: "Dashboard", path: "/" },
   { label: "Employees", path: "/employees" },
+  { label: "Branches", path: "/branches", allowedRoles: HR_ROLES },
   { label: "Departments", path: "/departments", allowedRoles: HR_ROLES },
   { label: "Designations", path: "/designations", allowedRoles: HR_ROLES },
   { label: "Shifts", path: "/shifts", allowedRoles: HR_ROLES },
@@ -25,8 +26,7 @@ export function Topbar() {
     <header className="sticky top-0 z-30 border-b border-white/70 bg-shell/80 px-4 py-4 backdrop-blur-xl sm:px-6">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.22em] text-fern/70">Enterprise Payroll</p>
-          <h1 className="font-display text-2xl font-extrabold text-ink sm:text-3xl">People, pay, and policy in sync</h1>
+          
         </div>
 
         <div className="flex items-center gap-3">

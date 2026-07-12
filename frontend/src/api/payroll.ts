@@ -242,6 +242,10 @@ export const branchApi = {
     const { data } = await api.post<Branch>("/branches", payload);
     return data;
   },
+  update: async (id: number, payload: BranchPayload) => {
+    const { data } = await api.put<Branch>(`/branches/${id}`, payload);
+    return data;
+  },
 };
 
 export const shiftApi = {

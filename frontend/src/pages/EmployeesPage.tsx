@@ -354,8 +354,6 @@ export function EmployeesPage() {
   const [settingsMessage, setSettingsMessage] = useState("");
   const [thumbnailUrls, setThumbnailUrls] = useState<Record<number, string>>({});
   const [fileMessage, setFileMessage] = useState("");
-  const [branchName, setBranchName] = useState("");
-  const [branchCode, setBranchCode] = useState("");
   const errorAlertRef = useRef<HTMLDivElement>(null);
   const debouncedSearch = useDebounce(search);
 
@@ -866,27 +864,6 @@ export function EmployeesPage() {
     }
   }
 
-  async function createBranch() {
-    if (!branchName.trim()) {
-      setSettingsMessage("Branch name is required.");
-      return;
-    }
-    try {
-      const created = await branchApi.create({ name: branchName.trim(), code: branchCode.trim() || undefined });
-      const nextBranches = [...branches, created].sort((left, right) => left.name.localeCompare(right.name));
-      setBranches(nextBranches);
-      setBranchName("");
-      setBranchCode("");
-      setForm((current) => ({
-        ...current,
-        branchId: current.branchId || created.id,
-      }));
-      setSettingsMessage("Branch created successfully.");
-    } catch (apiError) {
-      setSettingsMessage(getErrorMessage(apiError));
-    }
-  }
-
   const columns: Column<Employee>[] = [
     {
       header: "Profile Photo",
@@ -1064,31 +1041,6 @@ export function EmployeesPage() {
                 </>
               )}
               <p className="text-sm font-semibold text-ink/55">Employee Code uniqueness is validated before save.</p>
-            </div>
-          </div>
-          <div className="grid gap-4 lg:grid-cols-[240px_1fr]">
-            <div className="rounded-3xl border border-moss/10 bg-white/70 p-4">
-              <p className="text-sm font-extrabold text-ink">Branches</p>
-              <p className="mt-2 text-sm leading-6 text-ink/55">Main Branch is available by default. Add more branches here when needed.</p>
-            </div>
-            <div className="space-y-4 rounded-3xl border border-moss/10 bg-white/70 p-4">
-              <div className="grid gap-4 md:grid-cols-[1fr_180px_auto]">
-                <Input label="Branch Name" value={branchName} onChange={(event) => setBranchName(event.target.value)} />
-                <Input label="Branch Code" value={branchCode} onChange={(event) => setBranchCode(event.target.value.toUpperCase())} />
-                <div className="flex items-end">
-                  <Button type="button" onClick={createBranch}>
-                    <Plus size={16} />
-                    Add Branch
-                  </Button>
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {branches.map((branch) => (
-                  <span key={branch.id} className="rounded-full bg-oat/70 px-3 py-1 text-sm font-semibold text-ink/70">
-                    {branch.name}
-                  </span>
-                ))}
-              </div>
             </div>
           </div>
           {settingsMessage && <p className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">{settingsMessage}</p>}

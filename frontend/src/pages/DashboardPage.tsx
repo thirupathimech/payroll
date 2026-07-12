@@ -56,18 +56,6 @@ export function DashboardPage() {
             <Badge value={`${summary?.approvedLeavesThisMonth ?? 0} approved`} />
           </div>
 
-          <div className="mt-8 grid gap-4 sm:grid-cols-3">
-            {[
-              ["Payroll cutoff", "25th day"],
-              ["Security", "JWT enabled"],
-              ["Database", "MySQL + Flyway"],
-            ].map(([label, value]) => (
-              <div key={label} className="rounded-3xl bg-oat/70 p-5">
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-ink/45">{label}</p>
-                <p className="mt-3 font-display text-xl font-extrabold text-ink">{value}</p>
-              </div>
-            ))}
-          </div>
         </Card>
 
         <Card>

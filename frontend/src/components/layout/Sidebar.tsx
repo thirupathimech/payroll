@@ -5,6 +5,7 @@ import {
   CalendarDays,
   Clock3,
   ClipboardList,
+  GitBranch,
   LayoutDashboard,
   Settings,
   ShieldCheck,
@@ -20,6 +21,7 @@ const navItems: Array<{ label: string; path: string; icon: typeof LayoutDashboar
   { label: "Dashboard", path: "/", icon: LayoutDashboard },
   { label: "Employees", path: "/employees", icon: Users },
   { label: "Users", path: "/users", icon: UserCog, allowedRoles: ADMIN_ROLES },
+  { label: "Branches", path: "/branches", icon: GitBranch, allowedRoles: HR_ROLES },
   { label: "Departments", path: "/departments", icon: Building2, allowedRoles: HR_ROLES },
   { label: "Designations", path: "/designations", icon: ClipboardList, allowedRoles: HR_ROLES },
   { label: "Shift Management", path: "/shifts", icon: Clock3, allowedRoles: HR_ROLES },
@@ -68,12 +70,6 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="mt-10 rounded-[1.6rem] border border-white/10 bg-white/8 p-4">
-        <p className="font-display text-sm font-extrabold">Payroll health</p>
-        <p className="mt-2 text-sm leading-6 text-white/58">
-          Secure JWT auth, auditable changes, and layered APIs are ready for production hardening.
-        </p>
-      </div>
     </aside>
   );
 }
