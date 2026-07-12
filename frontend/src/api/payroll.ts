@@ -27,6 +27,9 @@ import type {
   ShiftAssignmentPayload,
   ShiftPayload,
   UserSummary,
+  WeekOffAssignment,
+  WeekOffAssignmentPayload,
+  WeekOffAssignmentType,
 } from "../types";
 
 export const authApi = {
@@ -282,6 +285,21 @@ export const shiftAssignmentApi = {
   },
   delete: async (id: number) => {
     const { data } = await api.delete<{ message: string }>(`/shift-assignments/${id}`);
+    return data;
+  },
+};
+
+export const weekOffAssignmentApi = {
+  search: async (params: { type?: WeekOffAssignmentType | ""; employeeId?: number }) => {
+    const { data } = await api.get<WeekOffAssignment[]>("/week-off-assignments", { params });
+    return data;
+  },
+  create: async (payload: WeekOffAssignmentPayload) => {
+    const { data } = await api.post<WeekOffAssignment[]>("/week-off-assignments", payload);
+    return data;
+  },
+  delete: async (id: number) => {
+    const { data } = await api.delete<{ message: string }>(`/week-off-assignments/${id}`);
     return data;
   },
 };

@@ -13,6 +13,7 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { ShiftAssignmentPage } from "./pages/ShiftAssignmentPage";
 import { ShiftManagementPage } from "./pages/ShiftManagementPage";
 import { UsersPage } from "./pages/UsersPage";
+import { WeekOffAssignmentPage } from "./pages/WeekOffAssignmentPage";
 import { ADMIN_ROLES, HR_ROLES, MANAGER_ROLES } from "./lib/access";
 
 export default function App() {
@@ -36,6 +37,7 @@ export default function App() {
           </Route>
           <Route element={<ProtectedRoute allowedRoles={MANAGER_ROLES} />}>
             <Route path="/shift-assignments" element={<ShiftAssignmentPage />} />
+            <Route path="/week-off-assignments" element={<WeekOffAssignmentPage />} />
             <Route path="/leaves" element={<LeavePage />} />
           </Route>
         </Route>

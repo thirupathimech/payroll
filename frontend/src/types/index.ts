@@ -2,6 +2,8 @@ export type RoleName = "ADMIN" | "HR" | "MANAGER" | "EMPLOYEE";
 export type EmploymentStatus = "ACTIVE" | "ON_LEAVE" | "PROBATION" | "TERMINATED";
 export type LeaveStatus = "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
 export type LeaveType = "ANNUAL" | "SICK" | "CASUAL" | "MATERNITY" | "PATERNITY" | "UNPAID";
+export type WeekOffAssignmentType = "GROUP_WEEKLY" | "EMPLOYEE_DATE" | "EMPLOYEE_WEEKLY";
+export type WeekDayName = "SUNDAY" | "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURSDAY" | "FRIDAY" | "SATURDAY";
 
 export interface PageResponse<T> {
   content: T[];
@@ -264,6 +266,34 @@ export interface ShiftAssignmentPayload {
   startDate: string;
   endDate: string;
   overrideExisting: boolean;
+}
+
+export interface WeekOffAssignment {
+  id: number;
+  type: WeekOffAssignmentType;
+  branchId?: number;
+  branchName?: string;
+  departmentId?: number;
+  departmentName?: string;
+  designationId?: number;
+  designationTitle?: string;
+  employeeId?: number;
+  employeeCode?: string;
+  employeeName?: string;
+  dayOfWeek?: WeekDayName;
+  date?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WeekOffAssignmentPayload {
+  type: WeekOffAssignmentType;
+  branchId?: number;
+  departmentId?: number;
+  designationId?: number;
+  employeeId?: number;
+  dayOfWeeks?: WeekDayName[];
+  dates?: string[];
 }
 
 export interface ApiError {
