@@ -89,18 +89,51 @@ export interface Employee {
   id: number;
   employeeCode: string;
   firstName: string;
+  middleName?: string;
   lastName: string;
   fullName: string;
   email: string;
+  personalEmail?: string;
   phone?: string;
+  alternateMobileNumber?: string;
+  gender?: string;
+  maritalStatus?: string;
+  bloodGroup?: string;
+  nationality?: string;
+  aadhaarNumber?: string;
   dateOfBirth?: string;
   joiningDate: string;
+  confirmationDate?: string;
   baseSalary: number;
+  employmentType?: string;
+  probationPeriod?: string;
+  biometricId?: string;
   bankAccountNumber?: string;
+  accountHolderName?: string;
+  bankName?: string;
+  ifscCode?: string;
   taxIdentificationNumber?: string;
   address?: string;
+  permanentAddress?: string;
+  emergencyContactName?: string;
+  emergencyRelationship?: string;
+  emergencyMobileNumber?: string;
+  primarySkill?: string;
+  secondarySkill?: string;
+  certifications?: string;
+  languagesKnown?: string;
+  resignationDate?: string;
+  lastWorkingDate?: string;
+  exitReason?: string;
+  relievingDate?: string;
   branchId?: number;
   branchName?: string;
+  managerId?: number;
+  managerEmployeeCode?: string;
+  managerName?: string;
+  hrManagerId?: number;
+  hrManagerEmployeeCode?: string;
+  hrManagerName?: string;
   status: EmploymentStatus;
   departmentId: number;
   departmentName: string;
@@ -109,21 +142,75 @@ export interface Employee {
   hasProfilePhoto: boolean;
   createdAt: string;
   updatedAt: string;
+  education: EmployeeEducation[];
+  experience: EmployeeExperience[];
+}
+
+export interface EmployeeEducation {
+  id?: number;
+  qualification?: string;
+  institution?: string;
+  university?: string;
+  yearOfPassing?: string;
+  score?: string;
+  specialization?: string;
+}
+
+export interface EmployeeExperience {
+  id?: number;
+  company?: string;
+  designation?: string;
+  startDate?: string;
+  endDate?: string;
+  totalExperience?: string;
+  lastDrawnSalary?: string;
+  reasonForLeaving?: string;
 }
 
 export interface EmployeePayload {
   employeeCode: string;
   firstName: string;
+  middleName?: string;
   lastName: string;
   email: string;
+  personalEmail?: string;
   phone?: string;
+  alternateMobileNumber?: string;
+  gender?: string;
+  maritalStatus?: string;
+  bloodGroup?: string;
+  nationality?: string;
+  aadhaarNumber?: string;
   dateOfBirth?: string;
   joiningDate: string;
+  confirmationDate?: string;
   baseSalary: number;
+  employmentType?: string;
+  probationPeriod?: string;
+  biometricId?: string;
   bankAccountNumber?: string;
+  accountHolderName?: string;
+  bankName?: string;
+  ifscCode?: string;
   taxIdentificationNumber?: string;
   address?: string;
+  permanentAddress?: string;
+  emergencyContactName?: string;
+  emergencyRelationship?: string;
+  emergencyMobileNumber?: string;
+  primarySkill?: string;
+  secondarySkill?: string;
+  certifications?: string;
+  languagesKnown?: string;
+  resignationDate?: string;
+  lastWorkingDate?: string;
+  exitReason?: string;
+  relievingDate?: string;
   branchId?: number;
+  managerId?: number;
+  hrManagerId?: number;
+  education?: EmployeeEducation[];
+  experience?: EmployeeExperience[];
   status: EmploymentStatus;
   departmentId: number;
   designationId: number;
@@ -327,4 +414,23 @@ export interface EmployeeDocument {
   uploadedBy: string;
   profilePhoto: boolean;
   previewSupported: boolean;
+}
+
+export interface EmployeeHierarchyNode {
+  id: number;
+  employeeCode: string;
+  fullName: string;
+  designationTitle: string;
+  departmentName: string;
+  managerId?: number;
+  managerEmployeeCode?: string;
+  managerName?: string;
+  directReportsCount: number;
+  children: EmployeeHierarchyNode[];
+}
+
+export interface EmployeeHierarchy {
+  current: EmployeeHierarchyNode;
+  ancestors: EmployeeHierarchyNode[];
+  descendants: EmployeeHierarchyNode[];
 }

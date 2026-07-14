@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, Download, Edit3, Eye, Plus, Search, Settings, Trash2, UploadCloud } from "lucide-react";
+import { AlertCircle, BriefcaseBusiness, Download, Edit3, Eye, GitBranch, GraduationCap, Plus, Search, Settings, Trash2, UploadCloud, UserRound, type LucideIcon } from "lucide-react";
 import { getErrorMessage } from "../api/client";
 import { branchApi, departmentApi, designationApi, employeeApi, employeeSettingsApi } from "../api/payroll";
 import { useAuth } from "../auth/AuthContext";
@@ -26,6 +26,8 @@ import type {
   EmployeeSettings,
   EmployeePayload,
   EmploymentStatus,
+  EmployeeHierarchy,
+  EmployeeHierarchyNode,
   PageResponse,
 } from "../types";
 
@@ -129,6 +131,8 @@ type EmployeeForm = {
   exitReason: string;
   relievingDate: string;
 };
+
+type ProfilePanel = "profile" | "hierarchy" | "education" | "experience";
 
 const emptyPage: PageResponse<Employee> = {
   content: [],
@@ -262,8 +266,19 @@ function addressToText(address: AddressFields) {
     .join(", ");
 }
 
+function textToAddress(text?: string | null): AddressFields {
+  const [line1 = "", line2 = "", city = "", district = "", state = "", country = "", pinCode = ""] = (text ?? "")
+    .split(",")
+    .map((part) => part.trim());
+  return { line1, line2, city, district, state, country, pinCode };
+}
+
 function readEmployeeAddress(employee: Employee): AddressFields {
-  return { ...emptyAddress, line1: employee.address ?? "" };
+  return textToAddress(employee.address);
+}
+
+function readEmployeePermanentAddress(employee: Employee): AddressFields {
+  return textToAddress(employee.permanentAddress ?? employee.address);
 }
 
 function validateEmail(value: string) {
@@ -333,6 +348,139 @@ function Section({
   );
 }
 
+function ProfileMenuButton({
+  icon: Icon,
+  active,
+  label,
+  onClick,
+}: {
+  icon: LucideIcon;
+  active: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-bold transition ${
+        active ? "bg-moss text-white shadow-glow" : "bg-white/80 text-ink hover:bg-white"
+      }`}
+    >
+      <Icon size={16} />
+      {label}
+    </button>
+  );
+}
+
+function HierarchyTreeNode({ node }: { node: EmployeeHierarchyNode }) {
+  return (
+    <div className="relative pl-8">
+      <div className="absolute left-3 top-0 h-full w-px bg-moss/20" />
+      <div className="absolute left-[10px] top-6 h-3 w-3 rounded-full border-2 border-moss bg-shell" />
+      <div className="rounded-3xl border border-moss/10 bg-white/80 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-bold text-ink">{node.fullName}</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">{node.employeeCode}</p>
+          </div>
+          <span className="rounded-full bg-oat px-3 py-1 text-xs font-bold text-ink/70">
+            {node.directReportsCount} down
+          </span>
+        </div>
+        <p className="mt-2 text-sm text-ink/65">
+          {node.designationTitle} · {node.departmentName}
+        </p>
+      </div>
+      {node.children.length > 0 && (
+        <div className="mt-3 space-y-3">
+          {node.children.map((child) => (
+            <HierarchyTreeNode key={child.employeeCode} node={child} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HierarchyChart({ hierarchy }: { hierarchy: EmployeeHierarchy }) {
+  const ancestorChain = [...hierarchy.ancestors, hierarchy.current];
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-3">
+        {ancestorChain.map((node, index) => {
+          const isCurrent = index === ancestorChain.length - 1;
+          return (
+            <div key={node.employeeCode} className="relative">
+              {index < ancestorChain.length - 1 && <div className="absolute left-6 top-full h-4 w-px bg-moss/20" />}
+              <div
+                className={`relative rounded-3xl border p-4 ${
+                  isCurrent ? "border-moss/25 bg-moss text-white shadow-glow" : "border-moss/10 bg-white/80"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`grid h-12 w-12 place-items-center rounded-2xl ${isCurrent ? "bg-white/15 text-white" : "bg-oat text-ink"}`}>
+                    {isCurrent ? <UserRound size={18} /> : <BriefcaseBusiness size={18} />}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold">{node.fullName}</p>
+                    <p className={`truncate text-xs font-semibold uppercase tracking-[0.16em] ${isCurrent ? "text-white/70" : "text-ink/45"}`}>
+                      {node.employeeCode}
+                    </p>
+                  </div>
+                  <div className="ml-auto text-right">
+                    <p className={`text-xs font-semibold ${isCurrent ? "text-white/70" : "text-ink/45"}`}>
+                      {index === ancestorChain.length - 1 ? "Current" : "Above"}
+                    </p>
+                    <p className={`text-sm font-bold ${isCurrent ? "text-white" : "text-ink"}`}>{node.designationTitle}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[280px_1fr]">
+        <div className="rounded-3xl border border-moss/10 bg-oat/50 p-5">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-fern">Current Level</p>
+          <h4 className="mt-2 font-display text-xl font-extrabold text-ink">{hierarchy.current.fullName}</h4>
+          <p className="mt-1 text-sm font-semibold text-ink/55">
+            {hierarchy.current.departmentName} · {hierarchy.current.designationTitle}
+          </p>
+          <div className="mt-4 grid gap-3">
+            <div className="rounded-2xl bg-white/75 p-4">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-ink/45">One Up</p>
+              <p className="mt-2 text-sm font-semibold text-ink">{hierarchy.current.managerName ?? "No manager"}</p>
+            </div>
+            <div className="rounded-2xl bg-white/75 p-4">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-ink/45">One Down</p>
+              <p className="mt-2 text-sm font-semibold text-ink">{hierarchy.current.directReportsCount} direct report(s)</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-3xl border border-moss/10 bg-white/75 p-5">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-fern">Downstream Tree</p>
+          <h4 className="mt-2 font-display text-xl font-extrabold text-ink">One-to-many branch</h4>
+          <div className="mt-4">
+            {hierarchy.descendants.length === 0 ? (
+              <p className="rounded-3xl bg-oat/60 p-4 text-sm font-semibold text-ink/55">No subordinate branches yet.</p>
+            ) : (
+              <div className="space-y-3">
+                {hierarchy.descendants.map((node) => (
+                  <HierarchyTreeNode key={node.employeeCode} node={node} />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function EmployeesPage() {
   const { user, viewMode } = useAuth();
   const [employees, setEmployees] = useState(emptyPage);
@@ -354,10 +502,13 @@ export function EmployeesPage() {
   const [settingsMessage, setSettingsMessage] = useState("");
   const [thumbnailUrls, setThumbnailUrls] = useState<Record<number, string>>({});
   const [fileMessage, setFileMessage] = useState("");
+  const [hierarchy, setHierarchy] = useState<EmployeeHierarchy | null>(null);
+  const [profilePanel, setProfilePanel] = useState<ProfilePanel>("profile");
   const errorAlertRef = useRef<HTMLDivElement>(null);
   const debouncedSearch = useDebounce(search);
 
   const isPersonnelMode = viewMode === "personnel";
+  const currentEmployee = employees.content[0];
 
   const loadEmployeeDirectory = useCallback(() => {
     if (isPersonnelMode) {
@@ -387,6 +538,21 @@ export function EmployeesPage() {
         0;
       setForm((current) => ({ ...current, departmentId, designationId, branchId: branchItems[0]?.id || 0 }));
     });
+  }, [isPersonnelMode]);
+
+  useEffect(() => {
+    if (!isPersonnelMode) {
+      setHierarchy(null);
+      return;
+    }
+
+    employeeApi.hierarchy().then(setHierarchy).catch(() => setHierarchy(null));
+  }, [isPersonnelMode]);
+
+  useEffect(() => {
+    if (!isPersonnelMode) {
+      setProfilePanel("profile");
+    }
   }, [isPersonnelMode]);
 
   const loadEmployees = useCallback(() => {
@@ -518,29 +684,77 @@ export function EmployeesPage() {
   }
 
   async function openEdit(employee: Employee) {
-    const address = readEmployeeAddress(employee);
     setEditing(employee);
+    const currentAddress = readEmployeeAddress(employee);
+    const permanentAddress = readEmployeePermanentAddress(employee);
     setForm({
       ...initialForm,
       employeeCode: employee.employeeCode,
       firstName: employee.firstName,
+      middleName: employee.middleName ?? "",
       lastName: employee.lastName,
       officialEmail: employee.email,
+      personalEmail: employee.personalEmail ?? "",
       mobileNumber: employee.phone ?? "",
+      alternateMobileNumber: employee.alternateMobileNumber ?? "",
+      gender: employee.gender ?? "",
+      maritalStatus: employee.maritalStatus ?? "",
+      bloodGroup: employee.bloodGroup ?? "",
+      nationality: employee.nationality ?? "Indian",
+      aadhaarNumber: employee.aadhaarNumber ?? "",
       dateOfBirth: employee.dateOfBirth ?? "",
       joiningDate: employee.joiningDate,
+      confirmationDate: employee.confirmationDate ?? "",
       baseSalary: String(employee.baseSalary),
+      employmentType: employee.employmentType ?? "Permanent",
+      probationPeriod: employee.probationPeriod ?? "",
+      biometricId: employee.biometricId ?? "",
       bankAccountNumber: employee.bankAccountNumber ?? "",
+      accountHolderName: employee.accountHolderName ?? "",
+      bankName: employee.bankName ?? "",
+      ifscCode: employee.ifscCode ?? "",
       panNumber: employee.taxIdentificationNumber ?? "",
+      currentAddress,
+      permanentAddress,
+      reportingManager: employee.managerEmployeeCode ?? "",
+      hrManager: employee.hrManagerEmployeeCode ?? "",
       branchId: employee.branchId ?? branches[0]?.id ?? 0,
-      currentAddress: address,
-      permanentAddress: address,
       profilePhotoPreviewUrl: "",
       hasExistingProfilePhoto: employee.hasProfilePhoto,
       deleteProfilePhoto: false,
       status: employee.status,
       departmentId: employee.departmentId,
       designationId: employee.designationId,
+      emergencyContactName: employee.emergencyContactName ?? "",
+      emergencyRelationship: employee.emergencyRelationship ?? "",
+      emergencyMobileNumber: employee.emergencyMobileNumber ?? "",
+      primarySkill: employee.primarySkill ?? "",
+      secondarySkill: employee.secondarySkill ?? "",
+      certifications: employee.certifications ?? "",
+      languagesKnown: employee.languagesKnown ?? "",
+      resignationDate: employee.resignationDate ?? "",
+      lastWorkingDate: employee.lastWorkingDate ?? "",
+      exitReason: employee.exitReason ?? "",
+      relievingDate: employee.relievingDate ?? "",
+      education: (employee.education ?? []).map((record) => ({
+        id: record.id ?? Date.now(),
+        qualification: record.qualification ?? "",
+        institution: record.institution ?? "",
+        university: record.university ?? "",
+        yearOfPassing: record.yearOfPassing ?? "",
+        score: record.score ?? "",
+        specialization: record.specialization ?? "",
+      })),
+      experience: (employee.experience ?? []).map((record) => ({
+        id: record.id ?? Date.now(),
+        company: record.company ?? "",
+        designation: record.designation ?? "",
+        startDate: record.startDate ?? "",
+        endDate: record.endDate ?? "",
+        totalExperience: record.totalExperience ?? "",
+        lastDrawnSalary: record.lastDrawnSalary ?? "",
+        reasonForLeaving: record.reasonForLeaving ?? "",
+      })),
     });
     setError("");
     setFileMessage("");
@@ -728,19 +942,69 @@ export function EmployeesPage() {
   }
 
   function toPayload(): EmployeePayload {
+    const managerId = allEmployees.find((employee) => employee.employeeCode === form.reportingManager)?.id;
+    const hrManagerId = allEmployees.find((employee) => employee.employeeCode === form.hrManager)?.id;
     return {
       employeeCode: form.employeeCode.trim(),
       firstName: form.firstName.trim(),
+      middleName: form.middleName.trim() || undefined,
       lastName: form.lastName.trim(),
       email: form.officialEmail.trim(),
+      personalEmail: form.personalEmail.trim() || undefined,
       phone: form.mobileNumber || undefined,
+      alternateMobileNumber: form.alternateMobileNumber || undefined,
+      gender: form.gender || undefined,
+      maritalStatus: form.maritalStatus || undefined,
+      bloodGroup: form.bloodGroup || undefined,
+      nationality: form.nationality || undefined,
+      aadhaarNumber: form.aadhaarNumber || undefined,
       dateOfBirth: form.dateOfBirth || undefined,
       joiningDate: form.joiningDate,
+      confirmationDate: form.confirmationDate || undefined,
       baseSalary: Number(form.baseSalary),
+      employmentType: form.employmentType || undefined,
+      probationPeriod: form.probationPeriod || undefined,
+      biometricId: form.biometricId || undefined,
       bankAccountNumber: form.bankAccountNumber || undefined,
+      accountHolderName: form.accountHolderName || undefined,
+      bankName: form.bankName || undefined,
+      ifscCode: form.ifscCode || undefined,
       taxIdentificationNumber: form.panNumber || undefined,
       address: addressToText(form.currentAddress) || undefined,
+      permanentAddress: addressToText(form.permanentAddress) || undefined,
+      emergencyContactName: form.emergencyContactName || undefined,
+      emergencyRelationship: form.emergencyRelationship || undefined,
+      emergencyMobileNumber: form.emergencyMobileNumber || undefined,
+      primarySkill: form.primarySkill || undefined,
+      secondarySkill: form.secondarySkill || undefined,
+      certifications: form.certifications || undefined,
+      languagesKnown: form.languagesKnown || undefined,
+      resignationDate: form.resignationDate || undefined,
+      lastWorkingDate: form.lastWorkingDate || undefined,
+      exitReason: form.exitReason || undefined,
+      relievingDate: form.relievingDate || undefined,
       branchId: form.branchId || undefined,
+      managerId,
+      hrManagerId,
+      education: form.education.map((record) => ({
+        id: record.id,
+        qualification: record.qualification || undefined,
+        institution: record.institution || undefined,
+        university: record.university || undefined,
+        yearOfPassing: record.yearOfPassing || undefined,
+        score: record.score || undefined,
+        specialization: record.specialization || undefined,
+      })),
+      experience: form.experience.map((record) => ({
+        id: record.id,
+        company: record.company || undefined,
+        designation: record.designation || undefined,
+        startDate: record.startDate || undefined,
+        endDate: record.endDate || undefined,
+        totalExperience: record.totalExperience || undefined,
+        lastDrawnSalary: record.lastDrawnSalary || undefined,
+        reasonForLeaving: record.reasonForLeaving || undefined,
+      })),
       status: form.status,
       departmentId: form.departmentId,
       designationId: form.designationId,
@@ -1013,6 +1277,108 @@ export function EmployeesPage() {
         onPageChange={setPage}
         getRowKey={(employee) => employee.id}
       />
+
+      {isPersonnelMode && currentEmployee && (
+        <section className="grid gap-6 xl:grid-cols-[260px_1fr]">
+          <Card className="self-start">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-fern">My Profile</p>
+            <h3 className="mt-2 font-display text-2xl font-extrabold text-ink">Menu</h3>
+            <div className="mt-5 space-y-2">
+              <ProfileMenuButton icon={UserRound} label="Profile" active={profilePanel === "profile"} onClick={() => setProfilePanel("profile")} />
+              <ProfileMenuButton icon={GitBranch} label="Hierarchy Chart" active={profilePanel === "hierarchy"} onClick={() => setProfilePanel("hierarchy")} />
+              <ProfileMenuButton icon={GraduationCap} label="Education" active={profilePanel === "education"} onClick={() => setProfilePanel("education")} />
+              <ProfileMenuButton icon={BriefcaseBusiness} label="Experience" active={profilePanel === "experience"} onClick={() => setProfilePanel("experience")} />
+            </div>
+          </Card>
+
+          <Card>
+            {profilePanel === "profile" && (
+              <div className="space-y-5">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-fern">Profile</p>
+                  <h3 className="mt-2 font-display text-2xl font-extrabold text-ink">{currentEmployee.fullName}</h3>
+                  <p className="mt-1 text-sm font-semibold text-ink/55">
+                    {currentEmployee.employeeCode} · {currentEmployee.designationTitle}
+                  </p>
+                </div>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="rounded-3xl bg-oat/60 p-4">
+                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-ink/45">Department</p>
+                    <p className="mt-2 text-sm font-semibold text-ink">{currentEmployee.departmentName}</p>
+                  </div>
+                  <div className="rounded-3xl bg-oat/60 p-4">
+                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-ink/45">Manager</p>
+                    <p className="mt-2 text-sm font-semibold text-ink">{currentEmployee.managerName ?? "No manager"}</p>
+                  </div>
+                  <div className="rounded-3xl bg-oat/60 p-4">
+                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-ink/45">Reports</p>
+                    <p className="mt-2 text-sm font-semibold text-ink">{hierarchy?.current.directReportsCount ?? 0}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {profilePanel === "hierarchy" &&
+              (hierarchy ? (
+                <HierarchyChart hierarchy={hierarchy} />
+              ) : (
+                <p className="rounded-3xl bg-oat/60 p-4 text-sm font-semibold text-ink/55">Hierarchy data is not available right now.</p>
+              ))}
+
+            {profilePanel === "education" && (
+              <div className="space-y-4">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-fern">Education</p>
+                  <h3 className="mt-2 font-display text-2xl font-extrabold text-ink">Academic History</h3>
+                </div>
+                {(currentEmployee.education?.length ?? 0) === 0 ? (
+                  <p className="rounded-3xl bg-oat/60 p-4 text-sm font-semibold text-ink/55">No education entries saved yet.</p>
+                ) : (
+                  <div className="grid gap-3">
+                    {(currentEmployee.education ?? []).map((record, index) => (
+                      <div key={`${record.id ?? index}`} className="rounded-3xl border border-moss/10 bg-white/80 p-4">
+                        <p className="text-sm font-bold text-ink">{record.qualification || "Qualification"}</p>
+                        <p className="mt-1 text-sm text-ink/65">
+                          {record.institution || "-"} · {record.university || "-"}
+                        </p>
+                        <p className="mt-1 text-xs font-semibold text-ink/45">
+                          {record.yearOfPassing || "-"} · {record.score || "-"} · {record.specialization || "-"}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {profilePanel === "experience" && (
+              <div className="space-y-4">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-fern">Experience</p>
+                  <h3 className="mt-2 font-display text-2xl font-extrabold text-ink">Work History</h3>
+                </div>
+                {(currentEmployee.experience ?? []).length === 0 ? (
+                  <p className="rounded-3xl bg-oat/60 p-4 text-sm font-semibold text-ink/55">No experience entries saved yet.</p>
+                ) : (
+                  <div className="grid gap-3">
+                    {(currentEmployee.experience ?? []).map((record, index) => (
+                      <div key={`${record.id ?? index}`} className="rounded-3xl border border-moss/10 bg-white/80 p-4">
+                        <p className="text-sm font-bold text-ink">{record.company || "Company"}</p>
+                        <p className="mt-1 text-sm text-ink/65">
+                          {record.designation || "-"} · {record.startDate || "-"} to {record.endDate || "-"}
+                        </p>
+                        <p className="mt-1 text-xs font-semibold text-ink/45">
+                          {record.totalExperience || "-"} · {record.lastDrawnSalary || "-"}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </Card>
+        </section>
+      )}
 
       <Modal
         open={settingsOpen}

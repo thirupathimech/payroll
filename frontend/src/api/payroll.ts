@@ -14,6 +14,7 @@ import type {
   DesignationPayload,
   Employee,
   EmployeeDocument,
+  EmployeeHierarchy,
   EmployeeSettings,
   EmployeeSettingsPayload,
   EmployeePayload,
@@ -115,6 +116,10 @@ export const employeeApi = {
   },
   me: async () => {
     const { data } = await api.get<Employee>("/employees/me");
+    return data;
+  },
+  hierarchy: async () => {
+    const { data } = await api.get<EmployeeHierarchy>("/employees/me/hierarchy");
     return data;
   },
   create: async (payload: EmployeePayload) => {

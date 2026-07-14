@@ -18,6 +18,8 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
 
     Optional<Employee> findByOrgCodeAndEmployeeCodeIgnoreCase(String orgCode, String employeeCode);
 
+    List<Employee> findByOrgCodeAndManagerIdOrderByFirstNameAsc(String orgCode, Long managerId);
+
     Optional<Employee> findByOrgCodeAndEmailIgnoreCase(String orgCode, String email);
 
     @Query("select e.employeeCode from Employee e where e.orgCode = :orgCode")

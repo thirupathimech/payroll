@@ -3,6 +3,7 @@ package com.payroll.backend.controller;
 import com.payroll.backend.domain.enums.EmploymentStatus;
 import com.payroll.backend.dto.common.MessageResponse;
 import com.payroll.backend.dto.common.PageResponse;
+import com.payroll.backend.dto.employee.EmployeeHierarchyResponse;
 import com.payroll.backend.dto.employee.EmployeeRequest;
 import com.payroll.backend.dto.employee.EmployeeResponse;
 import com.payroll.backend.security.UserPrincipal;
@@ -48,6 +49,11 @@ public class EmployeeController {
     @GetMapping("/me")
     public EmployeeResponse getCurrent(@AuthenticationPrincipal UserPrincipal principal) {
         return employeeService.getCurrent(principal);
+    }
+
+    @GetMapping("/me/hierarchy")
+    public EmployeeHierarchyResponse hierarchy(@AuthenticationPrincipal UserPrincipal principal) {
+        return employeeService.hierarchy(principal);
     }
 
     @PostMapping
