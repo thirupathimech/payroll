@@ -38,10 +38,18 @@ public class LeaveService {
     private final CurrentOrgService currentOrgService;
 
     @Transactional(readOnly = true)
-    public PageResponse<LeaveResponse> search(String search, Long employeeId, LeaveStatus status, int page, int size) {
+    public PageResponse<LeaveResponse> search(
+            String search,
+            Long employeeId,
+            LeaveStatus status,
+            int page,
+            int size,
+            UserPrincipal principal
+    ) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Long effectiveEmployeeId = isEmployee(principal) ? findCurrentEmployee(principal).getId() : employeeId;
         return PageResponse.from(leaveRequestRepository
-                .search(currentOrgService.orgCode(), blankToNull(search), employeeId, status, pageable)
+                .search(currentOrgService.orgCode(), blankToNull(search), effectiveEmployeeId, status, pageable)
                 .map(this::toResponse));
     }
 
@@ -53,16 +61,22 @@ public class LeaveService {
     }
 
     @Transactional(readOnly = true)
-    public LeaveResponse get(Long id) {
-        return toResponse(findLeave(id));
+    public LeaveResponse get(Long id, UserPrincipal principal) {
+        LeaveRequest leave = findLeave(id);
+        if (isEmployee(principal) && !leave.getEmployee().getId().equals(findCurrentEmployee(principal).getId())) {
+            throw new ResourceNotFoundException("Leave request not found");
+        }
+        return toResponse(leave);
     }
 
     @Transactional
-    public LeaveResponse create(LeaveCreateRequest request) {
+    public LeaveResponse create(LeaveCreateRequest request, UserPrincipal principal) {
         validateDates(request.startDate(), request.endDate());
         String orgCode = currentOrgService.orgCode();
-        Employee employee = employeeRepository.findByOrgCodeAndId(orgCode, request.employeeId())
-                .orElseThrow(() -> new ResourceNotFoundException("Employee not found"));
+        Employee employee = isEmployee(principal)
+                ? findCurrentEmployee(principal)
+                : employeeRepository.findByOrgCodeAndId(orgCode, request.employeeId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Employee not found"));
 
         LeaveRequest leaveRequest = new LeaveRequest();
         leaveRequest.setOrgCode(orgCode);
@@ -114,6 +128,19 @@ public class LeaveService {
     private LeaveRequest findLeave(Long id) {
         return leaveRequestRepository.findByOrgCodeAndId(currentOrgService.orgCode(), id)
                 .orElseThrow(() -> new ResourceNotFoundException("Leave request not found"));
+    }
+
+    private Employee findCurrentEmployee(UserPrincipal principal) {
+        if (principal == null || principal.employeeCode() == null || principal.employeeCode().isBlank()) {
+            throw new ResourceNotFoundException("Employee profile not found");
+        }
+        return employeeRepository.findByOrgCodeAndEmployeeCodeIgnoreCase(currentOrgService.orgCode(), principal.employeeCode())
+                .orElseThrow(() -> new ResourceNotFoundException("Employee profile not found"));
+    }
+
+    private boolean isEmployee(UserPrincipal principal) {
+        return principal != null && principal.getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_EMPLOYEE".equals(authority.getAuthority()));
     }
 
     public LeaveResponse toResponse(LeaveRequest leaveRequest) {

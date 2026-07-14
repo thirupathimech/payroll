@@ -3,6 +3,7 @@ import { API_BASE_URL } from "../lib/config";
 
 export const AUTH_TOKEN_KEY = "payroll.auth.token";
 export const AUTH_USER_KEY = "payroll.auth.user";
+export const AUTH_VIEW_MODE_KEY = "payroll.auth.viewMode";
 
 export const api = axios.create({
   baseURL: API_BASE_URL,

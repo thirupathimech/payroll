@@ -174,18 +174,3 @@ Or run the full application:
 ```powershell
 docker compose up --build
 ```
-
-## Simple Tanglish Run Steps
-
-Backend mattum run panna:
-
-```powershell
-cd backend
-mvn spring-boot:run
-```
-
-MySQL local la illana easiest:
-
-```powershell
-docker compose up --build mysql backend
-```

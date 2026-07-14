@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from "react-router-dom";
+import { useAuth } from "./auth/AuthContext";
 import { AppShell } from "./components/layout/AppShell";
 import { ProtectedRoute } from "./components/layout/ProtectedRoute";
 import { AuditLogsPage } from "./pages/AuditLogsPage";
@@ -16,14 +17,21 @@ import { UsersPage } from "./pages/UsersPage";
 import { WeekOffAssignmentPage } from "./pages/WeekOffAssignmentPage";
 import { ADMIN_ROLES, HR_ROLES, MANAGER_ROLES } from "./lib/access";
 
+function HomeRoute() {
+  const { viewMode } = useAuth();
+  return viewMode === "personnel" ? <Navigate to="/employees" replace /> : <DashboardPage />;
+}
+
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route element={<ProtectedRoute />}>
         <Route element={<AppShell />}>
-          <Route index element={<DashboardPage />} />
+          <Route index element={<HomeRoute />} />
           <Route path="/employees" element={<EmployeesPage />} />
+          <Route path="/shift-assignments" element={<ShiftAssignmentPage />} />
+          <Route path="/leaves" element={<LeavePage />} />
           <Route element={<ProtectedRoute allowedRoles={ADMIN_ROLES} />}>
             <Route path="/users" element={<UsersPage />} />
             <Route path="/settings" element={<SettingsPage />} />
@@ -36,9 +44,7 @@ export default function App() {
             <Route path="/shifts" element={<ShiftManagementPage />} />
           </Route>
           <Route element={<ProtectedRoute allowedRoles={MANAGER_ROLES} />}>
-            <Route path="/shift-assignments" element={<ShiftAssignmentPage />} />
             <Route path="/week-off-assignments" element={<WeekOffAssignmentPage />} />
-            <Route path="/leaves" element={<LeavePage />} />
           </Route>
         </Route>
       </Route>

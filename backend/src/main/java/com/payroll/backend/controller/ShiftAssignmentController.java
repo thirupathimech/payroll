@@ -3,10 +3,12 @@ package com.payroll.backend.controller;
 import com.payroll.backend.dto.common.MessageResponse;
 import com.payroll.backend.dto.shift.ShiftAssignmentRequest;
 import com.payroll.backend.dto.shift.ShiftAssignmentResponse;
+import com.payroll.backend.security.UserPrincipal;
 import com.payroll.backend.service.ShiftAssignmentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -30,9 +32,10 @@ public class ShiftAssignmentController {
     public List<ShiftAssignmentResponse> search(
             @RequestParam(required = false) Long employeeId,
             @RequestParam(required = false) LocalDate startDate,
-            @RequestParam(required = false) LocalDate endDate
+            @RequestParam(required = false) LocalDate endDate,
+            @AuthenticationPrincipal UserPrincipal principal
     ) {
-        return shiftAssignmentService.search(employeeId, startDate, endDate);
+        return shiftAssignmentService.search(employeeId, startDate, endDate, principal);
     }
 
     @PostMapping

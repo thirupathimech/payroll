@@ -20,6 +20,7 @@ export interface UserSummary {
   email: string;
   fullName: string;
   role: RoleName;
+  employeeCode?: string;
 }
 
 export interface AppUser {

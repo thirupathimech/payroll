@@ -117,7 +117,14 @@ public class AuthService {
     }
 
     private UserSummary toSummary(AppUser user) {
-        return new UserSummary(user.getId(), user.getOrgCode(), user.getEmail(), user.getFullName(), user.getRole());
+        return new UserSummary(
+                user.getId(),
+                user.getOrgCode(),
+                user.getEmail(),
+                user.getFullName(),
+                user.getRole(),
+                user.getEmployeeCode()
+        );
     }
 
     private String generateOrgCode(String companyName) {

@@ -112,7 +112,7 @@ export function SearchableSelect({
       />
 
       {open && !disabled && (
-        <div className="absolute z-50 mt-1 max-h-72 w-full overflow-auto rounded-2xl border border-moss/10 bg-white p-2 shadow-card">
+        <div className="absolute z-[80] mt-1 max-h-72 w-full overflow-auto rounded-2xl border border-moss/10 bg-white p-2 shadow-card">
           {filteredOptions.map((option, index) => (
             <button
               key={option.value}

@@ -4,7 +4,7 @@ import { hasRoleAccess } from "../../lib/access";
 import type { RoleName } from "../../types";
 
 export function ProtectedRoute({ allowedRoles }: { allowedRoles?: RoleName[] }) {
-  const { token, loading, user } = useAuth();
+  const { token, loading, user, viewMode } = useAuth();
 
   if (loading) {
     return (
@@ -19,6 +19,10 @@ export function ProtectedRoute({ allowedRoles }: { allowedRoles?: RoleName[] }) 
 
   if (!token) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (allowedRoles && viewMode === "personnel") {
+    return <Navigate to="/employees" replace />;
   }
 
   return hasRoleAccess(user, allowedRoles) ? <Outlet /> : <Navigate to="/" replace />;

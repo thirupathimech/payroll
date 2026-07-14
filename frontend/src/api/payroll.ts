@@ -113,12 +113,20 @@ export const employeeApi = {
     const { data } = await api.get<PageResponse<Employee>>("/employees", { params });
     return data;
   },
+  me: async () => {
+    const { data } = await api.get<Employee>("/employees/me");
+    return data;
+  },
   create: async (payload: EmployeePayload) => {
     const { data } = await api.post<Employee>("/employees", payload);
     return data;
   },
   update: async (id: number, payload: EmployeePayload) => {
     const { data } = await api.put<Employee>(`/employees/${id}`, payload);
+    return data;
+  },
+  updateMe: async (payload: EmployeePayload) => {
+    const { data } = await api.put<Employee>("/employees/me", payload);
     return data;
   },
   terminate: async (id: number) => {

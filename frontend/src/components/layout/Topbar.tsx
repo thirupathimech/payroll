@@ -1,4 +1,4 @@
-import { LogOut, Menu } from "lucide-react";
+import { BriefcaseBusiness, LogOut, Menu, UserRound } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
 import { ADMIN_ROLES, HR_ROLES, MANAGER_ROLES, hasRoleAccess } from "../../lib/access";
@@ -19,8 +19,16 @@ const mobileItems = [
   { label: "Audit Logs", path: "/audit-logs", allowedRoles: ADMIN_ROLES },
 ];
 
+const personnelMobileItems = [
+  { label: "My Profile", path: "/employees" },
+  { label: "Apply Leave", path: "/leaves" },
+  { label: "My Shift", path: "/shift-assignments" },
+];
+
 export function Topbar() {
-  const { user, logout } = useAuth();
+  const { user, logout, viewMode, setViewMode, canSwitchViewMode } = useAuth();
+  const visibleMobileItems =
+    viewMode === "personnel" ? personnelMobileItems : mobileItems.filter((item) => hasRoleAccess(user, item.allowedRoles));
 
   return (
     <header className="sticky top-0 z-30 border-b border-white/70 bg-shell/80 px-4 py-4 backdrop-blur-xl sm:px-6">
@@ -30,9 +38,33 @@ export function Topbar() {
         </div>
 
         <div className="flex items-center gap-3">
+          {canSwitchViewMode && (
+            <div className="hidden rounded-2xl border border-moss/15 bg-white/70 p-1 sm:flex">
+              <Button
+                type="button"
+                variant={viewMode === "personnel" ? "primary" : "ghost"}
+                className="px-3 py-2"
+                onClick={() => setViewMode("personnel")}
+              >
+                <UserRound size={15} />
+                Personnel
+              </Button>
+              <Button
+                type="button"
+                variant={viewMode === "management" ? "primary" : "ghost"}
+                className="px-3 py-2"
+                onClick={() => setViewMode("management")}
+              >
+                <BriefcaseBusiness size={15} />
+                Management
+              </Button>
+            </div>
+          )}
           <div className="hidden text-right sm:block">
             <p className="text-sm font-bold text-ink">{user?.fullName}</p>
-            <p className="text-xs font-semibold text-ink/50">{user?.role}</p>
+            <p className="text-xs font-semibold text-ink/50">
+              {user?.role} · {viewMode === "personnel" ? "Personnel" : "Management"}
+            </p>
           </div>
           <div className="grid h-11 w-11 place-items-center rounded-2xl bg-moss text-sm font-extrabold text-white">
             {initials(user?.fullName ?? "User")}
@@ -50,9 +82,29 @@ export function Topbar() {
           Menu
         </summary>
         <div className="mt-3 grid gap-2 sm:grid-cols-3">
-          {mobileItems
-            .filter((item) => hasRoleAccess(user, item.allowedRoles))
-            .map((item) => (
+          {canSwitchViewMode && (
+            <div className="grid grid-cols-2 gap-2 sm:col-span-3">
+              <button
+                type="button"
+                className={`rounded-xl px-3 py-2 text-left text-sm font-bold ${
+                  viewMode === "personnel" ? "bg-moss text-white" : "bg-white text-moss"
+                }`}
+                onClick={() => setViewMode("personnel")}
+              >
+                Personnel
+              </button>
+              <button
+                type="button"
+                className={`rounded-xl px-3 py-2 text-left text-sm font-bold ${
+                  viewMode === "management" ? "bg-moss text-white" : "bg-white text-moss"
+                }`}
+                onClick={() => setViewMode("management")}
+              >
+                Management
+              </button>
+            </div>
+          )}
+          {visibleMobileItems.map((item) => (
               <NavLink
                 key={item.path}
                 to={item.path}

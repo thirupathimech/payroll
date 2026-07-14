@@ -334,7 +334,7 @@ function Section({
 }
 
 export function EmployeesPage() {
-  const { user } = useAuth();
+  const { user, viewMode } = useAuth();
   const [employees, setEmployees] = useState(emptyPage);
   const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -357,16 +357,22 @@ export function EmployeesPage() {
   const errorAlertRef = useRef<HTMLDivElement>(null);
   const debouncedSearch = useDebounce(search);
 
+  const isPersonnelMode = viewMode === "personnel";
+
   const loadEmployeeDirectory = useCallback(() => {
+    if (isPersonnelMode) {
+      employeeApi.me().then((employee) => setAllEmployees([employee]));
+      return;
+    }
     employeeApi.search({ page: 0, size: 1000 }).then((employeePage) => setAllEmployees(employeePage.content));
-  }, []);
+  }, [isPersonnelMode]);
 
   useEffect(() => {
     Promise.all([
       branchApi.active(),
       departmentApi.active(),
       designationApi.search({ active: true, page: 0, size: 500 }),
-      employeeApi.search({ page: 0, size: 1000 }),
+      isPersonnelMode ? employeeApi.me().then((employee) => ({ ...emptyPage, content: [employee], totalElements: 1, totalPages: 1 })) : employeeApi.search({ page: 0, size: 1000 }),
       employeeSettingsApi.get(),
     ]).then(([branchItems, departmentItems, designationPage, employeePage, employeeSettings]) => {
       setBranches(branchItems);
@@ -381,10 +387,17 @@ export function EmployeesPage() {
         0;
       setForm((current) => ({ ...current, departmentId, designationId, branchId: branchItems[0]?.id || 0 }));
     });
-  }, []);
+  }, [isPersonnelMode]);
 
   const loadEmployees = useCallback(() => {
     setLoading(true);
+    if (isPersonnelMode) {
+      employeeApi
+        .me()
+        .then((employee) => setEmployees({ ...emptyPage, content: [employee], totalElements: 1, totalPages: 1 }))
+        .finally(() => setLoading(false));
+      return;
+    }
     employeeApi
       .search({
         search: debouncedSearch,
@@ -395,7 +408,7 @@ export function EmployeesPage() {
       })
       .then(setEmployees)
       .finally(() => setLoading(false));
-  }, [debouncedSearch, departmentFilter, page, statusFilter]);
+  }, [debouncedSearch, departmentFilter, isPersonnelMode, page, statusFilter]);
 
   useEffect(() => {
     loadEmployees();
@@ -461,7 +474,8 @@ export function EmployeesPage() {
   );
 
   const generatedPreview = useMemo(() => employeeCodePattern(settings), [settings]);
-  const canManageEmployees = hasRoleAccess(user, HR_ROLES);
+  const canManageEmployees = hasRoleAccess(user, HR_ROLES) && !isPersonnelMode;
+  const canEditProfile = canManageEmployees || isPersonnelMode;
   const canTerminateEmployees = hasRoleAccess(user, ADMIN_ROLES);
 
   function codeExists(code: string) {
@@ -750,7 +764,7 @@ export function EmployeesPage() {
       showFormError("Enter valid official and personal email addresses.");
       return;
     }
-    if (!validateMobile(form.mobileNumber) || (form.alternateMobileNumber && !validateMobile(form.alternateMobileNumber))) {
+    if ((form.mobileNumber && !validateMobile(form.mobileNumber)) || (form.alternateMobileNumber && !validateMobile(form.alternateMobileNumber))) {
       showFormError("Mobile numbers must be valid 10-digit Indian mobile numbers.");
       return;
     }
@@ -778,7 +792,7 @@ export function EmployeesPage() {
       showFormError("Base salary must be greater than zero.");
       return;
     }
-    const pendingDocumentTypes = form.documents.filter((item) => item.file).map((item) => item.type.toLowerCase());
+    const pendingDocumentTypes = (isPersonnelMode ? [] : form.documents.filter((item) => item.file)).map((item) => item.type.toLowerCase());
     const duplicatePendingType = pendingDocumentTypes.find((type, index) => pendingDocumentTypes.indexOf(type) !== index);
     if (duplicatePendingType) {
       showFormError("Each uploaded document must use a unique document type. Change the document type before saving.");
@@ -788,7 +802,9 @@ export function EmployeesPage() {
     try {
       const payload = { ...toPayload(), employeeCode };
       let savedEmployee: Employee;
-      if (editing) {
+      if (isPersonnelMode) {
+        savedEmployee = await employeeApi.updateMe(payload);
+      } else if (editing) {
         savedEmployee = await employeeApi.update(editing.id, payload);
       } else {
         savedEmployee = await employeeApi.create(payload);
@@ -797,15 +813,15 @@ export function EmployeesPage() {
           setSettings(latestSettings);
         }
       }
-      if (form.deleteProfilePhoto && !form.profilePhotoFile) {
+      if (!isPersonnelMode && form.deleteProfilePhoto && !form.profilePhotoFile) {
         await employeeApi.deleteProfilePhoto(savedEmployee.id).catch(() => undefined);
       }
-      if (form.profilePhotoFile) {
+      if (!isPersonnelMode && form.profilePhotoFile) {
         await employeeApi.uploadProfilePhoto(savedEmployee.id, form.profilePhotoFile, (progress) => {
           setFileMessage(`Uploading profile photo ${progress}%`);
         });
       }
-      for (const document of form.documents.filter((item) => item.file)) {
+      for (const document of isPersonnelMode ? [] : form.documents.filter((item) => item.file)) {
         const duplicate = form.documents.some(
           (item) => item.persistedId && item.type.toLowerCase() === document.type.toLowerCase(),
         );
@@ -906,7 +922,7 @@ export function EmployeesPage() {
       header: "Actions",
       cell: (employee) => (
         <div className="flex gap-2">
-          {canManageEmployees ? (
+          {canEditProfile ? (
             <>
               <Button type="button" variant="secondary" className="px-3" onClick={() => openEdit(employee)}>
                 <Edit3 size={15} />
@@ -930,8 +946,12 @@ export function EmployeesPage() {
       <Card>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-sm font-bold uppercase tracking-[0.18em] text-fern">People</p>
-            <h2 className="mt-2 font-display text-3xl font-extrabold text-ink">Employees</h2>
+            <p className="text-sm font-bold uppercase tracking-[0.18em] text-fern">
+              {isPersonnelMode ? "Personnel" : "People"}
+            </p>
+            <h2 className="mt-2 font-display text-3xl font-extrabold text-ink">
+              {isPersonnelMode ? "My Profile" : "Employees"}
+            </h2>
           </div>
           {canManageEmployees && (
             <div className="flex flex-wrap gap-3">
@@ -946,39 +966,41 @@ export function EmployeesPage() {
           )}
         </div>
 
-        <div className="mt-6 grid gap-3 lg:grid-cols-[1fr_210px_240px]">
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-ink/35" size={18} />
-            <Input
-              aria-label="Search employees"
-              placeholder="Search by name, code, or email"
-              className="pl-11"
-              value={search}
-              onChange={(event) => {
+        {!isPersonnelMode && (
+          <div className="mt-6 grid gap-3 lg:grid-cols-[1fr_210px_240px]">
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-ink/35" size={18} />
+              <Input
+                aria-label="Search employees"
+                placeholder="Search by name, code, or email"
+                className="pl-11"
+                value={search}
+                onChange={(event) => {
+                  setPage(0);
+                  setSearch(event.target.value);
+                }}
+              />
+            </div>
+            <SearchableSelect
+              aria-label="Filter by status"
+              value={statusFilter}
+              options={[{ value: "", label: "All statuses" }, ...statuses.map((status) => ({ value: status, label: status }))]}
+              onChange={(value) => {
                 setPage(0);
-                setSearch(event.target.value);
+                setStatusFilter(value);
+              }}
+            />
+            <SearchableSelect
+              aria-label="Filter by department"
+              value={departmentFilter}
+              options={[{ value: "", label: "All departments" }, ...departmentOptions]}
+              onChange={(value) => {
+                setPage(0);
+                setDepartmentFilter(value);
               }}
             />
           </div>
-          <SearchableSelect
-            aria-label="Filter by status"
-            value={statusFilter}
-            options={[{ value: "", label: "All statuses" }, ...statuses.map((status) => ({ value: status, label: status }))]}
-            onChange={(value) => {
-              setPage(0);
-              setStatusFilter(value);
-            }}
-          />
-          <SearchableSelect
-            aria-label="Filter by department"
-            value={departmentFilter}
-            options={[{ value: "", label: "All departments" }, ...departmentOptions]}
-            onChange={(value) => {
-              setPage(0);
-              setDepartmentFilter(value);
-            }}
-          />
-        </div>
+        )}
       </Card>
 
       <DataTable
@@ -1053,8 +1075,12 @@ export function EmployeesPage() {
       <Modal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        title={editing ? "Edit employee" : "Create employee"}
-        description="Employee data powers payroll, leave, shift, and reporting workflows."
+        title={isPersonnelMode ? "Update my profile" : editing ? "Edit employee" : "Create employee"}
+        description={
+          isPersonnelMode
+            ? "Keep your personal, contact, address, and bank details current."
+            : "Employee data powers payroll, leave, shift, and reporting workflows."
+        }
       >
         <form onSubmit={handleSubmit} className="relative space-y-4">
           {error && (
@@ -1106,7 +1132,7 @@ export function EmployeesPage() {
               <Input label="Alternate Mobile Number" value={form.alternateMobileNumber} onChange={(event) => setForm({ ...form, alternateMobileNumber: event.target.value.replace(/\D/g, "") })} />
               <Input label="Personal Email" type="email" value={form.personalEmail} onChange={(event) => setForm({ ...form, personalEmail: event.target.value })} />
               <Input label="Official Email" type="email" value={form.officialEmail} onChange={(event) => setForm({ ...form, officialEmail: event.target.value })} />
-              <div className="space-y-2 text-sm font-semibold text-ink/80">
+              {!isPersonnelMode && <div className="space-y-2 text-sm font-semibold text-ink/80">
                 <span>Profile Photo</span>
                 <div className="flex items-center gap-4 rounded-3xl border border-moss/10 bg-white/70 p-4">
                   {form.profilePhotoPreviewUrl ? (
@@ -1127,7 +1153,7 @@ export function EmployeesPage() {
                     )}
                   </div>
                 </div>
-              </div>
+              </div>}
             </div>
           </Section>
 
@@ -1137,49 +1163,58 @@ export function EmployeesPage() {
                 label="Employment Type"
                 value={form.employmentType}
                 options={employmentTypeOptions}
+                disabled={isPersonnelMode}
                 onChange={(value) => setForm({ ...form, employmentType: value })}
               />
               <SearchableSelect
                 label="Department"
                 value={String(form.departmentId || "")}
                 options={departmentOptions}
+                disabled={isPersonnelMode}
                 onChange={(value) => updateDepartment(Number(value))}
               />
               <SearchableSelect
                 label="Designation"
                 value={String(form.designationId || "")}
                 options={designationOptions}
+                disabled={isPersonnelMode}
                 onChange={(value) => setForm({ ...form, designationId: Number(value) })}
               />
               <SearchableSelect
                 label="Branch"
                 value={String(form.branchId || "")}
                 options={branchOptions}
+                disabled={isPersonnelMode}
                 onChange={(value) => setForm({ ...form, branchId: Number(value) })}
               />
-              <EmployeeAutocomplete
-                label="Reporting Manager"
-                value={form.reportingManager}
-                employees={allEmployees}
-                onChange={(employeeCode) => setForm({ ...form, reportingManager: employeeCode })}
-              />
-              <EmployeeAutocomplete
-                label="HR Manager"
-                value={form.hrManager}
-                employees={allEmployees}
-                onChange={(employeeCode) => setForm({ ...form, hrManager: employeeCode })}
-              />
-              <Input label="Date of Joining" type="date" value={form.joiningDate} onChange={(event) => setForm({ ...form, joiningDate: event.target.value })} />
-              <Input label="Confirmation Date" type="date" value={form.confirmationDate} onChange={(event) => setForm({ ...form, confirmationDate: event.target.value })} />
-              <Input label="Probation Period" value={form.probationPeriod} onChange={(event) => setForm({ ...form, probationPeriod: event.target.value })} />
+              {!isPersonnelMode && (
+                <>
+                  <EmployeeAutocomplete
+                    label="Reporting Manager"
+                    value={form.reportingManager}
+                    employees={allEmployees}
+                    onChange={(employeeCode) => setForm({ ...form, reportingManager: employeeCode })}
+                  />
+                  <EmployeeAutocomplete
+                    label="HR Manager"
+                    value={form.hrManager}
+                    employees={allEmployees}
+                    onChange={(employeeCode) => setForm({ ...form, hrManager: employeeCode })}
+                  />
+                </>
+              )}
+              <Input label="Date of Joining" type="date" value={form.joiningDate} disabled={isPersonnelMode} onChange={(event) => setForm({ ...form, joiningDate: event.target.value })} />
+              <Input label="Confirmation Date" type="date" value={form.confirmationDate} disabled={isPersonnelMode} onChange={(event) => setForm({ ...form, confirmationDate: event.target.value })} />
+              <Input label="Probation Period" value={form.probationPeriod} disabled={isPersonnelMode} onChange={(event) => setForm({ ...form, probationPeriod: event.target.value })} />
               <SearchableSelect
                 label="Employee Status"
                 value={form.status}
                 options={statusOptions}
+                disabled={isPersonnelMode}
                 onChange={(value) => setForm({ ...form, status: value as EmploymentStatus })}
               />
-              <Input label="Biometric ID" value={form.biometricId} onChange={(event) => setForm({ ...form, biometricId: event.target.value })} />
-              <Input label="Base Salary" type="number" min="1" value={form.baseSalary} onChange={(event) => setForm({ ...form, baseSalary: event.target.value })} />
+              <Input label="Biometric ID" value={form.biometricId} disabled={isPersonnelMode} onChange={(event) => setForm({ ...form, biometricId: event.target.value })} />
+              <Input label="Base Salary" type="number" min="1" value={form.baseSalary} disabled={isPersonnelMode} onChange={(event) => setForm({ ...form, baseSalary: event.target.value })} />
             </div>
           </Section>
 
@@ -1236,93 +1271,95 @@ export function EmployeesPage() {
             </div>
           </Section>
 
-          <Section title="Documents">
-            <label className="flex cursor-pointer flex-col items-center justify-center rounded-3xl border border-dashed border-moss/25 bg-oat/50 p-6 text-center text-sm font-semibold text-ink/65">
-              <UploadCloud className="mb-2 text-fern" size={24} />
-              Upload multiple documents
-              <input className="hidden" type="file" multiple onChange={(event) => addDocuments(event.target.files)} />
-            </label>
-            {fileMessage && <p className="rounded-2xl bg-oat/70 px-4 py-3 text-sm font-semibold text-ink/70">{fileMessage}</p>}
-            <div className="grid gap-3">
-              {form.documents.map((document) => (
-                <div key={document.id} className="grid gap-3 rounded-3xl border border-moss/10 bg-white/70 p-4 md:grid-cols-[220px_1fr_auto] md:items-center">
-                  <Select
-                    aria-label="Document type"
-                    value={document.type}
-                    onChange={(event) =>
-                      setForm({
-                        ...form,
-                        documents: form.documents.map((item) => (item.id === document.id ? { ...item, type: event.target.value } : item)),
-                      })
-                    }
-                  >
-                    {documentTypes.map((type) => (
-                      <option key={type} value={type}>
-                        {type}
-                      </option>
-                    ))}
-                  </Select>
-                  <div>
-                    <p className="text-sm font-semibold text-ink">{document.fileName}</p>
-                    <p className="text-xs font-semibold text-ink/50">
-                      {document.uploadedAt ? `Uploaded ${formatDate(document.uploadedAt)} by ${document.uploadedBy}` : "Pending upload"}
-                    </p>
-                    <p className="text-xs text-ink/45">
-                      {formatFileSize(document.fileSize)} {document.uploadProgress !== undefined && document.uploadProgress < 100 ? `- ${document.uploadProgress}%` : ""}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    {(document.previewSupported || supportsInlinePreview(document.fileType)) && (
-                      <Button type="button" variant="secondary" className="px-3" onClick={() => previewDocument(document)}>
-                        <Eye size={15} />
-                      </Button>
-                    )}
-                    <Button type="button" variant="secondary" className="px-3" onClick={() => downloadDocument(document)}>
-                      <Download size={15} />
-                    </Button>
-                    <label className="inline-flex cursor-pointer items-center rounded-2xl border border-moss/15 bg-white/80 px-3 py-2.5 text-sm font-semibold text-moss transition hover:bg-white">
-                      <UploadCloud size={15} />
-                      <input
-                        className="hidden"
-                        type="file"
-                        onChange={(event) => {
-                          const file = event.target.files?.[0];
-                          if (!file) {
-                            return;
-                          }
-                          setForm({
-                            ...form,
-                            documents: form.documents.map((item) =>
-                              item.id === document.id
-                                ? {
-                                    ...item,
-                                    file,
-                                    fileName: file.name,
-                                    previewUrl: URL.createObjectURL(file),
-                                    fileType: file.type,
-                                    fileSize: file.size,
-                                    previewSupported: supportsInlinePreview(file.type),
-                                    uploadProgress: 0,
-                                  }
-                                : item,
-                            ),
-                          });
-                        }}
-                      />
-                    </label>
-                    <Button
-                      type="button"
-                      variant="danger"
-                      className="px-3"
-                      onClick={() => removeDocument(document)}
+          {!isPersonnelMode && (
+            <Section title="Documents">
+              <label className="flex cursor-pointer flex-col items-center justify-center rounded-3xl border border-dashed border-moss/25 bg-oat/50 p-6 text-center text-sm font-semibold text-ink/65">
+                <UploadCloud className="mb-2 text-fern" size={24} />
+                Upload multiple documents
+                <input className="hidden" type="file" multiple onChange={(event) => addDocuments(event.target.files)} />
+              </label>
+              {fileMessage && <p className="rounded-2xl bg-oat/70 px-4 py-3 text-sm font-semibold text-ink/70">{fileMessage}</p>}
+              <div className="grid gap-3">
+                {form.documents.map((document) => (
+                  <div key={document.id} className="grid gap-3 rounded-3xl border border-moss/10 bg-white/70 p-4 md:grid-cols-[220px_1fr_auto] md:items-center">
+                    <Select
+                      aria-label="Document type"
+                      value={document.type}
+                      onChange={(event) =>
+                        setForm({
+                          ...form,
+                          documents: form.documents.map((item) => (item.id === document.id ? { ...item, type: event.target.value } : item)),
+                        })
+                      }
                     >
-                      <Trash2 size={15} />
-                    </Button>
+                      {documentTypes.map((type) => (
+                        <option key={type} value={type}>
+                          {type}
+                        </option>
+                      ))}
+                    </Select>
+                    <div>
+                      <p className="text-sm font-semibold text-ink">{document.fileName}</p>
+                      <p className="text-xs font-semibold text-ink/50">
+                        {document.uploadedAt ? `Uploaded ${formatDate(document.uploadedAt)} by ${document.uploadedBy}` : "Pending upload"}
+                      </p>
+                      <p className="text-xs text-ink/45">
+                        {formatFileSize(document.fileSize)} {document.uploadProgress !== undefined && document.uploadProgress < 100 ? `- ${document.uploadProgress}%` : ""}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      {(document.previewSupported || supportsInlinePreview(document.fileType)) && (
+                        <Button type="button" variant="secondary" className="px-3" onClick={() => previewDocument(document)}>
+                          <Eye size={15} />
+                        </Button>
+                      )}
+                      <Button type="button" variant="secondary" className="px-3" onClick={() => downloadDocument(document)}>
+                        <Download size={15} />
+                      </Button>
+                      <label className="inline-flex cursor-pointer items-center rounded-2xl border border-moss/15 bg-white/80 px-3 py-2.5 text-sm font-semibold text-moss transition hover:bg-white">
+                        <UploadCloud size={15} />
+                        <input
+                          className="hidden"
+                          type="file"
+                          onChange={(event) => {
+                            const file = event.target.files?.[0];
+                            if (!file) {
+                              return;
+                            }
+                            setForm({
+                              ...form,
+                              documents: form.documents.map((item) =>
+                                item.id === document.id
+                                  ? {
+                                      ...item,
+                                      file,
+                                      fileName: file.name,
+                                      previewUrl: URL.createObjectURL(file),
+                                      fileType: file.type,
+                                      fileSize: file.size,
+                                      previewSupported: supportsInlinePreview(file.type),
+                                      uploadProgress: 0,
+                                    }
+                                  : item,
+                              ),
+                            });
+                          }}
+                        />
+                      </label>
+                      <Button
+                        type="button"
+                        variant="danger"
+                        className="px-3"
+                        onClick={() => removeDocument(document)}
+                      >
+                        <Trash2 size={15} />
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </Section>
+                ))}
+              </div>
+            </Section>
+          )}
 
           <Section title="Education">
             <Button type="button" variant="secondary" onClick={addEducation}>
@@ -1391,7 +1428,7 @@ export function EmployeesPage() {
             <Button type="button" variant="secondary" onClick={() => setModalOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit">{editing ? "Save changes" : "Create employee"}</Button>
+            <Button type="submit">{isPersonnelMode ? "Save profile" : editing ? "Save changes" : "Create employee"}</Button>
           </div>
         </form>
       </Modal>

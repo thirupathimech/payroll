@@ -5,9 +5,11 @@ import com.payroll.backend.dto.common.MessageResponse;
 import com.payroll.backend.dto.common.PageResponse;
 import com.payroll.backend.dto.employee.EmployeeRequest;
 import com.payroll.backend.dto.employee.EmployeeResponse;
+import com.payroll.backend.security.UserPrincipal;
 import com.payroll.backend.service.EmployeeService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -32,14 +34,20 @@ public class EmployeeController {
             @RequestParam(required = false) EmploymentStatus status,
             @RequestParam(required = false) Long departmentId,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size
+            @RequestParam(defaultValue = "10") int size,
+            @AuthenticationPrincipal UserPrincipal principal
     ) {
-        return employeeService.search(search, status, departmentId, page, size);
+        return employeeService.search(search, status, departmentId, page, size, principal);
     }
 
     @GetMapping("/{id}")
-    public EmployeeResponse get(@PathVariable Long id) {
-        return employeeService.get(id);
+    public EmployeeResponse get(@PathVariable Long id, @AuthenticationPrincipal UserPrincipal principal) {
+        return employeeService.get(id, principal);
+    }
+
+    @GetMapping("/me")
+    public EmployeeResponse getCurrent(@AuthenticationPrincipal UserPrincipal principal) {
+        return employeeService.getCurrent(principal);
     }
 
     @PostMapping
@@ -52,6 +60,14 @@ public class EmployeeController {
     @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public EmployeeResponse update(@PathVariable Long id, @Valid @RequestBody EmployeeRequest request) {
         return employeeService.update(id, request);
+    }
+
+    @PutMapping("/me")
+    public EmployeeResponse updateCurrent(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @Valid @RequestBody EmployeeRequest request
+    ) {
+        return employeeService.updateCurrent(principal, request);
     }
 
     @DeleteMapping("/{id}")

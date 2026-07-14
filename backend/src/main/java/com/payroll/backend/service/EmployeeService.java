@@ -14,6 +14,7 @@ import com.payroll.backend.repository.DepartmentRepository;
 import com.payroll.backend.repository.DesignationRepository;
 import com.payroll.backend.repository.BranchRepository;
 import com.payroll.backend.repository.EmployeeRepository;
+import com.payroll.backend.security.UserPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -41,8 +42,16 @@ public class EmployeeService {
             EmploymentStatus status,
             Long departmentId,
             int page,
-            int size
+            int size,
+            UserPrincipal principal
     ) {
+        if (isEmployee(principal)) {
+            return PageResponse.from(new org.springframework.data.domain.PageImpl<>(
+                    java.util.List.of(findCurrentEmployee(principal)),
+                    PageRequest.of(0, 1),
+                    1
+            ).map(this::toResponse));
+        }
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "firstName"));
         return PageResponse.from(employeeRepository
                 .search(currentOrgService.orgCode(), blankToNull(search), status, departmentId, pageable)
@@ -50,8 +59,17 @@ public class EmployeeService {
     }
 
     @Transactional(readOnly = true)
-    public EmployeeResponse get(Long id) {
-        return toResponse(findEmployee(id));
+    public EmployeeResponse get(Long id, UserPrincipal principal) {
+        Employee employee = findEmployee(id);
+        if (isEmployee(principal) && !employee.getId().equals(findCurrentEmployee(principal).getId())) {
+            throw new ResourceNotFoundException("Employee not found");
+        }
+        return toResponse(employee);
+    }
+
+    @Transactional(readOnly = true)
+    public EmployeeResponse getCurrent(UserPrincipal principal) {
+        return toResponse(findCurrentEmployee(principal));
     }
 
     @Transactional
@@ -86,6 +104,26 @@ public class EmployeeService {
         apply(request, employee, department, designation, branch, employee.getEmployeeCode());
         Employee saved = employeeRepository.save(employee);
         auditService.log("EMPLOYEE_UPDATED", "Employee", saved.getId(), saved.getEmployeeCode());
+        return toResponse(saved);
+    }
+
+    @Transactional
+    public EmployeeResponse updateCurrent(UserPrincipal principal, EmployeeRequest request) {
+        Employee employee = findCurrentEmployee(principal);
+        if (!employee.getEmployeeCode().equalsIgnoreCase(request.employeeCode().trim())) {
+            throw new BadRequestException("Employee code cannot be changed after creation");
+        }
+        ensureUniqueEmployee(request.employeeCode(), request.email(), employee.getId());
+        employee.setFirstName(request.firstName().trim());
+        employee.setLastName(request.lastName().trim());
+        employee.setEmail(request.email().trim().toLowerCase());
+        employee.setPhone(request.phone());
+        employee.setDateOfBirth(request.dateOfBirth());
+        employee.setBankAccountNumber(request.bankAccountNumber());
+        employee.setTaxIdentificationNumber(request.taxIdentificationNumber());
+        employee.setAddress(request.address());
+        Employee saved = employeeRepository.save(employee);
+        auditService.log("EMPLOYEE_SELF_UPDATED", "Employee", saved.getId(), saved.getEmployeeCode());
         return toResponse(saved);
     }
 
@@ -168,6 +206,19 @@ public class EmployeeService {
     private Employee findEmployee(Long id) {
         return employeeRepository.findByOrgCodeAndId(currentOrgService.orgCode(), id)
                 .orElseThrow(() -> new ResourceNotFoundException("Employee not found"));
+    }
+
+    private Employee findCurrentEmployee(UserPrincipal principal) {
+        if (principal == null || principal.employeeCode() == null || principal.employeeCode().isBlank()) {
+            throw new ResourceNotFoundException("Employee profile not found");
+        }
+        return employeeRepository.findByOrgCodeAndEmployeeCodeIgnoreCase(currentOrgService.orgCode(), principal.employeeCode())
+                .orElseThrow(() -> new ResourceNotFoundException("Employee profile not found"));
+    }
+
+    private boolean isEmployee(UserPrincipal principal) {
+        return principal != null && principal.getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_EMPLOYEE".equals(authority.getAuthority()));
     }
 
     private EmployeeResponse toResponse(Employee employee) {

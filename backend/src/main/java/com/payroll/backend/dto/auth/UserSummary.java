@@ -7,6 +7,7 @@ public record UserSummary(
         String orgCode,
         String email,
         String fullName,
-        RoleName role
+        RoleName role,
+        String employeeCode
 ) {
 }

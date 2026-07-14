@@ -11,6 +11,7 @@ import {
   Settings,
   ShieldCheck,
   UserCog,
+  UserRound,
   Users,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
@@ -33,9 +34,16 @@ const navItems: Array<{ label: string; path: string; icon: typeof LayoutDashboar
   { label: "Audit Logs", path: "/audit-logs", icon: ShieldCheck, allowedRoles: ADMIN_ROLES },
 ];
 
+const personnelItems: Array<{ label: string; path: string; icon: typeof LayoutDashboard }> = [
+  { label: "My Profile", path: "/employees", icon: UserRound },
+  { label: "Apply Leave", path: "/leaves", icon: CalendarDays },
+  { label: "My Shift", path: "/shift-assignments", icon: Clock3 },
+];
+
 export function Sidebar() {
-  const { user } = useAuth();
-  const visibleItems = navItems.filter((item) => hasRoleAccess(user, item.allowedRoles));
+  const { user, viewMode } = useAuth();
+  const visibleItems =
+    viewMode === "personnel" ? personnelItems : navItems.filter((item) => hasRoleAccess(user, item.allowedRoles));
 
   return (
     <aside className="hidden min-h-screen w-72 shrink-0 border-r border-white/60 bg-ink px-5 py-6 text-white lg:block">
@@ -46,6 +54,9 @@ export function Sidebar() {
         <div>
           <p className="font-display text-xl font-extrabold">Payroll</p>
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/45">{user?.orgCode ?? "ORG"}</p>
+          <p className="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-white/35">
+            {viewMode === "personnel" ? "Personnel" : "Management"}
+          </p>
         </div>
       </div>
 

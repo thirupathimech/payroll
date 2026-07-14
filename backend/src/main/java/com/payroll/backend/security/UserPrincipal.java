@@ -14,6 +14,7 @@ public record UserPrincipal(
         String username,
         String email,
         String fullName,
+        String employeeCode,
         String password,
         Collection<? extends GrantedAuthority> authorities,
         boolean enabled
@@ -26,6 +27,7 @@ public record UserPrincipal(
                 user.getUsername(),
                 user.getEmail(),
                 user.getFullName(),
+                user.getEmployeeCode(),
                 user.getPasswordHash(),
                 List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().name())),
                 user.isEnabled()

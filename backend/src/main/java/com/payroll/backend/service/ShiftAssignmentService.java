@@ -10,6 +10,7 @@ import com.payroll.backend.exception.ResourceNotFoundException;
 import com.payroll.backend.repository.EmployeeRepository;
 import com.payroll.backend.repository.ShiftAssignmentRepository;
 import com.payroll.backend.repository.ShiftRepository;
+import com.payroll.backend.security.UserPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,16 +30,17 @@ public class ShiftAssignmentService {
     private final AuditService auditService;
 
     @Transactional(readOnly = true)
-    public List<ShiftAssignmentResponse> search(Long employeeId, LocalDate startDate, LocalDate endDate) {
+    public List<ShiftAssignmentResponse> search(Long employeeId, LocalDate startDate, LocalDate endDate, UserPrincipal principal) {
         String orgCode = currentOrgService.orgCode();
         LocalDate start = startDate == null ? LocalDate.now().withDayOfMonth(1) : startDate;
         LocalDate end = endDate == null ? start.plusMonths(1).minusDays(1) : endDate;
         if (end.isBefore(start)) {
             throw new BadRequestException("End date cannot be before start date");
         }
-        List<ShiftAssignment> assignments = employeeId == null
+        Long effectiveEmployeeId = isEmployee(principal) ? findCurrentEmployee(principal).getId() : employeeId;
+        List<ShiftAssignment> assignments = effectiveEmployeeId == null
                 ? shiftAssignmentRepository.findByOrgCodeAndAssignmentDateBetweenOrderByAssignmentDate(orgCode, start, end)
-                : shiftAssignmentRepository.findByOrgCodeAndEmployeeIdAndAssignmentDateBetweenOrderByAssignmentDate(orgCode, employeeId, start, end);
+                : shiftAssignmentRepository.findByOrgCodeAndEmployeeIdAndAssignmentDateBetweenOrderByAssignmentDate(orgCode, effectiveEmployeeId, start, end);
         return assignments.stream().map(this::toResponse).toList();
     }
 
@@ -96,6 +98,19 @@ public class ShiftAssignmentService {
             current = current.plusDays(1);
         }
         return dates;
+    }
+
+    private Employee findCurrentEmployee(UserPrincipal principal) {
+        if (principal == null || principal.employeeCode() == null || principal.employeeCode().isBlank()) {
+            throw new ResourceNotFoundException("Employee profile not found");
+        }
+        return employeeRepository.findByOrgCodeAndEmployeeCodeIgnoreCase(currentOrgService.orgCode(), principal.employeeCode())
+                .orElseThrow(() -> new ResourceNotFoundException("Employee profile not found"));
+    }
+
+    private boolean isEmployee(UserPrincipal principal) {
+        return principal != null && principal.getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_EMPLOYEE".equals(authority.getAuthority()));
     }
 
     private ShiftAssignmentResponse toResponse(ShiftAssignment assignment) {

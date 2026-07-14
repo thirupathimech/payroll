@@ -2,6 +2,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, RotateCcw, Search, Trash2 } from "lucide-react";
 import { getErrorMessage } from "../api/client";
 import { departmentApi, employeeApi, shiftApi, shiftAssignmentApi } from "../api/payroll";
+import { useAuth } from "../auth/AuthContext";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
@@ -131,6 +132,8 @@ function buildCalendarDays(monthDate: Date) {
 }
 
 export function ShiftAssignmentPage() {
+  const { viewMode } = useAuth();
+  const isPersonnelMode = viewMode === "personnel";
   const [departments, setDepartments] = useState<Department[]>(initialDepartments);
   const [employees, setEmployees] = useState<EmployeeOption[]>(initialEmployees);
   const [shifts, setShifts] = useState<Shift[]>([]);
@@ -149,7 +152,7 @@ export function ShiftAssignmentPage() {
   useEffect(() => {
     Promise.all([
       departmentApi.active(),
-      employeeApi.search({ status: "ACTIVE", page: 0, size: 500 }),
+      isPersonnelMode ? employeeApi.me().then((employee) => ({ content: [employee] })) : employeeApi.search({ status: "ACTIVE", page: 0, size: 500 }),
       shiftApi.active(),
     ])
       .then(([departmentItems, employeePage, shiftItems]) => {
@@ -170,7 +173,7 @@ export function ShiftAssignmentPage() {
         }
       })
       .catch(() => undefined);
-  }, []);
+  }, [isPersonnelMode]);
 
   const visibleEmployees = useMemo(
     () =>
@@ -219,6 +222,9 @@ export function ShiftAssignmentPage() {
   }, [loadAssignments]);
 
   function openAssignmentDialog(dateKey: string) {
+    if (isPersonnelMode) {
+      return;
+    }
     setForm({
       employeeId: selectedEmployeeId,
       shiftId: shifts[0] ? String(shifts[0].id) : "",
@@ -318,6 +324,9 @@ export function ShiftAssignmentPage() {
   }
 
   async function removeAssignment(assignment: ShiftAssignment) {
+    if (isPersonnelMode) {
+      return;
+    }
     if (!window.confirm(`Remove ${assignment.shiftName} for ${assignment.employeeName} on ${formatDate(assignment.date)}?`)) {
       return;
     }
@@ -336,45 +345,51 @@ export function ShiftAssignmentPage() {
 
   return (
     <div className="space-y-6">
-      <Card>
+      <Card className="relative z-30 overflow-visible">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-sm font-bold uppercase tracking-[0.18em] text-fern">Attendance Setup</p>
-            <h2 className="mt-2 font-display text-3xl font-extrabold text-ink">Shift Assignment</h2>
+            <p className="text-sm font-bold uppercase tracking-[0.18em] text-fern">
+              {isPersonnelMode ? "Personnel" : "Attendance Setup"}
+            </p>
+            <h2 className="mt-2 font-display text-3xl font-extrabold text-ink">
+              {isPersonnelMode ? "My Shift" : "Shift Assignment"}
+            </h2>
           </div>
           <div className="grid h-12 w-12 place-items-center rounded-2xl bg-ember text-ink shadow-glow">
             <CalendarDays size={22} />
           </div>
         </div>
 
-        <div className="mt-6 grid gap-3 lg:grid-cols-[220px_1fr_280px]">
-          <SearchableSelect
-            aria-label="Filter by department"
-            value={departmentFilter}
-            options={[{ value: "", label: "All departments" }, ...departments.map((department) => ({ value: String(department.id), label: department.name, searchText: department.code }))]}
-            onChange={setDepartmentFilter}
-          />
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-ink/35" size={18} />
-            <Input
-              aria-label="Employee search"
-              placeholder="Search by employee name or ID"
-              className="pl-11"
-              value={employeeSearch}
-              onChange={(event) => setEmployeeSearch(event.target.value)}
+        {!isPersonnelMode && (
+          <div className="mt-6 grid gap-3 lg:grid-cols-[220px_1fr_280px]">
+            <SearchableSelect
+              aria-label="Filter by department"
+              value={departmentFilter}
+              options={[{ value: "", label: "All departments" }, ...departments.map((department) => ({ value: String(department.id), label: department.name, searchText: department.code }))]}
+              onChange={setDepartmentFilter}
+            />
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-ink/35" size={18} />
+              <Input
+                aria-label="Employee search"
+                placeholder="Search by employee name or ID"
+                className="pl-11"
+                value={employeeSearch}
+                onChange={(event) => setEmployeeSearch(event.target.value)}
+              />
+            </div>
+            <EmployeeAutocomplete
+              label=""
+              value={selectedEmployeeCode}
+              employees={visibleEmployees}
+              onChange={chooseEmployee}
+              placeholder="Select employee schedule"
             />
           </div>
-          <EmployeeAutocomplete
-            label=""
-            value={selectedEmployeeCode}
-            employees={visibleEmployees}
-            onChange={chooseEmployee}
-            placeholder="Select employee schedule"
-          />
-        </div>
+        )}
       </Card>
 
-      <section className="grid gap-6 xl:grid-cols-[1fr_320px]">
+      <section className="relative z-10 grid gap-6 xl:grid-cols-[1fr_320px]">
         <Card className="overflow-hidden p-0">
           <div className="flex flex-col gap-4 border-b border-moss/10 p-5 lg:flex-row lg:items-center lg:justify-between">
             <div>
@@ -416,6 +431,7 @@ export function ShiftAssignmentPage() {
                     day.inCurrentMonth ? "bg-white/60" : "bg-oat/35 text-ink/35"
                   }`}
                   onClick={() => openAssignmentDialog(day.dateKey)}
+                  disabled={isPersonnelMode}
                 >
                   <span
                     className={`grid h-7 w-7 place-items-center rounded-full text-sm font-extrabold ${
@@ -476,15 +492,17 @@ export function ShiftAssignmentPage() {
                     <p className="font-bold text-ink">{assignment.shiftName}</p>
                     <p className="text-sm text-ink/55">{formatDate(assignment.date)}</p>
                   </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="h-9 w-9 rounded-full p-0 text-red-700 hover:bg-red-50"
-                    onClick={() => removeAssignment(assignment)}
-                    aria-label="Remove assignment"
-                  >
-                    <Trash2 size={16} />
-                  </Button>
+                  {!isPersonnelMode && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="h-9 w-9 rounded-full p-0 text-red-700 hover:bg-red-50"
+                      onClick={() => removeAssignment(assignment)}
+                      aria-label="Remove assignment"
+                    >
+                      <Trash2 size={16} />
+                    </Button>
+                  )}
                 </div>
               ))}
               {upcomingAssignments.length === 0 && (
@@ -495,7 +513,7 @@ export function ShiftAssignmentPage() {
         </Card>
       </section>
 
-      <Modal
+      {!isPersonnelMode && <Modal
         open={dialogOpen}
         onClose={closeAssignmentDialog}
         title="Shift Assignment"
@@ -546,7 +564,7 @@ export function ShiftAssignmentPage() {
             <Button type="submit">Save Assignment</Button>
           </div>
         </form>
-      </Modal>
+      </Modal>}
 
       {warningOpen && (
         <div className="fixed inset-0 z-[60] grid place-items-center bg-ink/55 p-4 backdrop-blur-sm">

@@ -2,6 +2,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Check, Plus, Search, X } from "lucide-react";
 import { getErrorMessage } from "../api/client";
 import { employeeApi, leaveApi } from "../api/payroll";
+import { useAuth } from "../auth/AuthContext";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
@@ -36,6 +37,8 @@ const initialForm: LeavePayload = {
 };
 
 export function LeavePage() {
+  const { viewMode } = useAuth();
+  const isPersonnelMode = viewMode === "personnel";
   const [leaves, setLeaves] = useState(emptyPage);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [search, setSearch] = useState("");
@@ -49,25 +52,35 @@ export function LeavePage() {
   const debouncedSearch = useDebounce(search);
 
   useEffect(() => {
-    employeeApi.search({ status: "ACTIVE", page: 0, size: 500 }).then((employeePage) => {
-      setEmployees(employeePage.content);
-      setForm((current) => ({ ...current, employeeId: current.employeeId || employeePage.content[0]?.id || 0 }));
-      setSelectedEmployeeCode((current) => current || employeePage.content[0]?.employeeCode || "");
+    const request = isPersonnelMode
+      ? employeeApi.me().then((employee) => [employee])
+      : employeeApi.search({ status: "ACTIVE", page: 0, size: 500 }).then((employeePage) => employeePage.content);
+
+    request.then((employeeItems) => {
+      setEmployees(employeeItems);
+      setForm((current) => ({ ...current, employeeId: current.employeeId || employeeItems[0]?.id || 0 }));
+      setSelectedEmployeeCode((current) => current || employeeItems[0]?.employeeCode || "");
     });
-  }, []);
+  }, [isPersonnelMode]);
 
   const loadLeaves = useCallback(() => {
+    if (isPersonnelMode && !employees[0]?.id) {
+      setLeaves(emptyPage);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     leaveApi
       .search({
         search: debouncedSearch,
+        employeeId: isPersonnelMode ? employees[0]?.id : undefined,
         status: statusFilter ? (statusFilter as LeaveStatus) : undefined,
         page,
         size: 10,
       })
       .then(setLeaves)
       .finally(() => setLoading(false));
-  }, [debouncedSearch, page, statusFilter]);
+  }, [debouncedSearch, employees, isPersonnelMode, page, statusFilter]);
 
   useEffect(() => {
     loadLeaves();
@@ -144,7 +157,7 @@ export function LeavePage() {
     {
       header: "Actions",
       cell: (leave) =>
-        leave.status === "PENDING" ? (
+        !isPersonnelMode && leave.status === "PENDING" ? (
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="secondary" className="px-3 text-emerald-700" onClick={() => decide(leave, "APPROVED")}>
               <Check size={15} />
@@ -168,7 +181,9 @@ export function LeavePage() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-sm font-bold uppercase tracking-[0.18em] text-fern">Time Off</p>
-            <h2 className="mt-2 font-display text-3xl font-extrabold text-ink">Leave Management</h2>
+            <h2 className="mt-2 font-display text-3xl font-extrabold text-ink">
+              {isPersonnelMode ? "Apply Leave" : "Leave Management"}
+            </h2>
           </div>
           <Button type="button" onClick={openCreate}>
             <Plus size={18} />
@@ -176,20 +191,22 @@ export function LeavePage() {
           </Button>
         </div>
 
-        <div className="mt-6 grid gap-3 md:grid-cols-[1fr_220px]">
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-ink/35" size={18} />
-            <Input
-              aria-label="Search leave requests"
-              placeholder="Search by employee name or code"
-              className="pl-11"
-              value={search}
-              onChange={(event) => {
-                setPage(0);
-                setSearch(event.target.value);
-              }}
-            />
-          </div>
+        <div className={`mt-6 grid gap-3 ${isPersonnelMode ? "md:grid-cols-[220px]" : "md:grid-cols-[1fr_220px]"}`}>
+          {!isPersonnelMode && (
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-ink/35" size={18} />
+              <Input
+                aria-label="Search leave requests"
+                placeholder="Search by employee name or code"
+                className="pl-11"
+                value={search}
+                onChange={(event) => {
+                  setPage(0);
+                  setSearch(event.target.value);
+                }}
+              />
+            </div>
+          )}
           <SearchableSelect
             aria-label="Filter by leave status"
             value={statusFilter}
@@ -221,12 +238,14 @@ export function LeavePage() {
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
-            <EmployeeAutocomplete
-              label="Employee"
-              value={selectedEmployeeCode}
-              employees={employees}
-              onChange={chooseEmployee}
-            />
+            {!isPersonnelMode && (
+              <EmployeeAutocomplete
+                label="Employee"
+                value={selectedEmployeeCode}
+                employees={employees}
+                onChange={chooseEmployee}
+              />
+            )}
             <SearchableSelect
               label="Leave Type"
               value={form.leaveType}
