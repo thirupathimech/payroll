@@ -16,6 +16,7 @@ import com.payroll.backend.repository.DesignationRepository;
 import com.payroll.backend.repository.EmployeeRepository;
 import com.payroll.backend.repository.WeekOffAssignmentRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -80,10 +81,27 @@ public class WeekOffAssignmentService {
                                 designation.getId(),
                                 day
                         )
-                        .orElseGet(() -> saveGroupWeekly(branch, department, designation, day)))
+                        .orElseGet(() -> findOrSaveGroupWeekly(branch, department, designation, day)))
                 .toList();
         auditService.log("WEEK_OFF_GROUP_WEEKLY_SAVED", "WeekOffAssignment", department.getId(), designation.getTitle());
         return assignments.stream().map(this::toResponse).toList();
+    }
+
+    private WeekOffAssignment findOrSaveGroupWeekly(Branch branch, Department department, Designation designation, DayOfWeek day) {
+        try {
+            return saveGroupWeekly(branch, department, designation, day);
+        } catch (DataIntegrityViolationException ignored) {
+            return weekOffAssignmentRepository
+                    .findByOrgCodeAndAssignmentTypeAndBranchIdAndDepartmentIdAndDesignationIdAndDayOfWeek(
+                            currentOrgService.orgCode(),
+                            WeekOffAssignmentType.GROUP_WEEKLY,
+                            branch.getId(),
+                            department.getId(),
+                            designation.getId(),
+                            day
+                    )
+                    .orElseThrow(() -> ignored);
+        }
     }
 
     private WeekOffAssignment saveGroupWeekly(Branch branch, Department department, Designation designation, DayOfWeek day) {
@@ -92,7 +110,7 @@ public class WeekOffAssignmentService {
         assignment.setDepartment(department);
         assignment.setDesignation(designation);
         assignment.setDayOfWeek(day);
-        return weekOffAssignmentRepository.save(assignment);
+        return weekOffAssignmentRepository.saveAndFlush(assignment);
     }
 
     private List<WeekOffAssignmentResponse> createEmployeeDate(WeekOffAssignmentRequest request) {

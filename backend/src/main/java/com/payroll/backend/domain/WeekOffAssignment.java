@@ -12,6 +12,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -23,7 +24,13 @@ import java.time.LocalDate;
 @Setter
 @NoArgsConstructor
 @Entity
-@Table(name = "week_off_assignments")
+@Table(
+        name = "week_off_assignments",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_week_off_group_day",
+                columnNames = {"org_code", "assignment_type", "branch_id", "department_id", "designation_id", "day_of_week"}
+        )
+)
 public class WeekOffAssignment extends AuditableEntity {
 
     @Id

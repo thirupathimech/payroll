@@ -45,6 +45,18 @@ CREATE TABLE designations (
     CONSTRAINT fk_designations_department FOREIGN KEY (department_id) REFERENCES departments (id)
 );
 
+CREATE TABLE branches (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    org_code VARCHAR(3) NOT NULL,
+    created_at DATETIME(6) NOT NULL,
+    updated_at DATETIME(6) NOT NULL,
+    name VARCHAR(120) NOT NULL,
+    code VARCHAR(30),
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    PRIMARY KEY (id),
+    CONSTRAINT uk_branches_org_name UNIQUE (org_code, name)
+);
+
 CREATE TABLE employees (
     id BIGINT NOT NULL AUTO_INCREMENT,
     org_code VARCHAR(3) NOT NULL,
@@ -52,6 +64,7 @@ CREATE TABLE employees (
     updated_at DATETIME(6) NOT NULL,
     employee_code VARCHAR(40) NOT NULL,
     first_name VARCHAR(100) NOT NULL,
+    middle_name VARCHAR(100) NULL,
     last_name VARCHAR(100) NOT NULL,
     email VARCHAR(160) NOT NULL,
     phone VARCHAR(40),
@@ -65,11 +78,42 @@ CREATE TABLE employees (
     status VARCHAR(40) NOT NULL,
     department_id BIGINT NOT NULL,
     designation_id BIGINT NOT NULL,
+    manager_id BIGINT NULL,    
+    personal_email VARCHAR(160) NULL,
+    alternate_mobile_number VARCHAR(40) NULL,
+    gender VARCHAR(40) NULL,
+    marital_status VARCHAR(40) NULL,
+    blood_group VARCHAR(10) NULL,
+    nationality VARCHAR(80) NULL,
+    aadhaar_number VARCHAR(20) NULL,
+    confirmation_date DATE NULL,
+    employment_type VARCHAR(40) NULL,
+    probation_period VARCHAR(80) NULL,
+    biometric_id VARCHAR(80) NULL,
+    account_holder_name VARCHAR(160) NULL,
+    bank_name VARCHAR(160) NULL,
+    ifsc_code VARCHAR(40) NULL,
+    permanent_address VARCHAR(600) NULL,
+    emergency_contact_name VARCHAR(160) NULL,
+    emergency_relationship VARCHAR(80) NULL,
+    emergency_mobile_number VARCHAR(40) NULL,
+    primary_skill VARCHAR(120) NULL,
+    secondary_skill VARCHAR(120) NULL,
+    certifications VARCHAR(800) NULL,
+    languages_known VARCHAR(300) NULL,
+    resignation_date DATE NULL,
+    last_working_date DATE NULL,
+    exit_reason VARCHAR(800) NULL,
+    relieving_date DATE NULL,
+    hr_manager_id BIGINT NULL,
     PRIMARY KEY (id),
     CONSTRAINT uk_employees_org_code UNIQUE (org_code, employee_code),
     CONSTRAINT uk_employees_org_email UNIQUE (org_code, email),
     CONSTRAINT fk_employees_department FOREIGN KEY (department_id) REFERENCES departments (id),
-    CONSTRAINT fk_employees_designation FOREIGN KEY (designation_id) REFERENCES designations (id)
+    CONSTRAINT fk_employees_designation FOREIGN KEY (designation_id) REFERENCES designations (id),
+    CONSTRAINT fk_employees_manager FOREIGN KEY (manager_id) REFERENCES employees (id),
+    CONSTRAINT fk_employees_branch FOREIGN KEY (branch_id) REFERENCES branches (id),
+    CONSTRAINT fk_employees_hr_manager FOREIGN KEY (hr_manager_id) REFERENCES employees (id)
 );
 
 CREATE TABLE leave_requests (
@@ -141,21 +185,6 @@ CREATE TABLE employee_documents (
     CONSTRAINT fk_employee_documents_employee FOREIGN KEY (employee_id) REFERENCES employees (id)
 );
 
-CREATE TABLE branches (
-    id BIGINT NOT NULL AUTO_INCREMENT,
-    org_code VARCHAR(3) NOT NULL,
-    created_at DATETIME(6) NOT NULL,
-    updated_at DATETIME(6) NOT NULL,
-    name VARCHAR(120) NOT NULL,
-    code VARCHAR(30),
-    active BOOLEAN NOT NULL DEFAULT TRUE,
-    PRIMARY KEY (id),
-    CONSTRAINT uk_branches_org_name UNIQUE (org_code, name)
-);
-
-ALTER TABLE employees
-    ADD CONSTRAINT fk_employees_branch FOREIGN KEY (branch_id) REFERENCES branches (id);
-
 CREATE TABLE employee_settings (
     id BIGINT NOT NULL AUTO_INCREMENT,
     org_code VARCHAR(3) NOT NULL,
@@ -180,6 +209,7 @@ CREATE TABLE shifts (
     start_time TIME NOT NULL,
     duration_hours INT NOT NULL,
     duration_minutes INT NOT NULL,
+    segments_json JSON NOT NULL,
     active BOOLEAN NOT NULL DEFAULT TRUE,
     PRIMARY KEY (id),
     CONSTRAINT uk_shifts_org_code UNIQUE (org_code, code)
@@ -199,12 +229,73 @@ CREATE TABLE shift_assignments (
     CONSTRAINT fk_shift_assignments_shift FOREIGN KEY (shift_id) REFERENCES shifts (id)
 );
 
+CREATE TABLE week_off_assignments (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    org_code VARCHAR(3) NOT NULL,
+    created_at DATETIME(6) NOT NULL,
+    updated_at DATETIME(6) NOT NULL,
+    assignment_type VARCHAR(40) NOT NULL,
+    branch_id BIGINT,
+    department_id BIGINT,
+    designation_id BIGINT,
+    employee_id BIGINT,
+    day_of_week VARCHAR(20),
+    week_off_date DATE,
+    PRIMARY KEY (id),
+    CONSTRAINT uk_week_off_group_day UNIQUE (org_code, assignment_type, branch_id, department_id, designation_id, day_of_week),
+    CONSTRAINT fk_week_off_assignments_branch FOREIGN KEY (branch_id) REFERENCES branches (id),
+    CONSTRAINT fk_week_off_assignments_department FOREIGN KEY (department_id) REFERENCES departments (id),
+    CONSTRAINT fk_week_off_assignments_designation FOREIGN KEY (designation_id) REFERENCES designations (id),
+    CONSTRAINT fk_week_off_assignments_employee FOREIGN KEY (employee_id) REFERENCES employees (id)
+);
+
+CREATE TABLE employee_education (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    org_code VARCHAR(3) NOT NULL,
+    created_at DATETIME(6) NOT NULL,
+    updated_at DATETIME(6) NOT NULL,
+    employee_id BIGINT NOT NULL,
+    qualification VARCHAR(160),
+    institution VARCHAR(160),
+    university VARCHAR(160),
+    year_of_passing VARCHAR(40),
+    score VARCHAR(40),
+    specialization VARCHAR(160),
+    PRIMARY KEY (id),
+    CONSTRAINT fk_employee_education_employee FOREIGN KEY (employee_id) REFERENCES employees (id)
+);
+
+CREATE TABLE employee_experience (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    org_code VARCHAR(3) NOT NULL,
+    created_at DATETIME(6) NOT NULL,
+    updated_at DATETIME(6) NOT NULL,
+    employee_id BIGINT NOT NULL,
+    company VARCHAR(160),
+    designation VARCHAR(160),
+    start_date DATE,
+    end_date DATE,
+    total_experience VARCHAR(40),
+    last_drawn_salary VARCHAR(80),
+    reason_for_leaving VARCHAR(800),
+    PRIMARY KEY (id),
+    CONSTRAINT fk_employee_experience_employee FOREIGN KEY (employee_id) REFERENCES employees (id)
+);
+
 CREATE INDEX idx_employees_org_status ON employees (org_code, status);
+CREATE INDEX idx_employees_org_manager ON employees (org_code, manager_id);
+CREATE INDEX idx_employees_org_hr_manager ON employees (org_code, hr_manager_id);
+CREATE INDEX idx_employee_education_org_employee ON employee_education (org_code, employee_id);
+CREATE INDEX idx_employee_experience_org_employee ON employee_experience (org_code, employee_id);
+CREATE INDEX idx_employee_documents_org_employee ON employee_documents (org_code, employee_id);
+CREATE INDEX idx_employee_documents_org_category ON employee_documents (org_code, employee_id, document_category);
 CREATE INDEX idx_leave_requests_org_status ON leave_requests (org_code, status);
 CREATE INDEX idx_leave_requests_org_dates ON leave_requests (org_code, start_date, end_date);
 CREATE INDEX idx_audit_logs_org_created_at ON audit_logs (org_code, created_at);
-CREATE INDEX idx_employee_documents_org_employee ON employee_documents (org_code, employee_id);
-CREATE INDEX idx_employee_documents_org_category ON employee_documents (org_code, employee_id, document_category);
 CREATE INDEX idx_branches_org_active ON branches (org_code, active);
 CREATE INDEX idx_shift_assignments_org_employee ON shift_assignments (org_code, employee_id);
 CREATE INDEX idx_shift_assignments_org_date ON shift_assignments (org_code, assignment_date);
+CREATE INDEX idx_week_off_assignments_org_type ON week_off_assignments (org_code, assignment_type);
+CREATE INDEX idx_week_off_assignments_org_employee ON week_off_assignments (org_code, employee_id);
+CREATE INDEX idx_week_off_assignments_org_group ON week_off_assignments (org_code, branch_id, department_id, designation_id);
+CREATE INDEX idx_week_off_assignments_org_date ON week_off_assignments (org_code, week_off_date);

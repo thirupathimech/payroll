@@ -119,6 +119,7 @@ export function WeekOffAssignmentPage() {
   const [employeeDays, setEmployeeDays] = useState<WeekDayName[]>(["SUNDAY"]);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [savingAction, setSavingAction] = useState<"" | "GROUP_WEEKLY" | "EMPLOYEE_DATE" | "EMPLOYEE_WEEKLY">("");
 
   useEffect(() => {
     Promise.all([
@@ -181,6 +182,9 @@ export function WeekOffAssignmentPage() {
 
   async function saveGroupWeekly(event: FormEvent) {
     event.preventDefault();
+    if (savingAction) {
+      return;
+    }
     setError("");
     setSuccess("");
     if (!groupBranchId || !groupDepartmentId || !groupDesignationId || groupDays.length === 0) {
@@ -188,6 +192,7 @@ export function WeekOffAssignmentPage() {
       return;
     }
     try {
+      setSavingAction("GROUP_WEEKLY");
       await weekOffAssignmentApi.create({
         type: "GROUP_WEEKLY",
         branchId: Number(groupBranchId),
@@ -199,11 +204,16 @@ export function WeekOffAssignmentPage() {
       setSuccess("Group week off saved.");
     } catch (apiError) {
       setError(getErrorMessage(apiError));
+    } finally {
+      setSavingAction("");
     }
   }
 
   async function saveEmployeeDates(event: FormEvent) {
     event.preventDefault();
+    if (savingAction) {
+      return;
+    }
     setError("");
     setSuccess("");
     if (!dateEmployee || selectedDates.length === 0) {
@@ -211,6 +221,7 @@ export function WeekOffAssignmentPage() {
       return;
     }
     try {
+      setSavingAction("EMPLOYEE_DATE");
       await weekOffAssignmentApi.create({
         type: "EMPLOYEE_DATE",
         employeeId: dateEmployee.id,
@@ -221,11 +232,16 @@ export function WeekOffAssignmentPage() {
       setSuccess("Employee date week off saved.");
     } catch (apiError) {
       setError(getErrorMessage(apiError));
+    } finally {
+      setSavingAction("");
     }
   }
 
   async function saveEmployeeWeekly(event: FormEvent) {
     event.preventDefault();
+    if (savingAction) {
+      return;
+    }
     setError("");
     setSuccess("");
     if (!weeklyEmployee || employeeDays.length === 0) {
@@ -233,6 +249,7 @@ export function WeekOffAssignmentPage() {
       return;
     }
     try {
+      setSavingAction("EMPLOYEE_WEEKLY");
       await weekOffAssignmentApi.create({
         type: "EMPLOYEE_WEEKLY",
         employeeId: weeklyEmployee.id,
@@ -242,6 +259,8 @@ export function WeekOffAssignmentPage() {
       setSuccess("Employee weekly week off saved.");
     } catch (apiError) {
       setError(getErrorMessage(apiError));
+    } finally {
+      setSavingAction("");
     }
   }
 
@@ -312,8 +331,8 @@ export function WeekOffAssignmentPage() {
               />
             </div>
 
-            <Button type="submit" className="w-full">
-              Save Rule
+            <Button type="submit" className="w-full" disabled={savingAction === "GROUP_WEEKLY"}>
+              {savingAction === "GROUP_WEEKLY" ? "Saving..." : "Save Rule"}
             </Button>
           </form>
         </Card>
@@ -362,8 +381,8 @@ export function WeekOffAssignmentPage() {
               </div>
             </div>
 
-            <Button type="submit" className="w-full">
-              Save Dates
+            <Button type="submit" className="w-full" disabled={savingAction === "EMPLOYEE_DATE"}>
+              {savingAction === "EMPLOYEE_DATE" ? "Saving..." : "Save Dates"}
             </Button>
           </form>
         </Card>
@@ -390,8 +409,8 @@ export function WeekOffAssignmentPage() {
               placeholder="Select employee"
             />
 
-            <Button type="submit" className="w-full">
-              Save Days
+            <Button type="submit" className="w-full" disabled={savingAction === "EMPLOYEE_WEEKLY"}>
+              {savingAction === "EMPLOYEE_WEEKLY" ? "Saving..." : "Save Days"}
             </Button>
           </form>
         </Card>
