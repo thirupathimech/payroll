@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, type MouseEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, RotateCcw, Search, Trash2 } from "lucide-react";
 import { getErrorMessage } from "../api/client";
 import { departmentApi, employeeApi, shiftApi, shiftAssignmentApi } from "../api/payroll";
@@ -33,6 +33,12 @@ interface PendingSave {
   form: AssignmentForm;
   dates: string[];
   conflicts: ShiftAssignment[];
+}
+
+interface AssignmentDetailsMenu {
+  assignment: ShiftAssignment;
+  x: number;
+  y: number;
 }
 
 const initialDepartments: Department[] = [];
@@ -148,6 +154,7 @@ export function ShiftAssignmentPage() {
   const [pendingSave, setPendingSave] = useState<PendingSave | null>(null);
   const [form, setForm] = useState<AssignmentForm>(initialForm);
   const [error, setError] = useState("");
+  const [assignmentDetailsMenu, setAssignmentDetailsMenu] = useState<AssignmentDetailsMenu | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -221,6 +228,26 @@ export function ShiftAssignmentPage() {
     loadAssignments();
   }, [loadAssignments]);
 
+  useEffect(() => {
+    if (!assignmentDetailsMenu) {
+      return undefined;
+    }
+
+    function closeDetailsMenu() {
+      setAssignmentDetailsMenu(null);
+    }
+
+    window.addEventListener("click", closeDetailsMenu);
+    window.addEventListener("scroll", closeDetailsMenu, true);
+    window.addEventListener("resize", closeDetailsMenu);
+
+    return () => {
+      window.removeEventListener("click", closeDetailsMenu);
+      window.removeEventListener("scroll", closeDetailsMenu, true);
+      window.removeEventListener("resize", closeDetailsMenu);
+    };
+  }, [assignmentDetailsMenu]);
+
   function openAssignmentDialog(dateKey: string) {
     if (isPersonnelMode) {
       return;
@@ -249,6 +276,16 @@ export function ShiftAssignmentPage() {
 
   function moveMonth(amount: number) {
     setCurrentMonth((current) => new Date(current.getFullYear(), current.getMonth() + amount, 1));
+  }
+
+  function showAssignmentDetails(event: MouseEvent, assignment: ShiftAssignment) {
+    event.preventDefault();
+    event.stopPropagation();
+    setAssignmentDetailsMenu({
+      assignment,
+      x: Math.min(event.clientX, window.innerWidth - 288),
+      y: Math.min(event.clientY, window.innerHeight - 288),
+    });
   }
 
   async function commitAssignments(nextForm: AssignmentForm, overrideExisting: boolean) {
@@ -431,7 +468,7 @@ export function ShiftAssignmentPage() {
                     day.inCurrentMonth ? "bg-white/60" : "bg-oat/35 text-ink/35"
                   }`}
                   onClick={() => openAssignmentDialog(day.dateKey)}
-                  disabled={isPersonnelMode}
+                  aria-disabled={isPersonnelMode}
                 >
                   <span
                     className={`grid h-7 w-7 place-items-center rounded-full text-sm font-extrabold ${
@@ -449,6 +486,7 @@ export function ShiftAssignmentPage() {
                           className={`block truncate rounded-xl border px-2 py-1 text-xs font-bold ${
                             shiftIndex >= 0 ? shiftTone(shiftIndex) : "border-slate-200 bg-slate-100 text-slate-700"
                           }`}
+                          onContextMenu={(event) => showAssignmentDetails(event, assignment)}
                         >
                           {assignment.shiftCode} - {assignment.shiftName}
                         </span>
@@ -512,6 +550,49 @@ export function ShiftAssignmentPage() {
           </div>
         </Card>
       </section>
+
+      {assignmentDetailsMenu && (
+        <div
+          className="fixed z-[70] w-72 rounded-2xl border border-moss/10 bg-white p-4 text-sm shadow-card"
+          style={{ left: assignmentDetailsMenu.x, top: assignmentDetailsMenu.y }}
+          onClick={(event) => event.stopPropagation()}
+          role="dialog"
+          aria-label="Shift details"
+        >
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-fern">Shift Details</p>
+          <h3 className="mt-2 font-display text-lg font-extrabold text-ink">{assignmentDetailsMenu.assignment.shiftName}</h3>
+          <div className="mt-3 space-y-2 text-ink/70">
+            <p>
+              <span className="font-bold text-ink">Code:</span> {assignmentDetailsMenu.assignment.shiftCode}
+            </p>
+            <p>
+              <span className="font-bold text-ink">Date:</span> {formatDate(assignmentDetailsMenu.assignment.date)}
+            </p>
+            <p>
+              <span className="font-bold text-ink">Employee:</span> {assignmentDetailsMenu.assignment.employeeName}
+            </p>
+            <p>
+              <span className="font-bold text-ink">Personnel Type:</span> {assignmentDetailsMenu.assignment.employmentType || "-"}
+            </p>
+            <p>
+              <span className="font-bold text-ink">Department:</span> {assignmentDetailsMenu.assignment.departmentName}
+            </p>
+            <p>
+              <span className="font-bold text-ink">Time:</span>{" "}
+              {assignmentDetailsMenu.assignment.startTime} to{" "}
+              {toClockLabel(
+                assignmentDetailsMenu.assignment.startTime,
+                assignmentDetailsMenu.assignment.durationHours,
+                assignmentDetailsMenu.assignment.durationMinutes,
+              )}
+            </p>
+            <p>
+              <span className="font-bold text-ink">Duration:</span> {assignmentDetailsMenu.assignment.durationHours}h{" "}
+              {assignmentDetailsMenu.assignment.durationMinutes}m
+            </p>
+          </div>
+        </div>
+      )}
 
       {!isPersonnelMode && <Modal
         open={dialogOpen}

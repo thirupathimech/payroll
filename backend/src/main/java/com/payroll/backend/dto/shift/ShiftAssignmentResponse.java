@@ -9,6 +9,7 @@ public record ShiftAssignmentResponse(
         Long employeeId,
         String employeeCode,
         String employeeName,
+        String employmentType,
         Long departmentId,
         String departmentName,
         Long shiftId,

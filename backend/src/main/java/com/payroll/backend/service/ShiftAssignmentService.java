@@ -121,6 +121,7 @@ public class ShiftAssignmentService {
                 employee.getId(),
                 employee.getEmployeeCode(),
                 employee.getFirstName() + " " + employee.getLastName(),
+                employee.getEmploymentType(),
                 employee.getDepartment().getId(),
                 employee.getDepartment().getName(),
                 shift.getId(),

@@ -346,6 +346,7 @@ export interface ShiftAssignment {
   employeeId: number;
   employeeCode: string;
   employeeName: string;
+  employmentType?: string;
   departmentId: number;
   departmentName: string;
   shiftId: number;
