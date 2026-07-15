@@ -17,7 +17,10 @@ import lombok.Setter;
 @Entity
 @Table(
         name = "branches",
-        uniqueConstraints = @UniqueConstraint(name = "uk_branches_org_name", columnNames = {"org_code", "name"})
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_branches_org_name", columnNames = {"org_code", "name"}),
+                @UniqueConstraint(name = "uk_branches_org_code", columnNames = {"org_code", "code"})
+        }
 )
 public class Branch extends AuditableEntity {
 

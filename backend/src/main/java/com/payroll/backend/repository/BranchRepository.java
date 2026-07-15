@@ -11,5 +11,9 @@ public interface BranchRepository extends JpaRepository<Branch, Long> {
 
     Optional<Branch> findByOrgCodeAndNameIgnoreCase(String orgCode, String name);
 
+    Optional<Branch> findByOrgCodeAndCodeIgnoreCase(String orgCode, String code);
+
+    Optional<Branch> findFirstByOrgCodeOrderById(String orgCode);
+
     List<Branch> findByOrgCodeAndActiveTrueOrderByName(String orgCode);
 }

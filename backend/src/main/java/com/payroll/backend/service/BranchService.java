@@ -32,6 +32,7 @@ public class BranchService {
     public BranchResponse create(BranchRequest request) {
         String orgCode = currentOrgService.orgCode();
         ensureUniqueName(request.name(), null);
+        ensureUniqueCode(request.code(), null);
 
         Branch branch = new Branch();
         branch.setOrgCode(orgCode);
@@ -45,6 +46,7 @@ public class BranchService {
     public BranchResponse update(Long id, BranchRequest request) {
         Branch branch = findBranch(id);
         ensureUniqueName(request.name(), id);
+        ensureUniqueCode(request.code(), id);
         apply(request, branch);
         Branch saved = branchRepository.save(branch);
         auditService.log("BRANCH_UPDATED", "Branch", saved.getId(), saved.getName());
@@ -53,6 +55,8 @@ public class BranchService {
 
     public Branch ensureDefaultBranch(String orgCode) {
         return branchRepository.findByOrgCodeAndNameIgnoreCase(orgCode, "Main Branch")
+                .or(() -> branchRepository.findByOrgCodeAndCodeIgnoreCase(orgCode, "MAIN"))
+                .or(() -> branchRepository.findFirstByOrgCodeOrderById(orgCode))
                 .orElseGet(() -> {
                     Branch branch = new Branch();
                     branch.setOrgCode(orgCode);
@@ -76,6 +80,17 @@ public class BranchService {
         branchRepository.findByOrgCodeAndNameIgnoreCase(currentOrgService.orgCode(), name).ifPresent(existing -> {
             if (!existing.getId().equals(currentId)) {
                 throw new BadRequestException("Branch name already exists");
+            }
+        });
+    }
+
+    private void ensureUniqueCode(String code, Long currentId) {
+        if (code == null || code.isBlank()) {
+            return;
+        }
+        branchRepository.findByOrgCodeAndCodeIgnoreCase(currentOrgService.orgCode(), code.trim()).ifPresent(existing -> {
+            if (!existing.getId().equals(currentId)) {
+                throw new BadRequestException("Branch code already exists");
             }
         });
     }

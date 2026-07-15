@@ -54,7 +54,8 @@ CREATE TABLE branches (
     code VARCHAR(30),
     active BOOLEAN NOT NULL DEFAULT TRUE,
     PRIMARY KEY (id),
-    CONSTRAINT uk_branches_org_name UNIQUE (org_code, name)
+    CONSTRAINT uk_branches_org_name UNIQUE (org_code, name),
+    CONSTRAINT uk_branches_org_code UNIQUE (org_code, code)
 );
 
 CREATE TABLE employees (

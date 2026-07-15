@@ -36,6 +36,7 @@ export function BranchesPage() {
   const [editing, setEditing] = useState<Branch | null>(null);
   const [form, setForm] = useState<BranchForm>(initialForm);
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const loadBranches = useCallback(() => {
     setLoading(true);
@@ -82,6 +83,9 @@ export function BranchesPage() {
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
+    if (saving) {
+      return;
+    }
     setError("");
 
     if (!form.name.trim()) {
@@ -90,6 +94,7 @@ export function BranchesPage() {
     }
 
     try {
+      setSaving(true);
       if (editing) {
         await branchApi.update(editing.id, toPayload(form));
       } else {
@@ -99,6 +104,8 @@ export function BranchesPage() {
       loadBranches();
     } catch (apiError) {
       setError(getErrorMessage(apiError));
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -196,7 +203,9 @@ export function BranchesPage() {
             <Button type="button" variant="secondary" onClick={() => setModalOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit">{editing ? "Save changes" : "Create branch"}</Button>
+            <Button type="submit" disabled={saving}>
+              {saving ? "Saving..." : editing ? "Save changes" : "Create branch"}
+            </Button>
           </div>
         </form>
       </Modal>
