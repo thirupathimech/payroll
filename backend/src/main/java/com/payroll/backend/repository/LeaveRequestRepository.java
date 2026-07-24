@@ -28,6 +28,7 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long
           and e.orgCode = :orgCode
           and (:employeeId is null or e.id = :employeeId)
           and (:branchId is null or e.branch.id = :branchId)
+          and (:restrictToEmployeeIds = false or e.id in :employeeIds)
           and (:status is null or l.status = :status)
           and (:search is null
             or lower(e.employeeCode) like lower(concat('%', :search, '%'))
@@ -39,6 +40,8 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long
             @Param("search") String search,
             @Param("employeeId") Long employeeId,
             @Param("branchId") Long branchId,
+            @Param("employeeIds") List<Long> employeeIds,
+            @Param("restrictToEmployeeIds") boolean restrictToEmployeeIds,
             @Param("status") LeaveStatus status,
             Pageable pageable
     );
@@ -49,11 +52,14 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long
         where l.orgCode = :orgCode
           and l.status = :status
           and (:branchId is null or e.branch.id = :branchId)
+          and (:restrictToEmployeeIds = false or e.id in :employeeIds)
         """)
     long countByOrgCodeAndStatusAndBranchId(
             @Param("orgCode") String orgCode,
             @Param("status") LeaveStatus status,
-            @Param("branchId") Long branchId
+            @Param("branchId") Long branchId,
+            @Param("employeeIds") List<Long> employeeIds,
+            @Param("restrictToEmployeeIds") boolean restrictToEmployeeIds
     );
 
     @Query("""
@@ -63,13 +69,16 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long
           and l.status = :status
           and l.startDate between :startDate and :endDate
           and (:branchId is null or e.branch.id = :branchId)
+          and (:restrictToEmployeeIds = false or e.id in :employeeIds)
         """)
     long countByOrgCodeAndStatusAndStartDateBetweenAndBranchId(
             @Param("orgCode") String orgCode,
             @Param("status") LeaveStatus status,
             @Param("startDate") LocalDate startDate,
             @Param("endDate") LocalDate endDate,
-            @Param("branchId") Long branchId
+            @Param("branchId") Long branchId,
+            @Param("employeeIds") List<Long> employeeIds,
+            @Param("restrictToEmployeeIds") boolean restrictToEmployeeIds
     );
 
     @Query("""
@@ -77,11 +86,14 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long
         join l.employee e
         where l.orgCode = :orgCode
           and (:branchId is null or e.branch.id = :branchId)
+          and (:restrictToEmployeeIds = false or e.id in :employeeIds)
         order by l.createdAt desc
         """)
     List<LeaveRequest> findRecentByOrgCodeAndBranchId(
             @Param("orgCode") String orgCode,
             @Param("branchId") Long branchId,
+            @Param("employeeIds") List<Long> employeeIds,
+            @Param("restrictToEmployeeIds") boolean restrictToEmployeeIds,
             Pageable pageable
     );
 }

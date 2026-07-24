@@ -45,13 +45,13 @@ public class LeaveController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER','EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER','LEAD','EMPLOYEE')")
     public LeaveResponse create(@Valid @RequestBody LeaveCreateRequest request, @AuthenticationPrincipal UserPrincipal principal) {
         return leaveService.create(request, principal);
     }
 
     @PatchMapping("/{id}/decision")
-    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER','LEAD')")
     public LeaveResponse decide(
             @PathVariable Long id,
             @Valid @RequestBody LeaveDecisionRequest request,

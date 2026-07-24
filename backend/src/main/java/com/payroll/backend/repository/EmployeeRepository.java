@@ -44,6 +44,7 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
           and (:status is null or e.status = :status)
           and (:departmentId is null or d.id = :departmentId)
           and (:branchId is null or e.branch.id = :branchId)
+          and (:restrictToEmployeeIds = false or e.id in :employeeIds)
         """)
     Page<Employee> search(
             @Param("orgCode") String orgCode,
@@ -51,6 +52,8 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
             @Param("status") EmploymentStatus status,
             @Param("departmentId") Long departmentId,
             @Param("branchId") Long branchId,
+            @Param("employeeIds") List<Long> employeeIds,
+            @Param("restrictToEmployeeIds") boolean restrictToEmployeeIds,
             Pageable pageable
     );
 }

@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -31,13 +32,27 @@ public class DashboardService {
         LocalDate monthEnd = monthStart.plusMonths(1).minusDays(1);
         String orgCode = currentOrgService.orgCode();
         Long branchId = employeeAccessService.branchScopeId(principal);
+        List<Long> managedEmployeeIds = employeeAccessService.managedEmployeeIds(principal);
+        if (employeeAccessService.isLead(principal) && managedEmployeeIds.isEmpty()) {
+            return new DashboardSummaryResponse(0, 0, 0, 0, 0, List.of());
+        }
+        List<Long> effectiveEmployeeIds = managedEmployeeIds.isEmpty() ? List.of(-1L) : managedEmployeeIds;
+        boolean restrictToEmployeeIds = !managedEmployeeIds.isEmpty();
 
         return new DashboardSummaryResponse(
-                employeeRepository.search(orgCode, null, null, null, branchId, Pageable.unpaged()).getNumberOfElements(),
-                employeeRepository.search(orgCode, null, EmploymentStatus.ACTIVE, null, branchId, Pageable.unpaged()).getNumberOfElements(),
+                employeeRepository.search(orgCode, null, null, null, branchId, effectiveEmployeeIds, restrictToEmployeeIds, Pageable.unpaged()).getNumberOfElements(),
+                employeeRepository.search(orgCode, null, EmploymentStatus.ACTIVE, null, branchId, effectiveEmployeeIds, restrictToEmployeeIds, Pageable.unpaged()).getNumberOfElements(),
                 departmentRepository.countByOrgCodeAndActiveTrue(orgCode),
-                leaveRequestRepository.countByOrgCodeAndStatusAndBranchId(orgCode, LeaveStatus.PENDING, branchId),
-                leaveRequestRepository.countByOrgCodeAndStatusAndStartDateBetweenAndBranchId(orgCode, LeaveStatus.APPROVED, monthStart, monthEnd, branchId),
+                leaveRequestRepository.countByOrgCodeAndStatusAndBranchId(orgCode, LeaveStatus.PENDING, branchId, effectiveEmployeeIds, restrictToEmployeeIds),
+                leaveRequestRepository.countByOrgCodeAndStatusAndStartDateBetweenAndBranchId(
+                        orgCode,
+                        LeaveStatus.APPROVED,
+                        monthStart,
+                        monthEnd,
+                        branchId,
+                        effectiveEmployeeIds,
+                        restrictToEmployeeIds
+                ),
                 leaveService.recent(principal)
         );
     }

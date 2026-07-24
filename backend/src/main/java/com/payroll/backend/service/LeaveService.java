@@ -50,17 +50,40 @@ public class LeaveService {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         Long effectiveEmployeeId = isEmployee(principal) ? findCurrentEmployee(principal).getId() : employeeId;
         Long branchId = employeeAccessService.branchScopeId(principal);
+        List<Long> managedEmployeeIds = scopedEmployeeIds(principal);
+        if (employeeAccessService.isLead(principal) && managedEmployeeIds.isEmpty()) {
+            return PageResponse.from(new org.springframework.data.domain.PageImpl<LeaveRequest>(
+                    List.of(),
+                    pageable,
+                    0
+            ).map(this::toResponse));
+        }
         return PageResponse.from(leaveRequestRepository
-                .search(currentOrgService.orgCode(), blankToNull(search), effectiveEmployeeId, branchId, status, pageable)
+                .search(
+                        currentOrgService.orgCode(),
+                        blankToNull(search),
+                        effectiveEmployeeId,
+                        branchId,
+                        managedEmployeeIds.isEmpty() ? List.of(-1L) : managedEmployeeIds,
+                        !managedEmployeeIds.isEmpty(),
+                        status,
+                        pageable
+                )
                 .map(this::toResponse));
     }
 
     @Transactional(readOnly = true)
     public List<LeaveResponse> recent(UserPrincipal principal) {
         Long branchId = employeeAccessService.branchScopeId(principal);
+        List<Long> managedEmployeeIds = scopedEmployeeIds(principal);
+        if (employeeAccessService.isLead(principal) && managedEmployeeIds.isEmpty()) {
+            return List.of();
+        }
         return leaveRequestRepository.findRecentByOrgCodeAndBranchId(
                         currentOrgService.orgCode(),
                         branchId,
+                        managedEmployeeIds.isEmpty() ? List.of(-1L) : managedEmployeeIds,
+                        !managedEmployeeIds.isEmpty(),
                         PageRequest.of(0, 5)
                 ).stream()
                 .map(this::toResponse)
@@ -143,6 +166,10 @@ public class LeaveService {
 
     private boolean isEmployee(UserPrincipal principal) {
         return employeeAccessService.isEmployee(principal);
+    }
+
+    private List<Long> scopedEmployeeIds(UserPrincipal principal) {
+        return employeeAccessService.managedEmployeeIds(principal);
     }
 
     public LeaveResponse toResponse(LeaveRequest leaveRequest) {

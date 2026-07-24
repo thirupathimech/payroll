@@ -38,7 +38,7 @@ public class WeekOffAssignmentController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER','LEAD')")
     public List<WeekOffAssignmentResponse> create(
             @Valid @RequestBody WeekOffAssignmentRequest request,
             @AuthenticationPrincipal UserPrincipal principal
@@ -47,7 +47,7 @@ public class WeekOffAssignmentController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER','LEAD')")
     public MessageResponse delete(@PathVariable Long id, @AuthenticationPrincipal UserPrincipal principal) {
         weekOffAssignmentService.delete(id, principal);
         return new MessageResponse("Week off assignment deleted");

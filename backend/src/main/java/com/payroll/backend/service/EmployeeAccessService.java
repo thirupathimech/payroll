@@ -7,6 +7,10 @@ import com.payroll.backend.security.UserPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
 @Service
 @RequiredArgsConstructor
 public class EmployeeAccessService {
@@ -30,12 +34,26 @@ public class EmployeeAccessService {
         return hasRole(principal, "ROLE_MANAGER");
     }
 
+    public boolean isLead(UserPrincipal principal) {
+        return hasRole(principal, "ROLE_LEAD");
+    }
+
     public Long branchScopeId(UserPrincipal principal) {
         if (!isManager(principal)) {
             return null;
         }
         Employee currentEmployee = findCurrentEmployee(principal);
         return currentEmployee.getBranch() == null ? null : currentEmployee.getBranch().getId();
+    }
+
+    public List<Long> managedEmployeeIds(UserPrincipal principal) {
+        if (!isLead(principal)) {
+            return List.of();
+        }
+        Employee currentEmployee = findCurrentEmployee(principal);
+        Set<Long> managedIds = new HashSet<>();
+        collectManagedEmployeeIds(currentEmployee.getId(), managedIds);
+        return managedIds.stream().sorted().toList();
     }
 
     public void assertCanAccessEmployee(UserPrincipal principal, Employee targetEmployee) {
@@ -48,6 +66,12 @@ public class EmployeeAccessService {
         }
 
         if (!isManager(principal)) {
+            if (!isLead(principal)) {
+                return;
+            }
+            if (!managedEmployeeIds(principal).contains(targetEmployee.getId())) {
+                throw new ResourceNotFoundException("Employee not found");
+            }
             return;
         }
 
@@ -60,12 +84,27 @@ public class EmployeeAccessService {
     }
 
     public void assertCanAccessBranch(UserPrincipal principal, Long branchId) {
+        if (isLead(principal)) {
+            throw new ResourceNotFoundException("Branch not found");
+        }
         if (!isManager(principal)) {
             return;
         }
         Long scopedBranchId = branchScopeId(principal);
         if (scopedBranchId == null || branchId == null || !scopedBranchId.equals(branchId)) {
             throw new ResourceNotFoundException("Branch not found");
+        }
+    }
+
+    private void collectManagedEmployeeIds(Long managerId, Set<Long> managedIds) {
+        if (managerId == null) {
+            return;
+        }
+        List<Employee> directReports = employeeRepository.findByOrgCodeAndManagerIdOrderByFirstNameAsc(currentOrgService.orgCode(), managerId);
+        for (Employee directReport : directReports) {
+            if (managedIds.add(directReport.getId())) {
+                collectManagedEmployeeIds(directReport.getId(), managedIds);
+            }
         }
     }
 

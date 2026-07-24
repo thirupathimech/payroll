@@ -63,7 +63,7 @@ public class EmployeeController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER','LEAD')")
     public EmployeeResponse update(
             @PathVariable Long id,
             @Valid @RequestBody EmployeeRequest request,

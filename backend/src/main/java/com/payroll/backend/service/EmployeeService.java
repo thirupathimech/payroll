@@ -69,10 +69,27 @@ public class EmployeeService {
                     1
             ).map(this::toResponse));
         }
+        List<Long> managedEmployeeIds = scopedEmployeeIds(principal);
+        if (employeeAccessService.isLead(principal) && managedEmployeeIds.isEmpty()) {
+            return PageResponse.from(new org.springframework.data.domain.PageImpl<Employee>(
+                    List.of(),
+                    PageRequest.of(page, size),
+                    0
+            ).map(this::toResponse));
+        }
         Long branchId = employeeAccessService.branchScopeId(principal);
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "firstName"));
         return PageResponse.from(employeeRepository
-                .search(currentOrgService.orgCode(), blankToNull(search), status, departmentId, branchId, pageable)
+                .search(
+                        currentOrgService.orgCode(),
+                        blankToNull(search),
+                        status,
+                        departmentId,
+                        branchId,
+                        managedEmployeeIds.isEmpty() ? List.of(-1L) : managedEmployeeIds,
+                        !managedEmployeeIds.isEmpty(),
+                        pageable
+                )
                 .map(this::toResponse));
     }
 
@@ -361,6 +378,10 @@ public class EmployeeService {
 
     private boolean isEmployee(UserPrincipal principal) {
         return employeeAccessService.isEmployee(principal);
+    }
+
+    private List<Long> scopedEmployeeIds(UserPrincipal principal) {
+        return employeeAccessService.managedEmployeeIds(principal);
     }
 
     private EmployeeHierarchyNodeResponse toNode(Employee employee) {

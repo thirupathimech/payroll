@@ -35,7 +35,7 @@ const emptyPage: PageResponse<AppUser> = {
   last: true,
 };
 
-const roles: RoleName[] = ["ADMIN", "HR", "MANAGER", "EMPLOYEE"];
+const roles: RoleName[] = ["ADMIN", "HR", "MANAGER", "LEAD", "EMPLOYEE"];
 
 function toPayload(form: UserForm): AppUserPayload {
   return {

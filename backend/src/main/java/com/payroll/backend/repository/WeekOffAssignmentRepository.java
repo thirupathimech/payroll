@@ -25,13 +25,16 @@ public interface WeekOffAssignmentRepository extends JpaRepository<WeekOffAssign
           and (:type is null or w.assignmentType = :type)
           and (:employeeId is null or e.id = :employeeId)
           and (:branchId is null or w.branch.id = :branchId or e.branch.id = :branchId)
+          and (:restrictToEmployeeIds = false or e.id in :employeeIds)
         order by w.createdAt desc
         """)
     List<WeekOffAssignment> search(
             @Param("orgCode") String orgCode,
             @Param("type") WeekOffAssignmentType type,
             @Param("employeeId") Long employeeId,
-            @Param("branchId") Long branchId
+            @Param("branchId") Long branchId,
+            @Param("employeeIds") List<Long> employeeIds,
+            @Param("restrictToEmployeeIds") boolean restrictToEmployeeIds
     );
 
     Optional<WeekOffAssignment> findByOrgCodeAndAssignmentTypeAndBranchIdAndDepartmentIdAndDesignationIdAndDayOfWeek(

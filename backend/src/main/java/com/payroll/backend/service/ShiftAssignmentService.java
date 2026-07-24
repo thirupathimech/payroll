@@ -40,10 +40,26 @@ public class ShiftAssignmentService {
         }
         Long effectiveEmployeeId = isEmployee(principal) ? findCurrentEmployee(principal).getId() : employeeId;
         Long branchId = employeeAccessService.branchScopeId(principal);
+        List<Long> managedEmployeeIds = scopedEmployeeIds(principal);
+        if (employeeAccessService.isLead(principal) && managedEmployeeIds.isEmpty()) {
+            return List.of();
+        }
+        if (!managedEmployeeIds.isEmpty() && effectiveEmployeeId != null && !managedEmployeeIds.contains(effectiveEmployeeId)) {
+            return List.of();
+        }
         List<ShiftAssignment> assignments = effectiveEmployeeId == null
-                ? (branchId == null
+                ? (!managedEmployeeIds.isEmpty()
+                ? shiftAssignmentRepository.findByOrgCodeAndEmployeeIdInAndAssignmentDateBetweenOrderByAssignmentDate(orgCode, managedEmployeeIds, start, end)
+                : (branchId == null
                 ? shiftAssignmentRepository.findByOrgCodeAndAssignmentDateBetweenOrderByAssignmentDate(orgCode, start, end)
-                : shiftAssignmentRepository.findByOrgCodeAndBranchIdAndAssignmentDateBetweenOrderByAssignmentDate(orgCode, branchId, start, end))
+                : shiftAssignmentRepository.findByOrgCodeAndBranchIdAndAssignmentDateBetweenOrderByAssignmentDate(
+                        orgCode,
+                        branchId,
+                        List.of(-1L),
+                        false,
+                        start,
+                        end
+                )))
                 : shiftAssignmentRepository.findByOrgCodeAndEmployeeIdAndAssignmentDateBetweenOrderByAssignmentDate(orgCode, effectiveEmployeeId, start, end);
         if (branchId != null && effectiveEmployeeId != null) {
             assignments = assignments.stream()
@@ -117,6 +133,10 @@ public class ShiftAssignmentService {
 
     private boolean isEmployee(UserPrincipal principal) {
         return employeeAccessService.isEmployee(principal);
+    }
+
+    private List<Long> scopedEmployeeIds(UserPrincipal principal) {
+        return employeeAccessService.managedEmployeeIds(principal);
     }
 
     private ShiftAssignmentResponse toResponse(ShiftAssignment assignment) {

@@ -42,11 +42,17 @@ public class WeekOffAssignmentService {
 
     @Transactional(readOnly = true)
     public List<WeekOffAssignmentResponse> search(WeekOffAssignmentType type, Long employeeId, UserPrincipal principal) {
+        List<Long> managedEmployeeIds = employeeAccessService.managedEmployeeIds(principal);
+        if (employeeAccessService.isLead(principal) && managedEmployeeIds.isEmpty()) {
+            return List.of();
+        }
         return weekOffAssignmentRepository.search(
                         currentOrgService.orgCode(),
                         type,
                         employeeId,
-                        employeeAccessService.branchScopeId(principal)
+                        employeeAccessService.branchScopeId(principal),
+                        managedEmployeeIds.isEmpty() ? List.of(-1L) : managedEmployeeIds,
+                        !managedEmployeeIds.isEmpty()
                 )
                 .stream()
                 .map(this::toResponse)

@@ -39,7 +39,7 @@ public class ShiftAssignmentController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER','LEAD')")
     public List<ShiftAssignmentResponse> create(
             @Valid @RequestBody ShiftAssignmentRequest request,
             @AuthenticationPrincipal UserPrincipal principal
@@ -48,7 +48,7 @@ public class ShiftAssignmentController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER','LEAD')")
     public MessageResponse delete(@PathVariable Long id, @AuthenticationPrincipal UserPrincipal principal) {
         shiftAssignmentService.delete(id, principal);
         return new MessageResponse("Shift assignment deleted");

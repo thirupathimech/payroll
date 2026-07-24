@@ -41,7 +41,7 @@ public class EmployeeDocumentController {
     }
 
     @PostMapping(value = "/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER','LEAD')")
     public EmployeeDocumentResponse uploadDocument(
             @PathVariable Long employeeId,
             @RequestParam("file") MultipartFile file,
@@ -76,7 +76,7 @@ public class EmployeeDocumentController {
     }
 
     @DeleteMapping("/documents/{documentId}")
-    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER','LEAD')")
     public MessageResponse deleteDocument(
             @PathVariable Long employeeId,
             @PathVariable Long documentId,
@@ -87,7 +87,7 @@ public class EmployeeDocumentController {
     }
 
     @PostMapping(value = "/profile-photo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER','LEAD')")
     public EmployeeDocumentResponse uploadProfilePhoto(
             @PathVariable Long employeeId,
             @RequestParam("file") MultipartFile file,
@@ -106,7 +106,7 @@ public class EmployeeDocumentController {
     }
 
     @DeleteMapping("/profile-photo")
-    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER','LEAD')")
     public MessageResponse deleteProfilePhoto(
             @PathVariable Long employeeId,
             @AuthenticationPrincipal UserPrincipal principal
