@@ -52,7 +52,11 @@ public class LeaveController {
 
     @PatchMapping("/{id}/decision")
     @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER')")
-    public LeaveResponse decide(@PathVariable Long id, @Valid @RequestBody LeaveDecisionRequest request) {
-        return leaveService.decide(id, request);
+    public LeaveResponse decide(
+            @PathVariable Long id,
+            @Valid @RequestBody LeaveDecisionRequest request,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return leaveService.decide(id, request, principal);
     }
 }

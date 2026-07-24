@@ -4,10 +4,12 @@ import com.payroll.backend.domain.enums.WeekOffAssignmentType;
 import com.payroll.backend.dto.common.MessageResponse;
 import com.payroll.backend.dto.weekoff.WeekOffAssignmentRequest;
 import com.payroll.backend.dto.weekoff.WeekOffAssignmentResponse;
+import com.payroll.backend.security.UserPrincipal;
 import com.payroll.backend.service.WeekOffAssignmentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -29,21 +31,25 @@ public class WeekOffAssignmentController {
     @GetMapping
     public List<WeekOffAssignmentResponse> search(
             @RequestParam(required = false) WeekOffAssignmentType type,
-            @RequestParam(required = false) Long employeeId
+            @RequestParam(required = false) Long employeeId,
+            @AuthenticationPrincipal UserPrincipal principal
     ) {
-        return weekOffAssignmentService.search(type, employeeId);
+        return weekOffAssignmentService.search(type, employeeId, principal);
     }
 
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER')")
-    public List<WeekOffAssignmentResponse> create(@Valid @RequestBody WeekOffAssignmentRequest request) {
-        return weekOffAssignmentService.create(request);
+    public List<WeekOffAssignmentResponse> create(
+            @Valid @RequestBody WeekOffAssignmentRequest request,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return weekOffAssignmentService.create(request, principal);
     }
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER')")
-    public MessageResponse delete(@PathVariable Long id) {
-        weekOffAssignmentService.delete(id);
+    public MessageResponse delete(@PathVariable Long id, @AuthenticationPrincipal UserPrincipal principal) {
+        weekOffAssignmentService.delete(id, principal);
         return new MessageResponse("Week off assignment deleted");
     }
 }

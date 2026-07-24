@@ -43,12 +43,14 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
             or lower(e.email) like lower(concat('%', :search, '%')))
           and (:status is null or e.status = :status)
           and (:departmentId is null or d.id = :departmentId)
+          and (:branchId is null or e.branch.id = :branchId)
         """)
     Page<Employee> search(
             @Param("orgCode") String orgCode,
             @Param("search") String search,
             @Param("status") EmploymentStatus status,
             @Param("departmentId") Long departmentId,
+            @Param("branchId") Long branchId,
             Pageable pageable
     );
 }

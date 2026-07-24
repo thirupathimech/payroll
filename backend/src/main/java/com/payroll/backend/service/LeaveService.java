@@ -36,6 +36,7 @@ public class LeaveService {
     private final AppUserRepository appUserRepository;
     private final AuditService auditService;
     private final CurrentOrgService currentOrgService;
+    private final EmployeeAccessService employeeAccessService;
 
     @Transactional(readOnly = true)
     public PageResponse<LeaveResponse> search(
@@ -48,14 +49,20 @@ public class LeaveService {
     ) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         Long effectiveEmployeeId = isEmployee(principal) ? findCurrentEmployee(principal).getId() : employeeId;
+        Long branchId = employeeAccessService.branchScopeId(principal);
         return PageResponse.from(leaveRequestRepository
-                .search(currentOrgService.orgCode(), blankToNull(search), effectiveEmployeeId, status, pageable)
+                .search(currentOrgService.orgCode(), blankToNull(search), effectiveEmployeeId, branchId, status, pageable)
                 .map(this::toResponse));
     }
 
     @Transactional(readOnly = true)
-    public List<LeaveResponse> recent() {
-        return leaveRequestRepository.findTop5ByOrgCodeOrderByCreatedAtDesc(currentOrgService.orgCode()).stream()
+    public List<LeaveResponse> recent(UserPrincipal principal) {
+        Long branchId = employeeAccessService.branchScopeId(principal);
+        return leaveRequestRepository.findRecentByOrgCodeAndBranchId(
+                        currentOrgService.orgCode(),
+                        branchId,
+                        PageRequest.of(0, 5)
+                ).stream()
                 .map(this::toResponse)
                 .toList();
     }
@@ -63,9 +70,7 @@ public class LeaveService {
     @Transactional(readOnly = true)
     public LeaveResponse get(Long id, UserPrincipal principal) {
         LeaveRequest leave = findLeave(id);
-        if (isEmployee(principal) && !leave.getEmployee().getId().equals(findCurrentEmployee(principal).getId())) {
-            throw new ResourceNotFoundException("Leave request not found");
-        }
+        employeeAccessService.assertCanAccessEmployee(principal, leave.getEmployee());
         return toResponse(leave);
     }
 
@@ -77,6 +82,7 @@ public class LeaveService {
                 ? findCurrentEmployee(principal)
                 : employeeRepository.findByOrgCodeAndId(orgCode, request.employeeId())
                         .orElseThrow(() -> new ResourceNotFoundException("Employee not found"));
+        employeeAccessService.assertCanAccessEmployee(principal, employee);
 
         LeaveRequest leaveRequest = new LeaveRequest();
         leaveRequest.setOrgCode(orgCode);
@@ -93,8 +99,9 @@ public class LeaveService {
     }
 
     @Transactional
-    public LeaveResponse decide(Long id, LeaveDecisionRequest request) {
+    public LeaveResponse decide(Long id, LeaveDecisionRequest request, UserPrincipal principal) {
         LeaveRequest leaveRequest = findLeave(id);
+        employeeAccessService.assertCanAccessEmployee(principal, leaveRequest.getEmployee());
         if (request.status() == LeaveStatus.PENDING) {
             throw new BadRequestException("Decision status must be APPROVED, REJECTED, or CANCELLED");
         }
@@ -131,16 +138,11 @@ public class LeaveService {
     }
 
     private Employee findCurrentEmployee(UserPrincipal principal) {
-        if (principal == null || principal.employeeCode() == null || principal.employeeCode().isBlank()) {
-            throw new ResourceNotFoundException("Employee profile not found");
-        }
-        return employeeRepository.findByOrgCodeAndEmployeeCodeIgnoreCase(currentOrgService.orgCode(), principal.employeeCode())
-                .orElseThrow(() -> new ResourceNotFoundException("Employee profile not found"));
+        return employeeAccessService.findCurrentEmployee(principal);
     }
 
     private boolean isEmployee(UserPrincipal principal) {
-        return principal != null && principal.getAuthorities().stream()
-                .anyMatch(authority -> "ROLE_EMPLOYEE".equals(authority.getAuthority()));
+        return employeeAccessService.isEmployee(principal);
     }
 
     public LeaveResponse toResponse(LeaveRequest leaveRequest) {

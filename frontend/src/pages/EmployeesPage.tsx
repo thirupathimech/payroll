@@ -15,7 +15,7 @@ import { Select } from "../components/ui/Select";
 import { Textarea } from "../components/ui/Textarea";
 import { formatCurrency, formatDate } from "../lib/format";
 import { useDebounce } from "../hooks/useDebounce";
-import { ADMIN_ROLES, HR_ROLES, hasRoleAccess } from "../lib/access";
+import { ADMIN_ROLES, HR_ROLES, MANAGEMENT_ROLES, hasRoleAccess } from "../lib/access";
 import type {
   Branch,
   Department,
@@ -641,7 +641,8 @@ export function EmployeesPage() {
 
   const generatedPreview = useMemo(() => employeeCodePattern(settings), [settings]);
   const canManageEmployees = hasRoleAccess(user, HR_ROLES) && !isPersonnelMode;
-  const canEditProfile = canManageEmployees || isPersonnelMode;
+  const canEditEmployees = hasRoleAccess(user, MANAGEMENT_ROLES) && !isPersonnelMode;
+  const canEditProfile = canEditEmployees || isPersonnelMode;
   const canTerminateEmployees = hasRoleAccess(user, ADMIN_ROLES);
 
   function codeExists(code: string) {

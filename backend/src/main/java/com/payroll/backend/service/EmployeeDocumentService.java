@@ -50,10 +50,12 @@ public class EmployeeDocumentService {
     private final EmployeeDocumentRepository employeeDocumentRepository;
     private final AuditService auditService;
     private final CurrentOrgService currentOrgService;
+    private final EmployeeAccessService employeeAccessService;
 
     @Transactional(readOnly = true)
-    public List<EmployeeDocumentResponse> listDocuments(Long employeeId) {
-        ensureEmployeeExists(employeeId);
+    public List<EmployeeDocumentResponse> listDocuments(Long employeeId, UserPrincipal principal) {
+        Employee employee = findEmployee(employeeId);
+        employeeAccessService.assertCanAccessEmployee(principal, employee);
         return employeeDocumentRepository.findByOrgCodeAndEmployeeIdAndProfilePhotoFalseOrderByUploadedAtDesc(currentOrgService.orgCode(), employeeId)
                 .stream()
                 .map(this::toResponse)
@@ -69,6 +71,7 @@ public class EmployeeDocumentService {
             UserPrincipal principal
     ) {
         Employee employee = findEmployee(employeeId);
+        employeeAccessService.assertCanAccessEmployee(principal, employee);
         validateFile(file, MAX_DOCUMENT_SIZE, ALLOWED_DOCUMENT_TYPES);
         String category = normalizeCategory(documentCategory);
 
@@ -88,15 +91,17 @@ public class EmployeeDocumentService {
     }
 
     @Transactional(readOnly = true)
-    public EmployeeDocument getDocument(Long employeeId, Long documentId) {
+    public EmployeeDocument getDocument(Long employeeId, Long documentId, UserPrincipal principal) {
+        Employee employee = findEmployee(employeeId);
+        employeeAccessService.assertCanAccessEmployee(principal, employee);
         return employeeDocumentRepository.findByOrgCodeAndEmployeeIdAndId(currentOrgService.orgCode(), employeeId, documentId)
                 .filter(document -> !document.isProfilePhoto())
                 .orElseThrow(() -> new ResourceNotFoundException("Employee document not found"));
     }
 
     @Transactional
-    public void deleteDocument(Long employeeId, Long documentId) {
-        EmployeeDocument document = getDocument(employeeId, documentId);
+    public void deleteDocument(Long employeeId, Long documentId, UserPrincipal principal) {
+        EmployeeDocument document = getDocument(employeeId, documentId, principal);
         employeeDocumentRepository.delete(document);
         auditService.log("EMPLOYEE_DOCUMENT_DELETED", "EmployeeDocument", document.getId(), document.getDocumentCategory());
     }
@@ -104,6 +109,7 @@ public class EmployeeDocumentService {
     @Transactional
     public EmployeeDocumentResponse uploadProfilePhoto(Long employeeId, MultipartFile file, UserPrincipal principal) {
         Employee employee = findEmployee(employeeId);
+        employeeAccessService.assertCanAccessEmployee(principal, employee);
         validateFile(file, MAX_PROFILE_PHOTO_SIZE, ALLOWED_PROFILE_TYPES);
         employeeDocumentRepository.deleteByOrgCodeAndEmployeeAndProfilePhotoTrue(currentOrgService.orgCode(), employee);
         employeeDocumentRepository.flush();
@@ -114,15 +120,17 @@ public class EmployeeDocumentService {
     }
 
     @Transactional(readOnly = true)
-    public EmployeeDocument getProfilePhoto(Long employeeId) {
-        ensureEmployeeExists(employeeId);
+    public EmployeeDocument getProfilePhoto(Long employeeId, UserPrincipal principal) {
+        Employee employee = findEmployee(employeeId);
+        employeeAccessService.assertCanAccessEmployee(principal, employee);
         return employeeDocumentRepository.findByOrgCodeAndEmployeeIdAndProfilePhotoTrue(currentOrgService.orgCode(), employeeId)
                 .orElseThrow(() -> new ResourceNotFoundException("Employee profile photo not found"));
     }
 
     @Transactional
-    public void deleteProfilePhoto(Long employeeId) {
+    public void deleteProfilePhoto(Long employeeId, UserPrincipal principal) {
         Employee employee = findEmployee(employeeId);
+        employeeAccessService.assertCanAccessEmployee(principal, employee);
         employeeDocumentRepository.deleteByOrgCodeAndEmployeeAndProfilePhotoTrue(currentOrgService.orgCode(), employee);
         auditService.log("EMPLOYEE_PROFILE_PHOTO_DELETED", "Employee", employee.getId(), employee.getEmployeeCode());
     }
@@ -193,12 +201,6 @@ public class EmployeeDocumentService {
             return "";
         }
         return fileName.substring(index + 1).toLowerCase(Locale.ROOT);
-    }
-
-    private void ensureEmployeeExists(Long employeeId) {
-        if (!employeeRepository.existsByOrgCodeAndId(currentOrgService.orgCode(), employeeId)) {
-            throw new ResourceNotFoundException("Employee not found");
-        }
     }
 
     private Employee findEmployee(Long employeeId) {

@@ -51,6 +51,7 @@ public class EmployeeService {
     private final BranchService branchService;
     private final BranchRepository branchRepository;
     private final EmployeeSettingsService employeeSettingsService;
+    private final EmployeeAccessService employeeAccessService;
 
     @Transactional(readOnly = true)
     public PageResponse<EmployeeResponse> search(
@@ -68,18 +69,17 @@ public class EmployeeService {
                     1
             ).map(this::toResponse));
         }
+        Long branchId = employeeAccessService.branchScopeId(principal);
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "firstName"));
         return PageResponse.from(employeeRepository
-                .search(currentOrgService.orgCode(), blankToNull(search), status, departmentId, pageable)
+                .search(currentOrgService.orgCode(), blankToNull(search), status, departmentId, branchId, pageable)
                 .map(this::toResponse));
     }
 
     @Transactional(readOnly = true)
     public EmployeeResponse get(Long id, UserPrincipal principal) {
         Employee employee = findEmployee(id);
-        if (isEmployee(principal) && !employee.getId().equals(findCurrentEmployee(principal).getId())) {
-            throw new ResourceNotFoundException("Employee not found");
-        }
+        employeeAccessService.assertCanAccessEmployee(principal, employee);
         return toResponse(employee);
     }
 
@@ -109,8 +109,9 @@ public class EmployeeService {
     }
 
     @Transactional
-    public EmployeeResponse update(Long id, EmployeeRequest request) {
+    public EmployeeResponse update(Long id, EmployeeRequest request, UserPrincipal principal) {
         Employee employee = findEmployee(id);
+        employeeAccessService.assertCanAccessEmployee(principal, employee);
         if (!employee.getEmployeeCode().equalsIgnoreCase(request.employeeCode().trim())) {
             throw new BadRequestException("Employee code cannot be changed after creation");
         }
@@ -118,6 +119,7 @@ public class EmployeeService {
         Department department = findDepartment(request.departmentId());
         Designation designation = findDesignation(request.designationId());
         Branch branch = findBranch(request.branchId());
+        employeeAccessService.assertCanAccessBranch(principal, branch.getId());
         ensureDesignationBelongsToDepartment(designation, department);
 
         apply(request, employee, department, designation, branch, employee.getEmployeeCode());
@@ -325,11 +327,7 @@ public class EmployeeService {
     }
 
     private Employee findCurrentEmployee(UserPrincipal principal) {
-        if (principal == null || principal.employeeCode() == null || principal.employeeCode().isBlank()) {
-            throw new ResourceNotFoundException("Employee profile not found");
-        }
-        return employeeRepository.findByOrgCodeAndEmployeeCodeIgnoreCase(currentOrgService.orgCode(), principal.employeeCode())
-                .orElseThrow(() -> new ResourceNotFoundException("Employee profile not found"));
+        return employeeAccessService.findCurrentEmployee(principal);
     }
 
     private Employee findManager(Long managerId, Long currentEmployeeId) {
@@ -362,8 +360,7 @@ public class EmployeeService {
     }
 
     private boolean isEmployee(UserPrincipal principal) {
-        return principal != null && principal.getAuthorities().stream()
-                .anyMatch(authority -> "ROLE_EMPLOYEE".equals(authority.getAuthority()));
+        return employeeAccessService.isEmployee(principal);
     }
 
     private EmployeeHierarchyNodeResponse toNode(Employee employee) {
@@ -379,6 +376,7 @@ public class EmployeeService {
                 manager == null ? null : manager.getEmployeeCode(),
                 manager == null ? null : manager.getFirstName() + " " + manager.getLastName(),
                 children.size(),
+                employeeDocumentService.hasProfilePhoto(employee.getId()),
                 children
         );
     }
@@ -414,6 +412,7 @@ public class EmployeeService {
                 manager == null ? null : manager.getEmployeeCode(),
                 manager == null ? null : manager.getFirstName() + " " + manager.getLastName(),
                 children.size(),
+                employeeDocumentService.hasProfilePhoto(employee.getId()),
                 children
         );
     }
@@ -430,6 +429,7 @@ public class EmployeeService {
                 manager == null ? null : manager.getEmployeeCode(),
                 manager == null ? null : manager.getFirstName() + " " + manager.getLastName(),
                 employeeRepository.findByOrgCodeAndManagerIdOrderByFirstNameAsc(currentOrgService.orgCode(), employee.getId()).size(),
+                employeeDocumentService.hasProfilePhoto(employee.getId()),
                 List.of()
         );
     }

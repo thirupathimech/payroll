@@ -63,9 +63,13 @@ public class EmployeeController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','HR')")
-    public EmployeeResponse update(@PathVariable Long id, @Valid @RequestBody EmployeeRequest request) {
-        return employeeService.update(id, request);
+    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER')")
+    public EmployeeResponse update(
+            @PathVariable Long id,
+            @Valid @RequestBody EmployeeRequest request,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return employeeService.update(id, request, principal);
     }
 
     @PutMapping("/me")

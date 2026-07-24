@@ -427,6 +427,7 @@ export interface EmployeeHierarchyNode {
   managerEmployeeCode?: string;
   managerName?: string;
   directReportsCount: number;
+  hasProfilePhoto: boolean;
   children: EmployeeHierarchyNode[];
 }
 
