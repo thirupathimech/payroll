@@ -13,6 +13,7 @@ import {
   UserCog,
   UserRound,
   Users,
+  Fingerprint,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
@@ -30,7 +31,10 @@ const navItems: Array<{ label: string; path: string; icon: typeof LayoutDashboar
   { label: "Shift Assignment", path: "/shift-assignments", icon: CalendarDays, allowedRoles: MANAGER_ROLES },
   { label: "Week Off Assignment", path: "/week-off-assignments", icon: CalendarOff, allowedRoles: MANAGER_ROLES },
   { label: "Leaves", path: "/leaves", icon: CalendarDays, allowedRoles: MANAGER_ROLES },
+  { label: "Attendance", path: "/attendance", icon: Fingerprint, allowedRoles: MANAGER_ROLES },
+  { label: "Employee Attendance", path: "/attendance/report", icon: ClipboardList, allowedRoles: MANAGER_ROLES },
   { label: "Settings", path: "/settings", icon: Settings, allowedRoles: ADMIN_ROLES },
+  { label: "System Configuration", path: "/system-configuration", icon: Settings, allowedRoles: MANAGER_ROLES },
   { label: "Audit Logs", path: "/audit-logs", icon: ShieldCheck, allowedRoles: ADMIN_ROLES },
 ];
 
@@ -67,6 +71,7 @@ export function Sidebar() {
             <NavLink
               key={item.path}
               to={item.path}
+              end
               className={({ isActive }) =>
                 clsx(
                   "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold transition",

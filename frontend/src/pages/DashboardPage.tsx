@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Building2, CalendarClock, CheckCircle2, Users } from "lucide-react";
+import { Building2, CalendarClock, CheckCircle2, UserCheck, Users } from "lucide-react";
 import { dashboardApi, employeeApi } from "../api/payroll";
 import { useAuth } from "../auth/AuthContext";
 import { HierarchyChart } from "../components/employee/HierarchyChart";
@@ -11,6 +11,7 @@ import type { DashboardSummary, EmployeeHierarchy } from "../types";
 const cards = [
   { label: "Total employees", key: "totalEmployees", icon: Users, tone: "bg-moss text-white" },
   { label: "Active employees", key: "activeEmployees", icon: CheckCircle2, tone: "bg-emerald-600 text-white" },
+  { label: "Present today", key: "presentEmployees", icon: UserCheck, tone: "bg-lagoon text-white" },
   { label: "Departments", key: "activeDepartments", icon: Building2, tone: "bg-lagoon text-white" },
   { label: "Pending leaves", key: "pendingLeaves", icon: CalendarClock, tone: "bg-ember text-ink" },
 ] as const;

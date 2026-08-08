@@ -4,6 +4,7 @@ export type LeaveStatus = "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
 export type LeaveType = "ANNUAL" | "SICK" | "CASUAL" | "MATERNITY" | "PATERNITY" | "UNPAID";
 export type WeekOffAssignmentType = "GROUP_WEEKLY" | "EMPLOYEE_DATE" | "EMPLOYEE_WEEKLY";
 export type WeekDayName = "SUNDAY" | "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURSDAY" | "FRIDAY" | "SATURDAY";
+export type AttendanceMode = "MANUAL" | "PUNCHES";
 
 export interface PageResponse<T> {
   content: T[];
@@ -289,10 +290,13 @@ export interface CompanySettings {
   payrollCutoffDay: number;
   updatedAt: string;
 }
+export interface AttendanceSettings { id?: number; attendanceMode: AttendanceMode; biometricEnabled: boolean; biometricName?: string; biometricUrl?: string; biometricApiKey?: string; updatedAt?: string; }
+export interface AttendanceRecord { id: number; employeeId: number; employeeCode: string; employeeName: string; date: string; clockIn?: string; clockOut?: string; source: string; }
 
 export interface DashboardSummary {
   totalEmployees: number;
   activeEmployees: number;
+  presentEmployees: number;
   activeDepartments: number;
   pendingLeaves: number;
   approvedLeavesThisMonth: number;

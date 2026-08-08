@@ -7,6 +7,7 @@ import java.util.List;
 public record DashboardSummaryResponse(
         long totalEmployees,
         long activeEmployees,
+        long presentEmployees,
         long activeDepartments,
         long pendingLeaves,
         long approvedLeavesThisMonth,

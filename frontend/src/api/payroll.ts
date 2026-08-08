@@ -31,6 +31,8 @@ import type {
   WeekOffAssignment,
   WeekOffAssignmentPayload,
   WeekOffAssignmentType,
+  AttendanceSettings,
+  AttendanceRecord,
 } from "../types";
 
 export const authApi = {
@@ -262,6 +264,13 @@ export const branchApi = {
     const { data } = await api.put<Branch>(`/branches/${id}`, payload);
     return data;
   },
+};
+
+export const attendanceApi = {
+  getSettings: async () => (await api.get<AttendanceSettings>("/attendance/settings")).data,
+  updateSettings: async (payload: Omit<AttendanceSettings, "id" | "updatedAt">) => (await api.put<AttendanceSettings>("/attendance/settings", payload)).data,
+  list: async (from: string, to: string) => (await api.get<AttendanceRecord[]>("/attendance", { params: { from, to } })).data,
+  save: async (payload: { employeeId: number; date: string; clockIn?: string; clockOut?: string; source: string }) => (await api.post<AttendanceRecord>("/attendance", payload)).data,
 };
 
 export const shiftApi = {

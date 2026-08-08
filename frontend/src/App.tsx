@@ -11,10 +11,13 @@ import { EmployeesPage } from "./pages/EmployeesPage";
 import { LeavePage } from "./pages/LeavePage";
 import { LoginPage } from "./pages/LoginPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { SystemConfigurationPage } from "./pages/SystemConfigurationPage";
 import { ShiftAssignmentPage } from "./pages/ShiftAssignmentPage";
 import { ShiftManagementPage } from "./pages/ShiftManagementPage";
 import { UsersPage } from "./pages/UsersPage";
 import { WeekOffAssignmentPage } from "./pages/WeekOffAssignmentPage";
+import { AttendancePage } from "./pages/AttendancePage";
+import { AttendanceReportPage } from "./pages/AttendanceReportPage";
 import { ADMIN_ROLES, HR_ROLES, MANAGER_ROLES } from "./lib/access";
 
 function HomeRoute() {
@@ -32,6 +35,11 @@ export default function App() {
           <Route path="/employees" element={<EmployeesPage />} />
           <Route path="/shift-assignments" element={<ShiftAssignmentPage />} />
           <Route path="/leaves" element={<LeavePage />} />
+          <Route path="/attendance" element={<AttendancePage />} />
+          <Route path="/attendance/report" element={<AttendanceReportPage />} />
+          <Route element={<ProtectedRoute allowedRoles={MANAGER_ROLES} />}>
+            <Route path="/system-configuration" element={<SystemConfigurationPage />} />
+          </Route>
           <Route element={<ProtectedRoute allowedRoles={ADMIN_ROLES} />}>
             <Route path="/users" element={<UsersPage />} />
             <Route path="/settings" element={<SettingsPage />} />

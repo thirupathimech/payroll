@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, BriefcaseBusiness, Download, Edit3, Eye, GitBranch, GraduationCap, Plus, Search, Settings, Trash2, UploadCloud, UserRound, type LucideIcon } from "lucide-react";
+import { AlertCircle, BriefcaseBusiness, Download, Edit3, Eye, GitBranch, GraduationCap, Plus, Search, Trash2, UploadCloud, UserRound, type LucideIcon } from "lucide-react";
 import { getErrorMessage } from "../api/client";
 import { branchApi, departmentApi, designationApi, employeeApi, employeeSettingsApi } from "../api/payroll";
 import { useAuth } from "../auth/AuthContext";
@@ -21,7 +21,6 @@ import type {
   Department,
   Designation,
   Employee,
-  EmployeeCodeMode,
   EmployeeDocument as EmployeeDocumentMeta,
   EmployeeSettings,
   EmployeePayload,
@@ -238,11 +237,6 @@ const documentTypes = [
   "Other Documents",
 ];
 
-function employeeCodePattern(settings: EmployeeSettings) {
-  const padding = Math.max(1, settings.padding || 1);
-  return `${settings.prefix}${"0".repeat(padding)}${settings.suffix}`;
-}
-
 function calculateExperience(startDate: string, endDate: string) {
   if (!startDate || !endDate || endDate < startDate) {
     return "";
@@ -373,29 +367,29 @@ function ProfileMenuButton({
   );
 }
 
-function HierarchyTreeNode({ node }: { node: EmployeeHierarchyNode }) {
+function orgNodeTone(depth: number) {
+  return [
+    "bg-[#d93636] text-white",
+    "bg-[#4c7ec1] text-white",
+    "bg-[#8bc43f] text-white",
+    "bg-[#d6df18] text-[#33431d]",
+  ][Math.min(depth, 3)];
+}
+
+function OrgChartNode({ node, depth = 0 }: { node: EmployeeHierarchyNode; depth?: number }) {
   return (
-    <div className="relative pl-8">
-      <div className="absolute left-3 top-0 h-full w-px bg-moss/20" />
-      <div className="absolute left-[10px] top-6 h-3 w-3 rounded-full border-2 border-moss bg-shell" />
-      <div className="rounded-3xl border border-moss/10 bg-white/80 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-bold text-ink">{node.fullName}</p>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">{node.employeeCode}</p>
-          </div>
-          <span className="rounded-full bg-oat px-3 py-1 text-xs font-bold text-ink/70">
-            {node.directReportsCount} down
-          </span>
-        </div>
-        <p className="mt-2 text-sm text-ink/65">
-          {node.designationTitle} · {node.departmentName}
-        </p>
+    <div className="flex min-w-max flex-col items-center">
+      <div className={`relative z-10 w-40 rounded-xl px-4 py-3 text-center shadow-sm ${orgNodeTone(depth)}`}>
+        <p className="truncate text-sm font-extrabold">{node.fullName}</p>
+        <p className="mt-1 truncate text-[11px] font-bold uppercase tracking-[0.12em] opacity-80">{node.designationTitle}</p>
+        <p className="mt-1 truncate text-[10px] font-semibold opacity-70">{node.employeeCode}</p>
       </div>
       {node.children.length > 0 && (
-        <div className="mt-3 space-y-3">
+        <div className="relative mt-12 flex items-start justify-center gap-6 before:absolute before:left-1/2 before:top-[-24px] before:h-6 before:w-px before:bg-ink/25">
           {node.children.map((child) => (
-            <HierarchyTreeNode key={child.employeeCode} node={child} />
+            <div key={child.employeeCode} className="relative pt-0 before:absolute before:left-1/2 before:top-[-24px] before:h-6 before:w-px before:bg-ink/25 after:absolute after:left-1/2 after:top-[-24px] after:h-px after:w-[calc(100%+1.5rem)] after:-translate-x-1/2 after:bg-ink/25 first:after:left-1/2 last:after:w-1/2">
+              <OrgChartNode node={child} depth={depth + 1} />
+            </div>
           ))}
         </div>
       )}
@@ -404,77 +398,24 @@ function HierarchyTreeNode({ node }: { node: EmployeeHierarchyNode }) {
 }
 
 function HierarchyChart({ hierarchy }: { hierarchy: EmployeeHierarchy }) {
-  const ancestorChain = [...hierarchy.ancestors, hierarchy.current];
+  const chain = [...hierarchy.ancestors, hierarchy.current];
+  let chartRoot: EmployeeHierarchyNode = { ...hierarchy.current, children: hierarchy.descendants };
+  for (let index = chain.length - 2; index >= 0; index -= 1) {
+    chartRoot = { ...chain[index], children: [chartRoot] };
+  }
 
   return (
-    <div className="space-y-6">
-      <div className="grid gap-3">
-        {ancestorChain.map((node, index) => {
-          const isCurrent = index === ancestorChain.length - 1;
-          return (
-            <div key={node.employeeCode} className="relative">
-              {index < ancestorChain.length - 1 && <div className="absolute left-6 top-full h-4 w-px bg-moss/20" />}
-              <div
-                className={`relative rounded-3xl border p-4 ${
-                  isCurrent ? "border-moss/25 bg-moss text-white shadow-glow" : "border-moss/10 bg-white/80"
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`grid h-12 w-12 place-items-center rounded-2xl ${isCurrent ? "bg-white/15 text-white" : "bg-oat text-ink"}`}>
-                    {isCurrent ? <UserRound size={18} /> : <BriefcaseBusiness size={18} />}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-bold">{node.fullName}</p>
-                    <p className={`truncate text-xs font-semibold uppercase tracking-[0.16em] ${isCurrent ? "text-white/70" : "text-ink/45"}`}>
-                      {node.employeeCode}
-                    </p>
-                  </div>
-                  <div className="ml-auto text-right">
-                    <p className={`text-xs font-semibold ${isCurrent ? "text-white/70" : "text-ink/45"}`}>
-                      {index === ancestorChain.length - 1 ? "Current" : "Above"}
-                    </p>
-                    <p className={`text-sm font-bold ${isCurrent ? "text-white" : "text-ink"}`}>{node.designationTitle}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-[280px_1fr]">
-        <div className="rounded-3xl border border-moss/10 bg-oat/50 p-5">
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-fern">Current Level</p>
-          <h4 className="mt-2 font-display text-xl font-extrabold text-ink">{hierarchy.current.fullName}</h4>
-          <p className="mt-1 text-sm font-semibold text-ink/55">
-            {hierarchy.current.departmentName} · {hierarchy.current.designationTitle}
-          </p>
-          <div className="mt-4 grid gap-3">
-            <div className="rounded-2xl bg-white/75 p-4">
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-ink/45">One Up</p>
-              <p className="mt-2 text-sm font-semibold text-ink">{hierarchy.current.managerName ?? "No manager"}</p>
-            </div>
-            <div className="rounded-2xl bg-white/75 p-4">
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-ink/45">One Down</p>
-              <p className="mt-2 text-sm font-semibold text-ink">{hierarchy.current.directReportsCount} direct report(s)</p>
-            </div>
-          </div>
+    <div className="rounded-[2rem] border border-moss/10 bg-white/75 p-5 md:p-8">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-fern">Hierarchy Chart</p>
+          <h4 className="mt-2 font-display text-xl font-extrabold text-ink">Organization structure</h4>
         </div>
-
-        <div className="rounded-3xl border border-moss/10 bg-white/75 p-5">
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-fern">Downstream Tree</p>
-          <h4 className="mt-2 font-display text-xl font-extrabold text-ink">One-to-many branch</h4>
-          <div className="mt-4">
-            {hierarchy.descendants.length === 0 ? (
-              <p className="rounded-3xl bg-oat/60 p-4 text-sm font-semibold text-ink/55">No subordinate branches yet.</p>
-            ) : (
-              <div className="space-y-3">
-                {hierarchy.descendants.map((node) => (
-                  <HierarchyTreeNode key={node.employeeCode} node={node} />
-                ))}
-              </div>
-            )}
-          </div>
+        <p className="text-sm font-semibold text-ink/45">{hierarchy.current.directReportsCount} direct report(s)</p>
+      </div>
+      <div className="mt-8 overflow-x-auto pb-4">
+        <div className="flex min-w-max justify-center px-8 py-2">
+          <OrgChartNode node={chartRoot} />
         </div>
       </div>
     </div>
@@ -494,12 +435,10 @@ export function EmployeesPage() {
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
   const [form, setForm] = useState<EmployeeForm>(initialForm);
   const [settings, setSettings] = useState<EmployeeSettings>(initialSettings);
   const [error, setError] = useState("");
-  const [settingsMessage, setSettingsMessage] = useState("");
   const [thumbnailUrls, setThumbnailUrls] = useState<Record<number, string>>({});
   const [fileMessage, setFileMessage] = useState("");
   const [hierarchy, setHierarchy] = useState<EmployeeHierarchy | null>(null);
@@ -639,7 +578,6 @@ export function EmployeesPage() {
     [branches],
   );
 
-  const generatedPreview = useMemo(() => employeeCodePattern(settings), [settings]);
   const canManageEmployees = hasRoleAccess(user, HR_ROLES) && !isPersonnelMode;
   const canEditEmployees = hasRoleAccess(user, MANAGEMENT_ROLES) && !isPersonnelMode;
   const canEditProfile = canEditEmployees || isPersonnelMode;
@@ -1124,27 +1062,6 @@ export function EmployeesPage() {
     loadEmployeeDirectory();
   }
 
-  async function saveSettings(event: FormEvent) {
-    event.preventDefault();
-    if (settings.codeMode === "AUTO" && settings.padding <= 0) {
-      setSettingsMessage("Number padding must be greater than zero.");
-      return;
-    }
-    try {
-      const saved = await employeeSettingsApi.update({
-        codeMode: settings.codeMode,
-        prefix: settings.prefix,
-        suffix: settings.suffix,
-        startingNumber: settings.startingNumber,
-        padding: settings.padding,
-      });
-      setSettings(saved);
-      setSettingsMessage("Employee code configuration saved.");
-    } catch (apiError) {
-      setSettingsMessage(getErrorMessage(apiError));
-    }
-  }
-
   const columns: Column<Employee>[] = [
     {
       header: "Profile Photo",
@@ -1220,9 +1137,6 @@ export function EmployeesPage() {
           </div>
           {canManageEmployees && (
             <div className="flex flex-wrap gap-3">
-              <Button type="button" variant="secondary" className="px-3" onClick={() => setSettingsOpen(true)} aria-label="Employee settings">
-                <Settings size={18} />
-              </Button>
               <Button type="button" onClick={openCreate}>
                 <Plus size={18} />
                 New Employee
@@ -1380,64 +1294,6 @@ export function EmployeesPage() {
           </Card>
         </section>
       )}
-
-      <Modal
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        title="Employee Settings"
-        description="Reusable configuration area for employee-related setup."
-      >
-        <form onSubmit={saveSettings} className="space-y-5">
-          <div className="grid gap-4 lg:grid-cols-[240px_1fr]">
-            <div className="rounded-3xl border border-moss/10 bg-white/70 p-4">
-              <p className="text-sm font-extrabold text-ink">Employee Code</p>
-              <p className="mt-2 text-sm leading-6 text-ink/55">More employee configuration groups can be added here later.</p>
-            </div>
-            <div className="space-y-4 rounded-3xl border border-moss/10 bg-white/70 p-4">
-              <Select
-                label="Employee Code Mode"
-                value={settings.codeMode}
-                onChange={(event) => setSettings({ ...settings, codeMode: event.target.value as EmployeeCodeMode })}
-              >
-                <option value="AUTO">Auto Generate</option>
-                <option value="MANUAL">Manual Entry</option>
-              </Select>
-              {settings.codeMode === "AUTO" && (
-                <>
-                  <div className="grid gap-4 md:grid-cols-4">
-                    <Input label="Prefix" value={settings.prefix} onChange={(event) => setSettings({ ...settings, prefix: event.target.value })} />
-                    <Input label="Suffix" value={settings.suffix} onChange={(event) => setSettings({ ...settings, suffix: event.target.value })} />
-                    <Input
-                      label="Starting Number"
-                      type="number"
-                      min="0"
-                      value={settings.startingNumber}
-                      onChange={(event) => setSettings({ ...settings, startingNumber: Number(event.target.value) || 0 })}
-                    />
-                    <Input
-                      label="Number Padding"
-                      type="number"
-                      min="1"
-                      value={settings.padding}
-                      onChange={(event) => setSettings({ ...settings, padding: Number(event.target.value) || 1 })}
-                    />
-                  </div>
-                  <div className="rounded-3xl bg-oat/70 p-4">
-                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-ink/45">Generated Code Preview</p>
-                    <p className="mt-2 font-display text-2xl font-extrabold text-ink">{generatedPreview}</p>
-                    <p className="mt-1 text-sm font-semibold text-ink/55">Next sequence is calculated from existing employee codes when you save.</p>
-                  </div>
-                </>
-              )}
-              <p className="text-sm font-semibold text-ink/55">Employee Code uniqueness is validated before save.</p>
-            </div>
-          </div>
-          {settingsMessage && <p className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">{settingsMessage}</p>}
-          <div className="flex justify-end">
-            <Button type="submit">Save Settings</Button>
-          </div>
-        </form>
-      </Modal>
 
       <Modal
         open={modalOpen}
