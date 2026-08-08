@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { CalendarOff, Plus, Trash2, UserRound, UsersRound } from "lucide-react";
 import { getErrorMessage } from "../api/client";
-import { branchApi, departmentApi, designationApi, employeeApi, weekOffAssignmentApi } from "../api/payroll";
+import { branchApi, departmentApi, designationApi, employeeApi, weekOffAssignmentApi, weekOffExclusionApi } from "../api/payroll";
 import { useAuth } from "../auth/AuthContext";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
@@ -18,6 +18,7 @@ import type {
   WeekDayName,
   WeekOffAssignment,
   WeekOffAssignmentType,
+  WeekOffExclusion,
 } from "../types";
 
 interface EmployeeOption {
@@ -113,10 +114,13 @@ export function WeekOffAssignmentPage() {
   const [designations, setDesignations] = useState<Designation[]>([]);
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [assignments, setAssignments] = useState<WeekOffAssignment[]>([]);
+  const [exclusions, setExclusions] = useState<WeekOffExclusion[]>([]);
   const [groupDays, setGroupDays] = useState<WeekDayName[]>(["SUNDAY"]);
   const [groupBranchId, setGroupBranchId] = useState("");
   const [groupDepartmentId, setGroupDepartmentId] = useState("");
   const [groupDesignationId, setGroupDesignationId] = useState("");
+  const [excludeDate, setExcludeDate] = useState(new Date().toISOString().slice(0, 10));
+  const [selectedExcludeDates, setSelectedExcludeDates] = useState<string[]>([]);
   const [dateEmployeeCode, setDateEmployeeCode] = useState("");
   const [dateValue, setDateValue] = useState(new Date().toISOString().slice(0, 10));
   const [selectedDates, setSelectedDates] = useState<string[]>([]);
@@ -133,14 +137,16 @@ export function WeekOffAssignmentPage() {
       designationApi.search({ active: true, page: 0, size: 500 }),
       employeeApi.search({ status: "ACTIVE", page: 0, size: 500 }),
       weekOffAssignmentApi.search({}),
+      weekOffExclusionApi.search(),
     ])
-      .then(([branchItems, departmentItems, designationPage, employeePage, assignmentItems]) => {
+      .then(([branchItems, departmentItems, designationPage, employeePage, assignmentItems, exclusionItems]) => {
         setBranches(branchItems);
         setDepartments(departmentItems);
         setDesignations(designationPage.content);
         const nextEmployees = employeePage.content.map(employeeToOption);
         setEmployees(nextEmployees);
         setAssignments(assignmentItems);
+        setExclusions(exclusionItems);
         setGroupBranchId(String(branchItems[0]?.id ?? ""));
         setGroupDepartmentId(String(departmentItems[0]?.id ?? ""));
         setGroupDesignationId(String(designationPage.content[0]?.id ?? ""));
@@ -175,6 +181,11 @@ export function WeekOffAssignmentPage() {
     return weekOffAssignmentApi.search({}).then(setAssignments);
   }
 
+  function addExcludeDate() {
+    if (!excludeDate) return;
+    setSelectedExcludeDates((current) => [...new Set([...current, excludeDate])].sort());
+  }
+
   function addSelectedDate() {
     setError("");
     setSuccess("");
@@ -205,8 +216,13 @@ export function WeekOffAssignmentPage() {
         designationId: Number(groupDesignationId),
         dayOfWeeks: groupDays,
       });
+      for (const date of selectedExcludeDates) {
+        await weekOffExclusionApi.create({ branchId: Number(groupBranchId), departmentId: Number(groupDepartmentId), designationId: Number(groupDesignationId), date });
+      }
       await reloadAssignments();
-      setSuccess("Group week off saved.");
+      setExclusions(await weekOffExclusionApi.search());
+      setSelectedExcludeDates([]);
+      setSuccess("Group week off and exclude dates saved.");
     } catch (apiError) {
       setError(getErrorMessage(apiError));
     } finally {
@@ -316,6 +332,25 @@ export function WeekOffAssignmentPage() {
 
               <DayCheckboxGroup value={groupDays} onChange={setGroupDays} compact />
 
+              <div className="space-y-3 rounded-2xl border border-moss/10 bg-oat/40 p-4">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-fern">Exclude Dates</p>
+                  <p className="mt-1 text-xs font-semibold text-ink/55">On these dates, the selected weekly off rule will not apply.</p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                  <Input label="Exclude Date" type="date" value={excludeDate} onChange={(event) => setExcludeDate(event.target.value)} />
+                  <Button type="button" variant="secondary" className="self-end" onClick={addExcludeDate}>Add Date</Button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {selectedExcludeDates.map((date) => (
+                    <button key={date} type="button" className="rounded-full bg-white px-3 py-1 text-xs font-bold text-ink shadow-sm" onClick={() => setSelectedExcludeDates((current) => current.filter((item) => item !== date))}>
+                      {formatDate(date)} ×
+                    </button>
+                  ))}
+                  {selectedExcludeDates.length === 0 && <span className="text-xs font-semibold text-ink/45">No exclude dates selected</span>}
+                </div>
+              </div>
+
               <div className="grid gap-4">
                 <SearchableSelect
                   label="Branch"
@@ -422,6 +457,22 @@ export function WeekOffAssignmentPage() {
           </form>
         </Card>
       </section>
+
+      <Card className="overflow-hidden p-0">
+        <div className="border-b border-moss/10 p-5">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-fern">Saved</p>
+          <h3 className="mt-1 font-display text-2xl font-extrabold text-ink">Week Off Exclude Dates</h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[850px] text-left text-sm">
+            <thead className="bg-moss/5 text-xs font-extrabold uppercase tracking-[0.14em] text-ink/55"><tr><th className="px-5 py-4">Date</th><th className="px-5 py-4">Branch</th><th className="px-5 py-4">Department</th><th className="px-5 py-4">Designation</th><th className="px-5 py-4 text-right">Action</th></tr></thead>
+            <tbody className="divide-y divide-moss/10">
+              {exclusions.map((item) => <tr key={item.id} className="bg-white/45"><td className="px-5 py-4 font-semibold text-ink">{formatDate(item.date)}</td><td className="px-5 py-4 text-ink/70">{item.branchName}</td><td className="px-5 py-4 text-ink/70">{item.departmentName}</td><td className="px-5 py-4 text-ink/70">{item.designationTitle}</td><td className="px-5 py-4 text-right"><Button type="button" variant="ghost" className="h-9 w-9 rounded-full p-0 text-red-700 hover:bg-red-50" onClick={async () => { try { await weekOffExclusionApi.delete(item.id); setExclusions(await weekOffExclusionApi.search()); } catch (apiError) { setError(getErrorMessage(apiError)); } }} aria-label="Delete exclude date"><Trash2 size={16} /></Button></td></tr>)}
+              {exclusions.length === 0 && <tr><td colSpan={5} className="px-5 py-8 text-center text-sm font-semibold text-ink/45">No exclude dates found.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </Card>
 
       <Card className="overflow-hidden p-0">
         <div className="border-b border-moss/10 p-5">

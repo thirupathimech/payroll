@@ -16,6 +16,7 @@ import { ShiftAssignmentPage } from "./pages/ShiftAssignmentPage";
 import { ShiftManagementPage } from "./pages/ShiftManagementPage";
 import { UsersPage } from "./pages/UsersPage";
 import { WeekOffAssignmentPage } from "./pages/WeekOffAssignmentPage";
+import { HolidayConfigurationPage } from "./pages/HolidayConfigurationPage";
 import { AttendancePage } from "./pages/AttendancePage";
 import { AttendanceReportPage } from "./pages/AttendanceReportPage";
 import { ADMIN_ROLES, HR_ROLES, MANAGER_ROLES } from "./lib/access";
@@ -53,6 +54,7 @@ export default function App() {
           </Route>
           <Route element={<ProtectedRoute allowedRoles={MANAGER_ROLES} />}>
             <Route path="/week-off-assignments" element={<WeekOffAssignmentPage />} />
+            <Route path="/holidays" element={<HolidayConfigurationPage />} />
           </Route>
         </Route>
       </Route>

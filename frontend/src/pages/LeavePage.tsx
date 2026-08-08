@@ -33,6 +33,8 @@ const initialForm: LeavePayload = {
   leaveType: "ANNUAL",
   startDate: new Date().toISOString().slice(0, 10),
   endDate: new Date().toISOString().slice(0, 10),
+  startTime: "09:00",
+  endTime: "18:00",
   reason: "",
 };
 
@@ -148,7 +150,9 @@ export function LeavePage() {
           <p>
             {formatDate(leave.startDate)} - {formatDate(leave.endDate)}
           </p>
-          <p className="text-xs text-ink/45">{leave.days} day(s)</p>
+          <p className="text-xs text-ink/45">
+            {leave.days} selected day(s) · {(leave.leaveMinutes / 60).toFixed(2)} hour(s)
+          </p>
         </div>
       ),
     },
@@ -257,6 +261,13 @@ export function LeavePage() {
             <Input label="Start Date" type="date" value={form.startDate} onChange={(event) => setForm({ ...form, startDate: event.target.value })} />
             <Input label="End Date" type="date" value={form.endDate} onChange={(event) => setForm({ ...form, endDate: event.target.value })} />
           </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <Input label="Start Time" type="time" value={form.startTime} onChange={(event) => setForm({ ...form, startTime: event.target.value })} />
+            <Input label="End Time" type="time" value={form.endTime} onChange={(event) => setForm({ ...form, endTime: event.target.value })} />
+          </div>
+          <p className="rounded-2xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+            Leave time must be within the assigned shift. Holidays and week-off dates are skipped; every other date must have a shift.
+          </p>
           <Textarea label="Reason" value={form.reason} onChange={(event) => setForm({ ...form, reason: event.target.value })} />
           {error && <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
           <div className="flex justify-end gap-3">

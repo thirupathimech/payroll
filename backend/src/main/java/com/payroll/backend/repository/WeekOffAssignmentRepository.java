@@ -59,4 +59,8 @@ public interface WeekOffAssignmentRepository extends JpaRepository<WeekOffAssign
             Long employeeId,
             LocalDate weekOffDate
     );
+
+    boolean existsByOrgCodeAndAssignmentTypeAndEmployeeIdAndDayOfWeek(
+            String orgCode, WeekOffAssignmentType assignmentType, Long employeeId, DayOfWeek dayOfWeek);
+
 }

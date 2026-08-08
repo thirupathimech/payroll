@@ -5,6 +5,7 @@ import com.payroll.backend.domain.enums.LeaveType;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 
 public record LeaveResponse(
         Long id,
@@ -15,7 +16,10 @@ public record LeaveResponse(
         LeaveStatus status,
         LocalDate startDate,
         LocalDate endDate,
+        LocalTime startTime,
+        LocalTime endTime,
         long days,
+        long leaveMinutes,
         String reason,
         String reviewerEmail,
         String reviewerComment,

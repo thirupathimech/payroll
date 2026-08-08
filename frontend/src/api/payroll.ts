@@ -18,6 +18,8 @@ import type {
   EmployeeSettings,
   EmployeeSettingsPayload,
   EmployeePayload,
+  Holiday,
+  HolidayPayload,
   EmploymentStatus,
   LeavePayload,
   LeaveRequest,
@@ -31,6 +33,7 @@ import type {
   WeekOffAssignment,
   WeekOffAssignmentPayload,
   WeekOffAssignmentType,
+  WeekOffExclusion,
   AttendanceSettings,
   AttendanceRecord,
 } from "../types";
@@ -322,6 +325,36 @@ export const weekOffAssignmentApi = {
   },
   delete: async (id: number) => {
     const { data } = await api.delete<{ message: string }>(`/week-off-assignments/${id}`);
+    return data;
+  },
+};
+
+export const weekOffExclusionApi = {
+  search: async () => {
+    const { data } = await api.get<WeekOffExclusion[]>("/week-off-exclusions");
+    return data;
+  },
+  create: async (payload: { branchId: number; departmentId: number; designationId: number; date: string }) => {
+    const { data } = await api.post<WeekOffExclusion>("/week-off-exclusions", payload);
+    return data;
+  },
+  delete: async (id: number) => {
+    const { data } = await api.delete<{ message: string }>(`/week-off-exclusions/${id}`);
+    return data;
+  },
+};
+
+export const holidayApi = {
+  search: async () => {
+    const { data } = await api.get<Holiday[]>("/holidays");
+    return data;
+  },
+  create: async (payload: HolidayPayload) => {
+    const { data } = await api.post<Holiday>("/holidays", payload);
+    return data;
+  },
+  delete: async (id: number) => {
+    const { data } = await api.delete<{ message: string }>(`/holidays/${id}`);
     return data;
   },
 };

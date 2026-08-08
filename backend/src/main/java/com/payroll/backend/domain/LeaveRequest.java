@@ -19,6 +19,7 @@ import lombok.Setter;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 
 @Getter
 @Setter
@@ -51,6 +52,15 @@ public class LeaveRequest extends AuditableEntity {
 
     @Column(nullable = false)
     private LocalDate endDate;
+
+    @Column(nullable = false)
+    private LocalTime startTime;
+
+    @Column(nullable = false)
+    private LocalTime endTime;
+
+    @Column(nullable = false)
+    private Integer leaveMinutes;
 
     @Column(nullable = false, length = 800)
     private String reason;
