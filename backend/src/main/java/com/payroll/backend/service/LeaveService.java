@@ -4,8 +4,11 @@ import com.payroll.backend.domain.AppUser;
 import com.payroll.backend.domain.Employee;
 import com.payroll.backend.domain.LeaveRequest;
 import com.payroll.backend.domain.ShiftAssignment;
+import com.payroll.backend.domain.Shift;
 import com.payroll.backend.domain.enums.LeaveStatus;
 import com.payroll.backend.domain.enums.WeekOffAssignmentType;
+import com.payroll.backend.dto.shift.ShiftSegmentResponse;
+import com.payroll.backend.dto.shift.ShiftSegmentType;
 import com.payroll.backend.dto.common.PageResponse;
 import com.payroll.backend.dto.leave.LeaveCreateRequest;
 import com.payroll.backend.dto.leave.LeaveDecisionRequest;
@@ -21,6 +24,9 @@ import com.payroll.backend.repository.WeekOffAssignmentRepository;
 import com.payroll.backend.repository.WeekOffExclusionRepository;
 import com.payroll.backend.security.UserPrincipal;
 import lombok.RequiredArgsConstructor;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -50,6 +56,9 @@ public class LeaveService {
     private final HolidayRepository holidayRepository;
     private final WeekOffAssignmentRepository weekOffAssignmentRepository;
     private final WeekOffExclusionRepository weekOffExclusionRepository;
+    private final ObjectMapper objectMapper;
+
+    private static final TypeReference<List<ShiftSegmentResponse>> SHIFT_SEGMENTS_TYPE = new TypeReference<>() { };
 
     @Transactional(readOnly = true)
     public PageResponse<LeaveResponse> search(
@@ -119,6 +128,15 @@ public class LeaveService {
                 : employeeRepository.findByOrgCodeAndId(orgCode, request.employeeId())
                         .orElseThrow(() -> new ResourceNotFoundException("Employee not found"));
         employeeAccessService.assertCanAccessEmployee(principal, employee);
+
+        if (leaveRequestRepository.existsByOrgCodeAndEmployeeIdAndStatusInAndStartDateLessThanEqualAndEndDateGreaterThanEqual(
+                orgCode,
+                employee.getId(),
+                List.of(LeaveStatus.PENDING, LeaveStatus.APPROVED),
+                request.endDate(),
+                request.startDate())) {
+            throw new BadRequestException("This employee already has a pending or approved leave overlapping the selected dates");
+        }
 
         LeaveCalculation calculation = calculateLeave(employee, request);
 
@@ -198,9 +216,53 @@ public class LeaveService {
             if (from.isBefore(shiftStart) || to.isAfter(shiftEnd) || !to.isAfter(from)) {
                 throw new BadRequestException("Leave time on " + date + " must be within shift hours (" + shiftStart + " to " + shiftEnd + ")");
             }
-            minutes += (int) Duration.between(from, to).toMinutes();
+            minutes += workingMinutesWithin(assignment.getShift(), from, to);
         }
         return new LeaveCalculation(minutes);
+    }
+
+    private int workingMinutesWithin(Shift shift, LocalTime from, LocalTime to) {
+        LocalTime shiftStart = shift.getStartTime();
+        int totalShiftMinutes = shift.getDurationHours() * 60 + shift.getDurationMinutes();
+        int fromOffset = minutesFromShiftStart(shiftStart, from);
+        int toOffset = minutesFromShiftStart(shiftStart, to);
+        if (toOffset <= fromOffset) {
+            toOffset += 24 * 60;
+        }
+
+        int cursor = 0;
+        int workingMinutes = 0;
+        for (ShiftSegmentResponse segment : readSegments(shift)) {
+            int segmentMinutes = segment.hours() * 60 + segment.minutes();
+            if (segment.type() == ShiftSegmentType.WORK) {
+                int workStart = cursor;
+                int workEnd = cursor + segmentMinutes;
+                workingMinutes += Math.max(0, Math.min(toOffset, workEnd) - Math.max(fromOffset, workStart));
+            }
+            cursor += segmentMinutes;
+        }
+        if (cursor == 0) {
+            return Math.max(0, Math.min(toOffset, totalShiftMinutes) - Math.max(fromOffset, 0));
+        }
+        return workingMinutes;
+    }
+
+    private int minutesFromShiftStart(LocalTime shiftStart, LocalTime time) {
+        int offset = (int) Duration.between(shiftStart, time).toMinutes();
+        return offset < 0 ? offset + (24 * 60) : offset;
+    }
+
+    private List<ShiftSegmentResponse> readSegments(Shift shift) {
+        if (shift.getSegmentsJson() == null || shift.getSegmentsJson().isBlank()) {
+            return List.of(new ShiftSegmentResponse(
+                    ShiftSegmentType.WORK, shift.getDurationHours(), shift.getDurationMinutes(), 0));
+        }
+        try {
+            return objectMapper.readValue(shift.getSegmentsJson(), SHIFT_SEGMENTS_TYPE);
+        } catch (JsonProcessingException exception) {
+            return List.of(new ShiftSegmentResponse(
+                    ShiftSegmentType.WORK, shift.getDurationHours(), shift.getDurationMinutes(), 0));
+        }
     }
 
     private boolean isHoliday(Employee employee, LocalDate date) {

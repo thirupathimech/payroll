@@ -1,7 +1,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Check, Plus, Search, X } from "lucide-react";
 import { getErrorMessage } from "../api/client";
-import { employeeApi, leaveApi } from "../api/payroll";
+import { employeeApi, leaveApi, shiftAssignmentApi } from "../api/payroll";
 import { useAuth } from "../auth/AuthContext";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
@@ -51,6 +51,10 @@ export function LeavePage() {
   const [form, setForm] = useState<LeavePayload>(initialForm);
   const [selectedEmployeeCode, setSelectedEmployeeCode] = useState("");
   const [error, setError] = useState("");
+  const [decision, setDecision] = useState<{ leave: LeaveRequest; status: LeaveStatus } | null>(null);
+  const [decisionComment, setDecisionComment] = useState("");
+  const [decisionError, setDecisionError] = useState("");
+  const [decisionLoading, setDecisionLoading] = useState(false);
   const debouncedSearch = useDebounce(search);
 
   useEffect(() => {
@@ -64,6 +68,30 @@ export function LeavePage() {
       setSelectedEmployeeCode((current) => current || employeeItems[0]?.employeeCode || "");
     });
   }, [isPersonnelMode]);
+
+  useEffect(() => {
+    if (!form.employeeId || !form.startDate || !form.endDate || new Date(form.endDate) < new Date(form.startDate)) {
+      return;
+    }
+    shiftAssignmentApi.search({
+      employeeId: form.employeeId,
+      startDate: form.startDate,
+      endDate: form.endDate,
+    }).then((assignments) => {
+      if (assignments.length === 0) return;
+      const first = assignments[0];
+      const last = assignments[assignments.length - 1];
+      const [hours, minutes] = last.startTime.slice(0, 5).split(":").map(Number);
+      const endMinutes = hours * 60 + minutes + last.durationHours * 60 + last.durationMinutes;
+      const endHour = Math.floor((endMinutes % (24 * 60)) / 60).toString().padStart(2, "0");
+      const endMinute = (endMinutes % 60).toString().padStart(2, "0");
+      setForm((current) => ({
+        ...current,
+        startTime: first.startTime.slice(0, 5),
+        endTime: `${endHour}:${endMinute}`,
+      }));
+    }).catch(() => undefined);
+  }, [form.employeeId, form.startDate, form.endDate]);
 
   const loadLeaves = useCallback(() => {
     if (isPersonnelMode && !employees[0]?.id) {
@@ -123,13 +151,25 @@ export function LeavePage() {
     }
   }
 
-  async function decide(leave: LeaveRequest, status: LeaveStatus) {
-    const comment = window.prompt(`Add an optional comment for ${status.toLowerCase()} decision`, "");
-    if (comment === null) {
-      return;
+  function openDecision(leave: LeaveRequest, status: LeaveStatus) {
+    setDecision({ leave, status });
+    setDecisionComment("");
+    setDecisionError("");
+  }
+
+  async function submitDecision() {
+    if (!decision) return;
+    setDecisionLoading(true);
+    setDecisionError("");
+    try {
+      await leaveApi.decide(decision.leave.id, decision.status, decisionComment.trim());
+      setDecision(null);
+      loadLeaves();
+    } catch (apiError) {
+      setDecisionError(getErrorMessage(apiError));
+    } finally {
+      setDecisionLoading(false);
     }
-    await leaveApi.decide(leave.id, status, comment);
-    loadLeaves();
   }
 
   const columns: Column<LeaveRequest>[] = [
@@ -163,13 +203,13 @@ export function LeavePage() {
       cell: (leave) =>
         !isPersonnelMode && leave.status === "PENDING" ? (
           <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="secondary" className="px-3 text-emerald-700" onClick={() => decide(leave, "APPROVED")}>
+            <Button type="button" variant="secondary" className="px-3 text-emerald-700" onClick={() => openDecision(leave, "APPROVED")}>
               <Check size={15} />
             </Button>
-            <Button type="button" variant="secondary" className="px-3 text-red-700" onClick={() => decide(leave, "REJECTED")}>
+            <Button type="button" variant="secondary" className="px-3 text-red-700" onClick={() => openDecision(leave, "REJECTED")}>
               <X size={15} />
             </Button>
-            <Button type="button" variant="ghost" className="px-3" onClick={() => decide(leave, "CANCELLED")}>
+            <Button type="button" variant="ghost" className="px-3" onClick={() => openDecision(leave, "CANCELLED")}>
               Cancel
             </Button>
           </div>
@@ -277,6 +317,27 @@ export function LeavePage() {
             <Button type="submit">Submit request</Button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={Boolean(decision)}
+        onClose={() => !decisionLoading && setDecision(null)}
+        title={`${decision?.status ?? ""} leave request`}
+        description="Add an optional reviewer comment before confirming this decision."
+      >
+        <div className="space-y-4">
+          <p className="rounded-2xl bg-mist px-4 py-3 text-sm font-semibold text-ink/70">
+            {decision?.leave.employeeName} · {decision?.leave.startDate} to {decision?.leave.endDate}
+          </p>
+          <Textarea label="Reviewer comment" value={decisionComment} onChange={(event) => setDecisionComment(event.target.value)} />
+          {decisionError && <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{decisionError}</p>}
+          <div className="flex justify-end gap-3">
+            <Button type="button" variant="secondary" onClick={() => setDecision(null)} disabled={decisionLoading}>Cancel</Button>
+            <Button type="button" onClick={submitDecision} disabled={decisionLoading}>
+              {decisionLoading ? "Saving..." : `Confirm ${decision?.status ?? ""}`}
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

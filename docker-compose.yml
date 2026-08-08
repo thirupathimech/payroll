@@ -22,7 +22,7 @@ services:
       context: ./backend
     container_name: payroll-backend
     environment:
-      DB_URL: jdbc:mysql://mysql:3306/payroll?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      DB_URL: jdbc:mysql://mysql:3306/payroll?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Calcutta
       DB_USERNAME: payroll
       DB_PASSWORD: payroll
       JWT_SECRET: local-compose-secret-key-local-compose-secret-key
