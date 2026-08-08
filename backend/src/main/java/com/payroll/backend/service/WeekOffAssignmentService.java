@@ -15,6 +15,7 @@ import com.payroll.backend.repository.DepartmentRepository;
 import com.payroll.backend.repository.DesignationRepository;
 import com.payroll.backend.repository.EmployeeRepository;
 import com.payroll.backend.repository.WeekOffAssignmentRepository;
+import com.payroll.backend.security.UserPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -37,35 +38,53 @@ public class WeekOffAssignmentService {
     private final EmployeeRepository employeeRepository;
     private final CurrentOrgService currentOrgService;
     private final AuditService auditService;
+    private final EmployeeAccessService employeeAccessService;
 
     @Transactional(readOnly = true)
-    public List<WeekOffAssignmentResponse> search(WeekOffAssignmentType type, Long employeeId) {
-        return weekOffAssignmentRepository.search(currentOrgService.orgCode(), type, employeeId)
+    public List<WeekOffAssignmentResponse> search(WeekOffAssignmentType type, Long employeeId, UserPrincipal principal) {
+        List<Long> managedEmployeeIds = employeeAccessService.managedEmployeeIds(principal);
+        if (employeeAccessService.isLead(principal) && managedEmployeeIds.isEmpty()) {
+            return List.of();
+        }
+        return weekOffAssignmentRepository.search(
+                        currentOrgService.orgCode(),
+                        type,
+                        employeeId,
+                        employeeAccessService.branchScopeId(principal),
+                        managedEmployeeIds.isEmpty() ? List.of(-1L) : managedEmployeeIds,
+                        !managedEmployeeIds.isEmpty()
+                )
                 .stream()
                 .map(this::toResponse)
                 .toList();
     }
 
     @Transactional
-    public List<WeekOffAssignmentResponse> create(WeekOffAssignmentRequest request) {
+    public List<WeekOffAssignmentResponse> create(WeekOffAssignmentRequest request, UserPrincipal principal) {
         return switch (request.type()) {
-            case GROUP_WEEKLY -> createGroupWeekly(request);
-            case EMPLOYEE_DATE -> createEmployeeDate(request);
-            case EMPLOYEE_WEEKLY -> createEmployeeWeekly(request);
+            case GROUP_WEEKLY -> createGroupWeekly(request, principal);
+            case EMPLOYEE_DATE -> createEmployeeDate(request, principal);
+            case EMPLOYEE_WEEKLY -> createEmployeeWeekly(request, principal);
         };
     }
 
     @Transactional
-    public void delete(Long id) {
+    public void delete(Long id, UserPrincipal principal) {
         WeekOffAssignment assignment = weekOffAssignmentRepository.findByOrgCodeAndId(currentOrgService.orgCode(), id)
                 .orElseThrow(() -> new ResourceNotFoundException("Week off assignment not found"));
+        if (assignment.getEmployee() != null) {
+            employeeAccessService.assertCanAccessEmployee(principal, assignment.getEmployee());
+        } else if (assignment.getBranch() != null) {
+            employeeAccessService.assertCanAccessBranch(principal, assignment.getBranch().getId());
+        }
         weekOffAssignmentRepository.delete(assignment);
         auditService.log("WEEK_OFF_ASSIGNMENT_DELETED", "WeekOffAssignment", assignment.getId(), assignment.getAssignmentType().name());
     }
 
-    private List<WeekOffAssignmentResponse> createGroupWeekly(WeekOffAssignmentRequest request) {
+    private List<WeekOffAssignmentResponse> createGroupWeekly(WeekOffAssignmentRequest request, UserPrincipal principal) {
         Set<DayOfWeek> days = requireDays(request.dayOfWeeks());
         Branch branch = findBranch(request.branchId());
+        employeeAccessService.assertCanAccessBranch(principal, branch.getId());
         Department department = findDepartment(request.departmentId());
         Designation designation = findDesignation(request.designationId());
         ensureDesignationBelongsToDepartment(designation, department);
@@ -113,8 +132,9 @@ public class WeekOffAssignmentService {
         return weekOffAssignmentRepository.saveAndFlush(assignment);
     }
 
-    private List<WeekOffAssignmentResponse> createEmployeeDate(WeekOffAssignmentRequest request) {
+    private List<WeekOffAssignmentResponse> createEmployeeDate(WeekOffAssignmentRequest request, UserPrincipal principal) {
         Employee employee = findEmployee(request.employeeId());
+        employeeAccessService.assertCanAccessEmployee(principal, employee);
         Set<LocalDate> dates = requireDates(request.dates());
         List<WeekOffAssignment> assignments = dates.stream()
                 .sorted()
@@ -138,8 +158,9 @@ public class WeekOffAssignmentService {
         return weekOffAssignmentRepository.save(assignment);
     }
 
-    private List<WeekOffAssignmentResponse> createEmployeeWeekly(WeekOffAssignmentRequest request) {
+    private List<WeekOffAssignmentResponse> createEmployeeWeekly(WeekOffAssignmentRequest request, UserPrincipal principal) {
         Employee employee = findEmployee(request.employeeId());
+        employeeAccessService.assertCanAccessEmployee(principal, employee);
         Set<DayOfWeek> days = requireDays(request.dayOfWeeks());
         List<WeekOffAssignment> assignments = days.stream()
                 .sorted(Comparator.comparingInt(DayOfWeek::getValue))

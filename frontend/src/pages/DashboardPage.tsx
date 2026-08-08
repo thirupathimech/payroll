@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { Building2, CalendarClock, CheckCircle2, Users } from "lucide-react";
-import { dashboardApi } from "../api/payroll";
+import { dashboardApi, employeeApi } from "../api/payroll";
+import { useAuth } from "../auth/AuthContext";
+import { HierarchyChart } from "../components/employee/HierarchyChart";
 import { Badge } from "../components/ui/Badge";
 import { Card } from "../components/ui/Card";
 import { formatDate } from "../lib/format";
-import type { DashboardSummary } from "../types";
+import type { DashboardSummary, EmployeeHierarchy } from "../types";
 
 const cards = [
   { label: "Total employees", key: "totalEmployees", icon: Users, tone: "bg-moss text-white" },
@@ -14,7 +16,9 @@ const cards = [
 ] as const;
 
 export function DashboardPage() {
+  const { user } = useAuth();
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [hierarchy, setHierarchy] = useState<EmployeeHierarchy | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -23,6 +27,15 @@ export function DashboardPage() {
       .then(setSummary)
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (!user?.employeeCode) {
+      setHierarchy(null);
+      return;
+    }
+
+    employeeApi.hierarchy().then(setHierarchy).catch(() => setHierarchy(null));
+  }, [user?.employeeCode]);
 
   return (
     <div className="space-y-6">
@@ -55,7 +68,13 @@ export function DashboardPage() {
             </div>
             <Badge value={`${summary?.approvedLeavesThisMonth ?? 0} approved`} />
           </div>
-
+          <div className="mt-6">
+            {hierarchy ? (
+              <HierarchyChart hierarchy={hierarchy} />
+            ) : (
+              <p className="rounded-3xl bg-white/70 p-4 text-sm text-ink/55">Hierarchy chart is not available for this login.</p>
+            )}
+          </div>
         </Card>
 
         <Card>

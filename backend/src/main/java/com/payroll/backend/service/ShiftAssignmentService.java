@@ -28,6 +28,7 @@ public class ShiftAssignmentService {
     private final ShiftRepository shiftRepository;
     private final CurrentOrgService currentOrgService;
     private final AuditService auditService;
+    private final EmployeeAccessService employeeAccessService;
 
     @Transactional(readOnly = true)
     public List<ShiftAssignmentResponse> search(Long employeeId, LocalDate startDate, LocalDate endDate, UserPrincipal principal) {
@@ -38,20 +39,45 @@ public class ShiftAssignmentService {
             throw new BadRequestException("End date cannot be before start date");
         }
         Long effectiveEmployeeId = isEmployee(principal) ? findCurrentEmployee(principal).getId() : employeeId;
+        Long branchId = employeeAccessService.branchScopeId(principal);
+        List<Long> managedEmployeeIds = scopedEmployeeIds(principal);
+        if (employeeAccessService.isLead(principal) && managedEmployeeIds.isEmpty()) {
+            return List.of();
+        }
+        if (!managedEmployeeIds.isEmpty() && effectiveEmployeeId != null && !managedEmployeeIds.contains(effectiveEmployeeId)) {
+            return List.of();
+        }
         List<ShiftAssignment> assignments = effectiveEmployeeId == null
+                ? (!managedEmployeeIds.isEmpty()
+                ? shiftAssignmentRepository.findByOrgCodeAndEmployeeIdInAndAssignmentDateBetweenOrderByAssignmentDate(orgCode, managedEmployeeIds, start, end)
+                : (branchId == null
                 ? shiftAssignmentRepository.findByOrgCodeAndAssignmentDateBetweenOrderByAssignmentDate(orgCode, start, end)
+                : shiftAssignmentRepository.findByOrgCodeAndBranchIdAndAssignmentDateBetweenOrderByAssignmentDate(
+                        orgCode,
+                        branchId,
+                        List.of(-1L),
+                        false,
+                        start,
+                        end
+                )))
                 : shiftAssignmentRepository.findByOrgCodeAndEmployeeIdAndAssignmentDateBetweenOrderByAssignmentDate(orgCode, effectiveEmployeeId, start, end);
+        if (branchId != null && effectiveEmployeeId != null) {
+            assignments = assignments.stream()
+                    .filter(assignment -> assignment.getEmployee().getBranch() != null && branchId.equals(assignment.getEmployee().getBranch().getId()))
+                    .toList();
+        }
         return assignments.stream().map(this::toResponse).toList();
     }
 
     @Transactional
-    public List<ShiftAssignmentResponse> create(ShiftAssignmentRequest request) {
+    public List<ShiftAssignmentResponse> create(ShiftAssignmentRequest request, UserPrincipal principal) {
         if (request.endDate().isBefore(request.startDate())) {
             throw new BadRequestException("End date cannot be before start date");
         }
         String orgCode = currentOrgService.orgCode();
         Employee employee = employeeRepository.findByOrgCodeAndId(orgCode, request.employeeId())
                 .orElseThrow(() -> new ResourceNotFoundException("Employee not found"));
+        employeeAccessService.assertCanAccessEmployee(principal, employee);
         Shift shift = shiftRepository.findByOrgCodeAndId(orgCode, request.shiftId())
                 .filter(Shift::isActive)
                 .orElseThrow(() -> new ResourceNotFoundException("Active shift not found"));
@@ -83,9 +109,10 @@ public class ShiftAssignmentService {
     }
 
     @Transactional
-    public void delete(Long id) {
+    public void delete(Long id, UserPrincipal principal) {
         ShiftAssignment assignment = shiftAssignmentRepository.findByOrgCodeAndId(currentOrgService.orgCode(), id)
                 .orElseThrow(() -> new ResourceNotFoundException("Shift assignment not found"));
+        employeeAccessService.assertCanAccessEmployee(principal, assignment.getEmployee());
         shiftAssignmentRepository.delete(assignment);
         auditService.log("SHIFT_ASSIGNMENT_DELETED", "ShiftAssignment", assignment.getId(), assignment.getEmployee().getEmployeeCode());
     }
@@ -101,16 +128,15 @@ public class ShiftAssignmentService {
     }
 
     private Employee findCurrentEmployee(UserPrincipal principal) {
-        if (principal == null || principal.employeeCode() == null || principal.employeeCode().isBlank()) {
-            throw new ResourceNotFoundException("Employee profile not found");
-        }
-        return employeeRepository.findByOrgCodeAndEmployeeCodeIgnoreCase(currentOrgService.orgCode(), principal.employeeCode())
-                .orElseThrow(() -> new ResourceNotFoundException("Employee profile not found"));
+        return employeeAccessService.findCurrentEmployee(principal);
     }
 
     private boolean isEmployee(UserPrincipal principal) {
-        return principal != null && principal.getAuthorities().stream()
-                .anyMatch(authority -> "ROLE_EMPLOYEE".equals(authority.getAuthority()));
+        return employeeAccessService.isEmployee(principal);
+    }
+
+    private List<Long> scopedEmployeeIds(UserPrincipal principal) {
+        return employeeAccessService.managedEmployeeIds(principal);
     }
 
     private ShiftAssignmentResponse toResponse(ShiftAssignment assignment) {

@@ -2,12 +2,14 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { CalendarOff, Plus, Trash2, UserRound, UsersRound } from "lucide-react";
 import { getErrorMessage } from "../api/client";
 import { branchApi, departmentApi, designationApi, employeeApi, weekOffAssignmentApi } from "../api/payroll";
+import { useAuth } from "../auth/AuthContext";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { EmployeeAutocomplete } from "../components/ui/EmployeeAutocomplete";
 import { Input } from "../components/ui/Input";
 import { SearchableSelect } from "../components/ui/SearchableSelect";
 import { formatDate } from "../lib/format";
+import { hasRoleAccess, HR_ROLES } from "../lib/access";
 import type {
   Branch,
   Department,
@@ -103,6 +105,9 @@ function DayCheckboxGroup({
 }
 
 export function WeekOffAssignmentPage() {
+  const { user } = useAuth();
+  const canManageGroupRules = hasRoleAccess(user, HR_ROLES) || user?.role === "MANAGER";
+  const isLead = user?.role === "LEAD";
   const [branches, setBranches] = useState<Branch[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [designations, setDesignations] = useState<Designation[]>([]);
@@ -295,47 +300,49 @@ export function WeekOffAssignmentPage() {
         )}
       </Card>
 
-      <section className="grid gap-6 xl:grid-cols-3">
-        <Card>
-          <form onSubmit={saveGroupWeekly} className="space-y-5">
-            <div className="flex items-center gap-3">
-              <div className="grid h-11 w-11 place-items-center rounded-2xl bg-moss text-white">
-                <UsersRound size={20} />
+      <section className={`grid gap-6 ${canManageGroupRules ? "xl:grid-cols-3" : "xl:grid-cols-2"}`}>
+        {canManageGroupRules && (
+          <Card>
+            <form onSubmit={saveGroupWeekly} className="space-y-5">
+              <div className="flex items-center gap-3">
+                <div className="grid h-11 w-11 place-items-center rounded-2xl bg-moss text-white">
+                  <UsersRound size={20} />
+                </div>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-fern">Rule</p>
+                  <h3 className="font-display text-xl font-extrabold text-ink">Branch / Department / Designation</h3>
+                </div>
               </div>
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-fern">Rule</p>
-                <h3 className="font-display text-xl font-extrabold text-ink">Branch / Department / Designation</h3>
+
+              <DayCheckboxGroup value={groupDays} onChange={setGroupDays} compact />
+
+              <div className="grid gap-4">
+                <SearchableSelect
+                  label="Branch"
+                  value={groupBranchId}
+                  options={branches.map((branch) => ({ value: String(branch.id), label: branch.name, searchText: branch.code }))}
+                  onChange={setGroupBranchId}
+                />
+                <SearchableSelect
+                  label="Department"
+                  value={groupDepartmentId}
+                  options={departments.map((department) => ({ value: String(department.id), label: department.name, searchText: department.code }))}
+                  onChange={setGroupDepartmentId}
+                />
+                <SearchableSelect
+                  label="Designation"
+                  value={groupDesignationId}
+                  options={groupDesignationOptions}
+                  onChange={setGroupDesignationId}
+                />
               </div>
-            </div>
 
-            <DayCheckboxGroup value={groupDays} onChange={setGroupDays} compact />
-
-            <div className="grid gap-4">
-              <SearchableSelect
-                label="Branch"
-                value={groupBranchId}
-                options={branches.map((branch) => ({ value: String(branch.id), label: branch.name, searchText: branch.code }))}
-                onChange={setGroupBranchId}
-              />
-              <SearchableSelect
-                label="Department"
-                value={groupDepartmentId}
-                options={departments.map((department) => ({ value: String(department.id), label: department.name, searchText: department.code }))}
-                onChange={setGroupDepartmentId}
-              />
-              <SearchableSelect
-                label="Designation"
-                value={groupDesignationId}
-                options={groupDesignationOptions}
-                onChange={setGroupDesignationId}
-              />
-            </div>
-
-            <Button type="submit" className="w-full" disabled={savingAction === "GROUP_WEEKLY"}>
-              {savingAction === "GROUP_WEEKLY" ? "Saving..." : "Save Rule"}
-            </Button>
-          </form>
-        </Card>
+              <Button type="submit" className="w-full" disabled={savingAction === "GROUP_WEEKLY"}>
+                {savingAction === "GROUP_WEEKLY" ? "Saving..." : "Save Rule"}
+              </Button>
+            </form>
+          </Card>
+        )}
 
         <Card>
           <form onSubmit={saveEmployeeDates} className="space-y-5">
@@ -448,15 +455,17 @@ export function WeekOffAssignmentPage() {
                     {assignment.date ? formatDate(assignment.date) : dayLabel(assignment.dayOfWeek)}
                   </td>
                   <td className="px-5 py-4 text-right">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="h-9 w-9 rounded-full p-0 text-red-700 hover:bg-red-50"
-                      onClick={() => deleteAssignment(assignment)}
-                      aria-label="Delete assignment"
-                    >
-                      <Trash2 size={16} />
-                    </Button>
+                    {(!isLead || assignment.employeeId) && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="h-9 w-9 rounded-full p-0 text-red-700 hover:bg-red-50"
+                        onClick={() => deleteAssignment(assignment)}
+                        aria-label="Delete assignment"
+                      >
+                        <Trash2 size={16} />
+                      </Button>
+                    )}
                   </td>
                 </tr>
               ))}

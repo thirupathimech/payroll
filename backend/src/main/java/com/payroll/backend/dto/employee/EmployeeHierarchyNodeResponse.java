@@ -12,6 +12,7 @@ public record EmployeeHierarchyNodeResponse(
         String managerEmployeeCode,
         String managerName,
         int directReportsCount,
+        boolean hasProfilePhoto,
         List<EmployeeHierarchyNodeResponse> children
 ) {
 }
