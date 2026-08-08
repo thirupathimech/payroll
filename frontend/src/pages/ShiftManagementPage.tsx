@@ -151,6 +151,12 @@ function totalSegmentMinutes(segments: Array<Pick<ShiftSegment, "hours" | "minut
   return segments.reduce((total, segment) => total + segmentMinutes(segment), 0);
 }
 
+function totalWorkMinutes(segments: Array<Pick<ShiftSegment, "type" | "hours" | "minutes">>) {
+  return segments
+    .filter((segment) => segment.type === "WORK")
+    .reduce((total, segment) => total + segmentMinutes(segment), 0);
+}
+
 function buildTimeline(startTime: string, segments: ShiftSegment[]): TimelineSegment[] {
   let cursor = getStartMinutes(startTime);
 
@@ -183,6 +189,7 @@ export function ShiftManagementPage() {
 
   const formSegments = useMemo(() => readSegments(form), [form]);
   const totalMinutes = useMemo(() => totalSegmentMinutes(formSegments), [formSegments]);
+  const totalWorkMinutesForForm = useMemo(() => totalWorkMinutes(formSegments), [formSegments]);
   const formEndTime = useMemo(() => calculateEndTime(form.startTime, totalMinutes), [form.startTime, totalMinutes]);
   const formTimeline = useMemo(() => buildTimeline(form.startTime, formSegments), [form.startTime, formSegments]);
 
@@ -360,7 +367,14 @@ export function ShiftManagementPage() {
         </div>
       ),
     },
-    { header: "Total Shift Hours", cell: (shift) => formatDurationFromMinutes(shift.durationHours * 60 + shift.durationMinutes) },
+    {
+      header: "Total Shift Hours",
+      cell: (shift) => formatDurationFromMinutes(totalWorkMinutes(normalizeShiftSegments(shift))),
+    },
+    {
+      header: "Shift Duration",
+      cell: (shift) => formatDurationFromMinutes(shift.durationHours * 60 + shift.durationMinutes),
+    },
     { header: "Status", cell: (shift) => <Badge value={shift.active} /> },
     {
       header: "Actions",
@@ -537,7 +551,7 @@ export function ShiftManagementPage() {
               <span>Total Shift Hours</span>
               <div className="flex min-h-[46px] items-center gap-3 rounded-2xl border border-moss/15 bg-oat/70 px-4 py-3 text-sm text-ink">
                 <Clock3 size={17} className="text-fern" />
-                <span className="font-bold">{formatDurationFromMinutes(totalMinutes)}</span>
+                <span className="font-bold">{formatDurationFromMinutes(totalWorkMinutesForForm)}</span>
               </div>
             </label>
             <label className="block space-y-2 text-sm font-semibold text-ink/80">
