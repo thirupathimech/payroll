@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { BriefcaseBusiness, LogOut, Menu, UserRound } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
@@ -27,6 +28,7 @@ const personnelMobileItems = [
 
 export function Topbar() {
   const { user, logout, viewMode, setViewMode, canSwitchViewMode } = useAuth();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const visibleMobileItems =
     viewMode === "personnel" ? personnelMobileItems : mobileItems.filter((item) => hasRoleAccess(user, item.allowedRoles));
 
@@ -76,7 +78,7 @@ export function Topbar() {
         </div>
       </div>
 
-      <details className="mt-4 rounded-2xl bg-white/70 p-3 lg:hidden">
+      <details open={mobileMenuOpen} onToggle={(event) => setMobileMenuOpen(event.currentTarget.open)} className="mt-4 rounded-2xl bg-white/70 p-3 lg:hidden">
         <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-bold text-moss">
           <Menu size={18} />
           Menu
@@ -111,11 +113,12 @@ export function Topbar() {
                 className={({ isActive }) =>
                   `rounded-xl px-3 py-2 text-sm font-bold ${isActive ? "bg-moss text-white" : "bg-white text-moss"}`
                 }
+                onClick={() => setMobileMenuOpen(false)}
               >
                 {item.label}
               </NavLink>
             ))}
-          <button className="rounded-xl bg-red-50 px-3 py-2 text-left text-sm font-bold text-red-700" onClick={logout}>
+          <button className="rounded-xl bg-red-50 px-3 py-2 text-left text-sm font-bold text-red-700" onClick={() => { setMobileMenuOpen(false); logout(); }}>
             Logout
           </button>
         </div>
