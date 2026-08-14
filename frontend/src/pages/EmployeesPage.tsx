@@ -423,7 +423,7 @@ function HierarchyChart({ hierarchy }: { hierarchy: EmployeeHierarchy }) {
 }
 
 export function EmployeesPage() {
-  const { user, viewMode } = useAuth();
+  const { user, viewMode, currency } = useAuth();
   const [employees, setEmployees] = useState(emptyPage);
   const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -1097,7 +1097,7 @@ export function EmployeesPage() {
     },
     { header: "Department", cell: (employee) => employee.departmentName },
     { header: "Designation", cell: (employee) => employee.designationTitle },
-    { header: "Salary", cell: (employee) => formatCurrency(employee.baseSalary) },
+    { header: "Salary", cell: (employee) => formatCurrency(employee.baseSalary, currency) },
     { header: "Joined", cell: (employee) => formatDate(employee.joiningDate) },
     { header: "Status", cell: (employee) => <Badge value={employee.status} /> },
     {

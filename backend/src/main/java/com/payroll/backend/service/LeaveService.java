@@ -189,34 +189,28 @@ public class LeaveService {
         List<ShiftAssignment> assignments = shiftAssignmentRepository
                 .findByOrgCodeAndEmployeeIdAndAssignmentDateBetweenOrderByAssignmentDate(
                         currentOrgService.orgCode(), employee.getId(), request.startDate(), request.endDate());
-        List<LocalDate> workingDates = new java.util.ArrayList<>();
-        for (LocalDate date = request.startDate(); !date.isAfter(request.endDate()); date = date.plusDays(1)) {
-            if (!isHoliday(employee, date) && !isWeekOff(employee, date)) {
-                workingDates.add(date);
-            }
+        if (assignments.isEmpty()) {
+            throw new BadRequestException("No shift assigned in the selected leave dates. Leave cannot be applied.");
         }
-        if (workingDates.isEmpty()) {
-            throw new BadRequestException("Leave cannot be applied on holidays or week-off days");
-        }
+
+        Shift fallbackShift = assignments.get(0).getShift();
         int minutes = 0;
         for (LocalDate date = request.startDate(); !date.isAfter(request.endDate()); date = date.plusDays(1)) {
-            if (isHoliday(employee, date) || isWeekOff(employee, date)) {
-                continue;
-            }
             LocalDate currentDate = date;
             ShiftAssignment assignment = assignments.stream()
                     .filter(item -> item.getAssignmentDate().equals(currentDate))
                     .findFirst()
-                    .orElseThrow(() -> new BadRequestException("No shift assigned for " + currentDate + ". Leave cannot be applied."));
-            LocalTime shiftStart = assignment.getShift().getStartTime();
-            LocalTime shiftEnd = shiftStart.plusHours(assignment.getShift().getDurationHours())
-                    .plusMinutes(assignment.getShift().getDurationMinutes());
-            LocalTime from = date.equals(workingDates.get(0)) ? request.startTime() : shiftStart;
-            LocalTime to = date.equals(workingDates.get(workingDates.size() - 1)) ? request.endTime() : shiftEnd;
+                    .orElse(null);
+            Shift shift = assignment == null ? fallbackShift : assignment.getShift();
+            LocalTime shiftStart = shift.getStartTime();
+            LocalTime shiftEnd = shiftStart.plusHours(shift.getDurationHours())
+                    .plusMinutes(shift.getDurationMinutes());
+            LocalTime from = date.equals(request.startDate()) ? request.startTime() : shiftStart;
+            LocalTime to = date.equals(request.endDate()) ? request.endTime() : shiftEnd;
             if (from.isBefore(shiftStart) || to.isAfter(shiftEnd) || !to.isAfter(from)) {
                 throw new BadRequestException("Leave time on " + date + " must be within shift hours (" + shiftStart + " to " + shiftEnd + ")");
             }
-            minutes += workingMinutesWithin(assignment.getShift(), from, to);
+            minutes += workingMinutesWithin(shift, from, to);
         }
         return new LeaveCalculation(minutes);
     }
@@ -323,6 +317,7 @@ public class LeaveService {
         Employee employee = leaveRequest.getEmployee();
         String employeeName = employee.getFirstName() + " " + employee.getLastName();
         long days = ChronoUnit.DAYS.between(leaveRequest.getStartDate(), leaveRequest.getEndDate()) + 1;
+        long leaveMinutes = recalculatedMinutesOrStoredValue(leaveRequest);
         return new LeaveResponse(
                 leaveRequest.getId(),
                 employee.getId(),
@@ -335,7 +330,7 @@ public class LeaveService {
                 leaveRequest.getStartTime(),
                 leaveRequest.getEndTime(),
                 days,
-                leaveRequest.getLeaveMinutes(),
+                leaveMinutes,
                 leaveRequest.getReason(),
                 leaveRequest.getReviewedBy() == null ? null : leaveRequest.getReviewedBy().getEmail(),
                 leaveRequest.getReviewerComment(),
@@ -343,6 +338,25 @@ public class LeaveService {
                 leaveRequest.getCreatedAt(),
                 leaveRequest.getUpdatedAt()
         );
+    }
+
+    private long recalculatedMinutesOrStoredValue(LeaveRequest leaveRequest) {
+        try {
+            return calculateLeave(
+                    leaveRequest.getEmployee(),
+                    new LeaveCreateRequest(
+                            leaveRequest.getEmployee().getId(),
+                            leaveRequest.getLeaveType(),
+                            leaveRequest.getStartDate(),
+                            leaveRequest.getEndDate(),
+                            leaveRequest.getStartTime(),
+                            leaveRequest.getEndTime(),
+                            leaveRequest.getReason()
+                    )
+            ).minutes();
+        } catch (BadRequestException exception) {
+            return leaveRequest.getLeaveMinutes();
+        }
     }
 
     private String blankToNull(String value) {

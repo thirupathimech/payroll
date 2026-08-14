@@ -2,9 +2,11 @@ import { FormEvent, useEffect, useState } from "react";
 import { Save } from "lucide-react";
 import { getErrorMessage } from "../api/client";
 import { settingsApi } from "../api/payroll";
+import { useAuth } from "../auth/AuthContext";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { Input } from "../components/ui/Input";
+import { Select } from "../components/ui/Select";
 import { Textarea } from "../components/ui/Textarea";
 import type { CompanySettings } from "../types";
 
@@ -22,7 +24,22 @@ const initialForm: SettingsForm = {
   payrollCutoffDay: 25,
 };
 
+const currencyOptions = [
+  ["USD", "$", "US Dollar"],
+  ["INR", "₹", "Indian Rupee"],
+  ["EUR", "€", "Euro"],
+  ["GBP", "£", "British Pound"],
+  ["AED", "د.إ", "UAE Dirham"],
+  ["SAR", "﷼", "Saudi Riyal"],
+  ["SGD", "S$", "Singapore Dollar"],
+  ["AUD", "A$", "Australian Dollar"],
+  ["CAD", "CA$", "Canadian Dollar"],
+  ["JPY", "¥", "Japanese Yen"],
+  ["CNY", "¥", "Chinese Yuan"],
+] as const;
+
 export function SettingsPage() {
+  const { refreshCurrency } = useAuth();
   const [form, setForm] = useState<SettingsForm>(initialForm);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -65,6 +82,7 @@ export function SettingsPage() {
     setSaving(true);
     try {
       const saved = await settingsApi.update(form);
+      await refreshCurrency();
       setMessage(`Settings saved for ${saved.companyName}.`);
     } catch (apiError) {
       setError(getErrorMessage(apiError));
@@ -107,11 +125,11 @@ export function SettingsPage() {
             </div>
             <Textarea label="Address" value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} />
             <div className="grid gap-4 md:grid-cols-3">
-              <Input
-                label="Currency"
-                value={form.currency}
-                onChange={(event) => setForm({ ...form, currency: event.target.value.toUpperCase() })}
-              />
+              <Select label="Currency" value={form.currency} onChange={(event) => setForm({ ...form, currency: event.target.value })}>
+                {currencyOptions.map(([code, symbol, name]) => (
+                  <option key={code} value={code}>{code} ({symbol}) - {name}</option>
+                ))}
+              </Select>
               <Input
                 label="Timezone"
                 value={form.timezone}

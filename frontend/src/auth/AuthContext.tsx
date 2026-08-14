@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { authApi } from "../api/payroll";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { authApi, settingsApi } from "../api/payroll";
 import { AUTH_TOKEN_KEY, AUTH_USER_KEY, AUTH_VIEW_MODE_KEY } from "../api/client";
 import type { UserSummary } from "../types";
 
@@ -12,6 +12,8 @@ interface AuthContextValue {
   loading: boolean;
   viewMode: ViewMode;
   canSwitchViewMode: boolean;
+  currency: string;
+  refreshCurrency: () => Promise<void>;
   setViewMode: (mode: ViewMode) => void;
   login: (orgCode: string, email: string, password: string) => Promise<void>;
   register: (payload: { companyName: string; fullName: string; email: string; password: string }) => Promise<void>;
@@ -30,8 +32,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [viewModeState, setViewModeState] = useState<ViewMode>(() =>
     localStorage.getItem(AUTH_VIEW_MODE_KEY) === "management" ? "management" : "personnel",
   );
+  const [currency, setCurrency] = useState("USD");
   const canSwitchViewMode = Boolean(user && user.role !== "EMPLOYEE");
   const viewMode = canSwitchViewMode ? viewModeState : "personnel";
+
+  const refreshCurrency = useCallback(async () => {
+    const settings = await settingsApi.get();
+    setCurrency(settings.currency || "USD");
+  }, []);
+
+  useEffect(() => {
+    if (!token) {
+      setCurrency("USD");
+      return;
+    }
+    refreshCurrency().catch(() => undefined);
+  }, [refreshCurrency, token]);
 
   useEffect(() => {
     let mounted = true;
@@ -93,11 +109,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setViewModeState("personnel");
   }
 
-  function setViewMode(mode: ViewMode) {
+  const setViewMode = useCallback((mode: ViewMode) => {
     const nextMode = canSwitchViewMode ? mode : "personnel";
     setViewModeState(nextMode);
     localStorage.setItem(AUTH_VIEW_MODE_KEY, nextMode);
-  }
+  }, [canSwitchViewMode]);
 
   function logout() {
     localStorage.removeItem(AUTH_TOKEN_KEY);
@@ -106,11 +122,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setToken(null);
     setUser(null);
     setViewModeState("personnel");
+    setCurrency("USD");
   }
 
   const value = useMemo(
-    () => ({ user, token, loading, viewMode, canSwitchViewMode, setViewMode, login, register, logout }),
-    [user, token, loading, viewMode, canSwitchViewMode],
+    () => ({ user, token, loading, viewMode, canSwitchViewMode, currency, refreshCurrency, setViewMode, login, register, logout }),
+    [user, token, loading, viewMode, canSwitchViewMode, currency, refreshCurrency, setViewMode],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

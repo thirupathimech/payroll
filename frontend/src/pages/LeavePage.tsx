@@ -28,6 +28,12 @@ const emptyPage: PageResponse<LeaveRequest> = {
 const leaveTypes: LeaveType[] = ["ANNUAL", "SICK", "CASUAL", "MATERNITY", "PATERNITY", "UNPAID"];
 const leaveStatuses: LeaveStatus[] = ["PENDING", "APPROVED", "REJECTED", "CANCELLED"];
 
+function formatLeaveHours(minutes: number) {
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return `${hours}h ${String(remainingMinutes).padStart(2, "0")}m`;
+}
+
 const initialForm: LeavePayload = {
   employeeId: 0,
   leaveType: "ANNUAL",
@@ -191,13 +197,25 @@ export function LeavePage() {
             {formatDate(leave.startDate)} - {formatDate(leave.endDate)}
           </p>
           <p className="text-xs text-ink/45">
-            {leave.days} selected day(s) · {(leave.leaveMinutes / 60).toFixed(2)} hour(s)
+            {leave.days} selected day(s)
           </p>
         </div>
       ),
     },
+    { header: "Leave hours", cell: (leave) => <span className="font-semibold text-ink">{formatLeaveHours(leave.leaveMinutes)}</span> },
     { header: "Reason", cell: (leave) => leave.reason },
     { header: "Status", cell: (leave) => <Badge value={leave.status} /> },
+    {
+      header: "Reviewer comment",
+      cell: (leave) => (
+        <div className="max-w-xs">
+          <p className={leave.reviewerComment ? "whitespace-pre-wrap text-sm text-ink" : "text-sm text-ink/40"}>
+            {leave.reviewerComment || "No comment"}
+          </p>
+          {leave.reviewerEmail && <p className="mt-1 text-xs text-ink/45">by {leave.reviewerEmail}</p>}
+        </div>
+      ),
+    },
     {
       header: "Actions",
       cell: (leave) =>
@@ -306,7 +324,7 @@ export function LeavePage() {
             <Input label="End Time" type="time" value={form.endTime} onChange={(event) => setForm({ ...form, endTime: event.target.value })} />
           </div>
           <p className="rounded-2xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
-            Leave time must be within the assigned shift. Holidays and week-off dates are skipped; every other date must have a shift.
+            Leave hours are calculated for every selected date using the employee&apos;s assigned shift hours.
           </p>
           <Textarea label="Reason" value={form.reason} onChange={(event) => setForm({ ...form, reason: event.target.value })} />
           {error && <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
