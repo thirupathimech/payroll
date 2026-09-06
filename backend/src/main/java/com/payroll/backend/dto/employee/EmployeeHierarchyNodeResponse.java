@@ -8,6 +8,7 @@ public record EmployeeHierarchyNodeResponse(
         String fullName,
         String designationTitle,
         String departmentName,
+        String branchName,
         Long managerId,
         String managerEmployeeCode,
         String managerName,

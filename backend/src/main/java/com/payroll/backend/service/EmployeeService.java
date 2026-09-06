@@ -19,6 +19,7 @@ import com.payroll.backend.dto.employee.EmployeeResponse;
 import com.payroll.backend.exception.BadRequestException;
 import com.payroll.backend.exception.ResourceNotFoundException;
 import com.payroll.backend.repository.DepartmentRepository;
+import com.payroll.backend.repository.EmployeeDocumentRepository;
 import com.payroll.backend.repository.EmployeeEducationRepository;
 import com.payroll.backend.repository.EmployeeExperienceRepository;
 import com.payroll.backend.repository.DesignationRepository;
@@ -34,7 +35,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -43,6 +48,7 @@ public class EmployeeService {
     private final EmployeeRepository employeeRepository;
     private final DepartmentRepository departmentRepository;
     private final DesignationRepository designationRepository;
+    private final EmployeeDocumentRepository employeeDocumentRepository;
     private final EmployeeEducationRepository employeeEducationRepository;
     private final EmployeeExperienceRepository employeeExperienceRepository;
     private final EmployeeDocumentService employeeDocumentService;
@@ -172,6 +178,47 @@ public class EmployeeService {
         EmployeeHierarchyNodeResponse currentNode = toNode(current);
         List<EmployeeHierarchyNodeResponse> descendants = buildDescendants(current);
         return new EmployeeHierarchyResponse(currentNode, ancestors, descendants);
+    }
+
+    @Transactional(readOnly = true)
+    public List<EmployeeHierarchyNodeResponse> organizationHierarchy() {
+        String orgCode = currentOrgService.orgCode();
+        List<Employee> employees = employeeRepository.findOrganizationHierarchyEmployees(orgCode, EmploymentStatus.TERMINATED);
+        if (employees.isEmpty()) {
+            return List.of();
+        }
+
+        Map<Long, Employee> employeesById = new HashMap<>();
+        Map<Long, List<Employee>> reportsByManagerId = new HashMap<>();
+        List<Employee> roots = new ArrayList<>();
+        for (Employee employee : employees) {
+            employeesById.put(employee.getId(), employee);
+        }
+        for (Employee employee : employees) {
+            Employee manager = employee.getManager();
+            if (manager != null && employeesById.containsKey(manager.getId())) {
+                reportsByManagerId.computeIfAbsent(manager.getId(), ignored -> new ArrayList<>()).add(employee);
+            } else {
+                roots.add(employee);
+            }
+        }
+
+        Set<Long> profilePhotoEmployeeIds = new HashSet<>(employeeDocumentRepository.findProfilePhotoEmployeeIdsByOrgCode(orgCode));
+        Set<Long> includedEmployeeIds = new HashSet<>();
+        List<EmployeeHierarchyNodeResponse> hierarchyRoots = new ArrayList<>();
+        for (Employee root : roots) {
+            if (!includedEmployeeIds.contains(root.getId())) {
+                hierarchyRoots.add(toOrganizationHierarchyNode(root, employeesById, reportsByManagerId, profilePhotoEmployeeIds, new HashSet<>(), includedEmployeeIds));
+            }
+        }
+
+        // Invalid reporting cycles have no natural root. Surface each affected branch instead of losing it or recursing forever.
+        for (Employee employee : employees) {
+            if (!includedEmployeeIds.contains(employee.getId())) {
+                hierarchyRoots.add(toOrganizationHierarchyNode(employee, employeesById, reportsByManagerId, profilePhotoEmployeeIds, new HashSet<>(), includedEmployeeIds));
+            }
+        }
+        return hierarchyRoots;
     }
 
     @Transactional
@@ -393,6 +440,7 @@ public class EmployeeService {
                 employee.getFirstName() + " " + employee.getLastName(),
                 employee.getDesignation().getTitle(),
                 employee.getDepartment().getName(),
+                employee.getBranch() == null ? null : employee.getBranch().getName(),
                 manager == null ? null : manager.getId(),
                 manager == null ? null : manager.getEmployeeCode(),
                 manager == null ? null : manager.getFirstName() + " " + manager.getLastName(),
@@ -420,6 +468,41 @@ public class EmployeeService {
                 .toList();
     }
 
+    private EmployeeHierarchyNodeResponse toOrganizationHierarchyNode(
+            Employee employee,
+            Map<Long, Employee> employeesById,
+            Map<Long, List<Employee>> reportsByManagerId,
+            Set<Long> profilePhotoEmployeeIds,
+            Set<Long> branchEmployeeIds,
+            Set<Long> includedEmployeeIds
+    ) {
+        branchEmployeeIds.add(employee.getId());
+        includedEmployeeIds.add(employee.getId());
+        List<EmployeeHierarchyNodeResponse> children = new ArrayList<>();
+        for (Employee report : reportsByManagerId.getOrDefault(employee.getId(), List.of())) {
+            if (!branchEmployeeIds.contains(report.getId()) && !includedEmployeeIds.contains(report.getId())) {
+                children.add(toOrganizationHierarchyNode(report, employeesById, reportsByManagerId, profilePhotoEmployeeIds, branchEmployeeIds, includedEmployeeIds));
+            }
+        }
+        branchEmployeeIds.remove(employee.getId());
+
+        Employee manager = employee.getManager() == null ? null : employeesById.get(employee.getManager().getId());
+        return new EmployeeHierarchyNodeResponse(
+                employee.getId(),
+                employee.getEmployeeCode(),
+                employee.getFirstName() + " " + employee.getLastName(),
+                employee.getDesignation().getTitle(),
+                employee.getDepartment().getName(),
+                employee.getBranch() == null ? null : employee.getBranch().getName(),
+                manager == null ? null : manager.getId(),
+                manager == null ? null : manager.getEmployeeCode(),
+                manager == null ? null : manager.getFirstName() + " " + manager.getLastName(),
+                children.size(),
+                profilePhotoEmployeeIds.contains(employee.getId()),
+                children
+        );
+    }
+
     private EmployeeHierarchyNodeResponse toTreeNode(Employee employee) {
         Employee manager = employee.getManager();
         List<EmployeeHierarchyNodeResponse> children = buildDescendants(employee);
@@ -429,6 +512,7 @@ public class EmployeeService {
                 employee.getFirstName() + " " + employee.getLastName(),
                 employee.getDesignation().getTitle(),
                 employee.getDepartment().getName(),
+                employee.getBranch() == null ? null : employee.getBranch().getName(),
                 manager == null ? null : manager.getId(),
                 manager == null ? null : manager.getEmployeeCode(),
                 manager == null ? null : manager.getFirstName() + " " + manager.getLastName(),
@@ -446,6 +530,7 @@ public class EmployeeService {
                 employee.getFirstName() + " " + employee.getLastName(),
                 employee.getDesignation().getTitle(),
                 employee.getDepartment().getName(),
+                employee.getBranch() == null ? null : employee.getBranch().getName(),
                 manager == null ? null : manager.getId(),
                 manager == null ? null : manager.getEmployeeCode(),
                 manager == null ? null : manager.getFirstName() + " " + manager.getLastName(),

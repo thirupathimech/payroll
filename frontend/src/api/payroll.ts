@@ -15,6 +15,7 @@ import type {
   Employee,
   EmployeeDocument,
   EmployeeHierarchy,
+  EmployeeHierarchyNode,
   EmployeeSettings,
   EmployeeSettingsPayload,
   EmployeePayload,
@@ -119,12 +120,20 @@ export const employeeApi = {
     const { data } = await api.get<PageResponse<Employee>>("/employees", { params });
     return data;
   },
+  get: async (id: number) => {
+    const { data } = await api.get<Employee>(`/employees/${id}`);
+    return data;
+  },
   me: async () => {
     const { data } = await api.get<Employee>("/employees/me");
     return data;
   },
   hierarchy: async () => {
     const { data } = await api.get<EmployeeHierarchy>("/employees/me/hierarchy");
+    return data;
+  },
+  organizationHierarchy: async () => {
+    const { data } = await api.get<EmployeeHierarchyNode[]>("/employees/organization-hierarchy");
     return data;
   },
   create: async (payload: EmployeePayload) => {

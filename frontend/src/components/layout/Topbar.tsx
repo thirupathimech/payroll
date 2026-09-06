@@ -9,6 +9,7 @@ import { Button } from "../ui/Button";
 const mobileItems = [
   { label: "Dashboard", path: "/" },
   { label: "Employees", path: "/employees" },
+  { label: "Organization Chart", path: "/organization-hierarchy", allowedRoles: ADMIN_ROLES },
   { label: "Branches", path: "/branches", allowedRoles: HR_ROLES },
   { label: "Departments", path: "/departments", allowedRoles: HR_ROLES },
   { label: "Designations", path: "/designations", allowedRoles: HR_ROLES },

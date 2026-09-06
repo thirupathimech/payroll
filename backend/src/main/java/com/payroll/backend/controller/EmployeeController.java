@@ -3,6 +3,7 @@ package com.payroll.backend.controller;
 import com.payroll.backend.domain.enums.EmploymentStatus;
 import com.payroll.backend.dto.common.MessageResponse;
 import com.payroll.backend.dto.common.PageResponse;
+import com.payroll.backend.dto.employee.EmployeeHierarchyNodeResponse;
 import com.payroll.backend.dto.employee.EmployeeHierarchyResponse;
 import com.payroll.backend.dto.employee.EmployeeRequest;
 import com.payroll.backend.dto.employee.EmployeeResponse;
@@ -21,6 +22,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
@@ -54,6 +57,12 @@ public class EmployeeController {
     @GetMapping("/me/hierarchy")
     public EmployeeHierarchyResponse hierarchy(@AuthenticationPrincipal UserPrincipal principal) {
         return employeeService.hierarchy(principal);
+    }
+
+    @GetMapping("/organization-hierarchy")
+    @PreAuthorize("hasRole('ADMIN')")
+    public List<EmployeeHierarchyNodeResponse> organizationHierarchy() {
+        return employeeService.organizationHierarchy();
     }
 
     @PostMapping

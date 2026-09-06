@@ -8,6 +8,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { DepartmentsPage } from "./pages/DepartmentsPage";
 import { DesignationsPage } from "./pages/DesignationsPage";
 import { EmployeesPage } from "./pages/EmployeesPage";
+import { OrganizationHierarchyPage } from "./pages/OrganizationHierarchyPage";
 import { LeavePage } from "./pages/LeavePage";
 import { LoginPage } from "./pages/LoginPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -43,6 +44,7 @@ export default function App() {
           </Route>
           <Route element={<ProtectedRoute allowedRoles={ADMIN_ROLES} />}>
             <Route path="/users" element={<UsersPage />} />
+            <Route path="/organization-hierarchy" element={<OrganizationHierarchyPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/audit-logs" element={<AuditLogsPage />} />
           </Route>

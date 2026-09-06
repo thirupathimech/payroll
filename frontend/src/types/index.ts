@@ -464,6 +464,7 @@ export interface EmployeeHierarchyNode {
   fullName: string;
   designationTitle: string;
   departmentName: string;
+  branchName?: string;
   managerId?: number;
   managerEmployeeCode?: string;
   managerName?: string;

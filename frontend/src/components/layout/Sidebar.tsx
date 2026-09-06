@@ -24,6 +24,7 @@ import type { RoleName } from "../../types";
 const navItems: Array<{ label: string; path: string; icon: typeof LayoutDashboard; allowedRoles?: RoleName[] }> = [
   { label: "Dashboard", path: "/", icon: LayoutDashboard },
   { label: "Employees", path: "/employees", icon: Users },
+  { label: "Organization Chart", path: "/organization-hierarchy", icon: GitBranch, allowedRoles: ADMIN_ROLES },
   { label: "Users", path: "/users", icon: UserCog, allowedRoles: ADMIN_ROLES },
   { label: "Branches", path: "/branches", icon: GitBranch, allowedRoles: HR_ROLES },
   { label: "Departments", path: "/departments", icon: Building2, allowedRoles: HR_ROLES },

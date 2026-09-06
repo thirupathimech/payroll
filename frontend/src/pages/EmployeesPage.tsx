@@ -1,5 +1,6 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, BriefcaseBusiness, Download, Edit3, Eye, GitBranch, GraduationCap, Plus, Search, Trash2, UploadCloud, UserRound, type LucideIcon } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 import { getErrorMessage } from "../api/client";
 import { branchApi, departmentApi, designationApi, employeeApi, employeeSettingsApi } from "../api/payroll";
 import { useAuth } from "../auth/AuthContext";
@@ -424,6 +425,7 @@ function HierarchyChart({ hierarchy }: { hierarchy: EmployeeHierarchy }) {
 
 export function EmployeesPage() {
   const { user, viewMode, currency } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [employees, setEmployees] = useState(emptyPage);
   const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -439,15 +441,20 @@ export function EmployeesPage() {
   const [form, setForm] = useState<EmployeeForm>(initialForm);
   const [settings, setSettings] = useState<EmployeeSettings>(initialSettings);
   const [error, setError] = useState("");
+  const [pageError, setPageError] = useState("");
   const [thumbnailUrls, setThumbnailUrls] = useState<Record<number, string>>({});
   const [fileMessage, setFileMessage] = useState("");
   const [hierarchy, setHierarchy] = useState<EmployeeHierarchy | null>(null);
   const [profilePanel, setProfilePanel] = useState<ProfilePanel>("profile");
+  const [viewingEmployee, setViewingEmployee] = useState<Employee | null>(null);
+  const [viewProfilePhotoUrl, setViewProfilePhotoUrl] = useState("");
   const errorAlertRef = useRef<HTMLDivElement>(null);
   const debouncedSearch = useDebounce(search);
 
   const isPersonnelMode = viewMode === "personnel";
   const currentEmployee = employees.content[0];
+  const requestedEmployeeIdValue = Number(searchParams.get("employeeId"));
+  const requestedEmployeeId = Number.isSafeInteger(requestedEmployeeIdValue) && requestedEmployeeIdValue > 0 ? requestedEmployeeIdValue : null;
 
   const loadEmployeeDirectory = useCallback(() => {
     if (isPersonnelMode) {
@@ -548,6 +555,40 @@ export function EmployeesPage() {
     };
   }, [employees.content, thumbnailUrls]);
 
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl = "";
+
+    if (!viewingEmployee?.hasProfilePhoto) {
+      setViewProfilePhotoUrl("");
+      return () => undefined;
+    }
+
+    setViewProfilePhotoUrl("");
+    employeeApi
+      .getProfilePhoto(viewingEmployee.id)
+      .then((blob) => {
+        objectUrl = URL.createObjectURL(blob);
+        if (cancelled) {
+          URL.revokeObjectURL(objectUrl);
+          return;
+        }
+        setViewProfilePhotoUrl(objectUrl);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setViewProfilePhotoUrl("");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [viewingEmployee?.hasProfilePhoto, viewingEmployee?.id]);
+
   const filteredDesignations = useMemo(
     () => designations.filter((designation) => designation.departmentId === form.departmentId),
     [designations, form.departmentId],
@@ -622,7 +663,7 @@ export function EmployeesPage() {
     setModalOpen(true);
   }
 
-  async function openEdit(employee: Employee) {
+  const openEdit = useCallback(async (employee: Employee) => {
     setEditing(employee);
     const currentAddress = readEmployeeAddress(employee);
     const permanentAddress = readEmployeePermanentAddress(employee);
@@ -713,7 +754,47 @@ export function EmployeesPage() {
     } catch (apiError) {
       setFileMessage(getErrorMessage(apiError));
     }
-  }
+  }, [branches]);
+
+  const openEmployeeView = useCallback((employee: Employee) => {
+    setPageError("");
+    setViewingEmployee(employee);
+  }, []);
+
+  useEffect(() => {
+    if (!requestedEmployeeId) {
+      return;
+    }
+
+    let cancelled = false;
+    setPageError("");
+    setViewingEmployee(null);
+    employeeApi
+      .get(requestedEmployeeId)
+      .then((employee) => {
+        if (!cancelled) {
+          openEmployeeView(employee);
+        }
+      })
+      .catch((apiError) => {
+        if (!cancelled) {
+          setPageError(getErrorMessage(apiError));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setSearchParams((current) => {
+            const next = new URLSearchParams(current);
+            next.delete("employeeId");
+            return next;
+          }, { replace: true });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [openEmployeeView, requestedEmployeeId, setSearchParams]);
 
   function updateDepartment(departmentId: number) {
     const designationId =
@@ -1104,6 +1185,16 @@ export function EmployeesPage() {
       header: "Actions",
       cell: (employee) => (
         <div className="flex gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            className="px-3"
+            title={`View ${employee.fullName}`}
+            aria-label={`View ${employee.fullName}`}
+            onClick={() => openEmployeeView(employee)}
+          >
+            <Eye size={15} />
+          </Button>
           {canEditProfile ? (
             <>
               <Button type="button" variant="secondary" className="px-3" onClick={() => openEdit(employee)}>
@@ -1115,9 +1206,7 @@ export function EmployeesPage() {
                 </Button>
               )}
             </>
-          ) : (
-            <span className="text-sm font-semibold text-ink/45">View only</span>
-          )}
+          ) : null}
         </div>
       ),
     },
@@ -1181,6 +1270,13 @@ export function EmployeesPage() {
           </div>
         )}
       </Card>
+
+      {pageError && (
+        <div role="alert" className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+          <AlertCircle className="mt-0.5 shrink-0" size={18} />
+          <span>{pageError}</span>
+        </div>
+      )}
 
       <DataTable
         rows={employees.content}
@@ -1294,6 +1390,172 @@ export function EmployeesPage() {
           </Card>
         </section>
       )}
+
+      <Modal
+        open={Boolean(viewingEmployee)}
+        onClose={() => setViewingEmployee(null)}
+        title="Employee details"
+        description="Read-only employee information."
+      >
+        {viewingEmployee && (
+          <div className="mx-auto max-w-4xl space-y-6">
+            <div className="flex flex-col gap-4 rounded-3xl border border-moss/10 bg-white/75 p-4 sm:flex-row sm:items-center sm:p-5">
+              {viewProfilePhotoUrl ? (
+                <img src={viewProfilePhotoUrl} alt={viewingEmployee.fullName} className="h-20 w-20 rounded-2xl object-cover ring-2 ring-moss/15" />
+              ) : (
+                <div className="grid h-20 w-20 shrink-0 place-items-center rounded-2xl bg-moss text-2xl font-extrabold text-white">
+                  {viewingEmployee.firstName.charAt(0)}
+                  {viewingEmployee.lastName.charAt(0)}
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-3">
+                  <h3 className="truncate font-display text-2xl font-extrabold text-ink">{viewingEmployee.fullName}</h3>
+                  <Badge value={viewingEmployee.status} />
+                </div>
+                <p className="mt-1 text-xs font-bold uppercase tracking-[0.16em] text-fern">{viewingEmployee.employeeCode}</p>
+                <p className="mt-3 text-sm font-semibold text-ink/60">{viewingEmployee.designationTitle} · {viewingEmployee.departmentName}</p>
+              </div>
+            </div>
+
+            <section className="space-y-3">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-fern">Employment</p>
+                <p className="mt-1 text-sm font-semibold text-ink/55">Assignment and employment milestones.</p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="rounded-2xl bg-oat/60 p-4">
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-ink/45">Branch</p>
+                  <p className="mt-2 break-words text-sm font-semibold text-ink">{viewingEmployee.branchName || "Not assigned"}</p>
+                </div>
+                <div className="rounded-2xl bg-oat/60 p-4">
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-ink/45">Employment type</p>
+                  <p className="mt-2 text-sm font-semibold text-ink">{viewingEmployee.employmentType || "Not specified"}</p>
+                </div>
+                <div className="rounded-2xl bg-oat/60 p-4">
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-ink/45">Joined</p>
+                  <p className="mt-2 text-sm font-semibold text-ink">{formatDate(viewingEmployee.joiningDate)}</p>
+                </div>
+                <div className="rounded-2xl bg-oat/60 p-4">
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-ink/45">Confirmation date</p>
+                  <p className="mt-2 text-sm font-semibold text-ink">{viewingEmployee.confirmationDate ? formatDate(viewingEmployee.confirmationDate) : "Not confirmed"}</p>
+                </div>
+                <div className="rounded-2xl bg-oat/60 p-4">
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-ink/45">Probation period</p>
+                  <p className="mt-2 text-sm font-semibold text-ink">{viewingEmployee.probationPeriod || "Not specified"}</p>
+                </div>
+                <div className="rounded-2xl bg-oat/60 p-4">
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-ink/45">Department</p>
+                  <p className="mt-2 break-words text-sm font-semibold text-ink">{viewingEmployee.departmentName}</p>
+                </div>
+              </div>
+            </section>
+
+            <section className="space-y-3">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-fern">Contact & reporting</p>
+                <p className="mt-1 text-sm font-semibold text-ink/55">Official contact details and reporting lines.</p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="rounded-2xl bg-oat/60 p-4">
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-ink/45">Official email</p>
+                  <p className="mt-2 break-words text-sm font-semibold text-ink">{viewingEmployee.email || "Not available"}</p>
+                </div>
+                <div className="rounded-2xl bg-oat/60 p-4">
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-ink/45">Mobile</p>
+                  <p className="mt-2 text-sm font-semibold text-ink">{viewingEmployee.phone || "Not available"}</p>
+                </div>
+                <div className="rounded-2xl bg-oat/60 p-4">
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-ink/45">Alternate mobile</p>
+                  <p className="mt-2 text-sm font-semibold text-ink">{viewingEmployee.alternateMobileNumber || "Not available"}</p>
+                </div>
+                <div className="rounded-2xl bg-oat/60 p-4 sm:col-span-2 lg:col-span-1">
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-ink/45">Reporting manager</p>
+                  <p className="mt-2 break-words text-sm font-semibold text-ink">{viewingEmployee.managerName || "Not assigned"}</p>
+                </div>
+                <div className="rounded-2xl bg-oat/60 p-4 sm:col-span-2 lg:col-span-2">
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-ink/45">HR manager</p>
+                  <p className="mt-2 break-words text-sm font-semibold text-ink">{viewingEmployee.hrManagerName || "Not assigned"}</p>
+                </div>
+              </div>
+            </section>
+
+            {Boolean(viewingEmployee.primarySkill || viewingEmployee.secondarySkill || viewingEmployee.certifications || viewingEmployee.languagesKnown) && (
+              <section className="space-y-3">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-fern">Professional profile</p>
+                  <p className="mt-1 text-sm font-semibold text-ink/55">Skills, certifications, and languages.</p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {viewingEmployee.primarySkill && (
+                    <div className="rounded-2xl bg-oat/60 p-4">
+                      <p className="text-xs font-bold uppercase tracking-[0.14em] text-ink/45">Primary skill</p>
+                      <p className="mt-2 break-words text-sm font-semibold text-ink">{viewingEmployee.primarySkill}</p>
+                    </div>
+                  )}
+                  {viewingEmployee.secondarySkill && (
+                    <div className="rounded-2xl bg-oat/60 p-4">
+                      <p className="text-xs font-bold uppercase tracking-[0.14em] text-ink/45">Secondary skill</p>
+                      <p className="mt-2 break-words text-sm font-semibold text-ink">{viewingEmployee.secondarySkill}</p>
+                    </div>
+                  )}
+                  {viewingEmployee.languagesKnown && (
+                    <div className="rounded-2xl bg-oat/60 p-4">
+                      <p className="text-xs font-bold uppercase tracking-[0.14em] text-ink/45">Languages known</p>
+                      <p className="mt-2 break-words text-sm font-semibold text-ink">{viewingEmployee.languagesKnown}</p>
+                    </div>
+                  )}
+                  {viewingEmployee.certifications && (
+                    <div className="rounded-2xl bg-oat/60 p-4 sm:col-span-2 lg:col-span-3">
+                      <p className="text-xs font-bold uppercase tracking-[0.14em] text-ink/45">Certifications</p>
+                      <p className="mt-2 break-words text-sm font-semibold text-ink">{viewingEmployee.certifications}</p>
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
+
+            {(viewingEmployee.education.some((record) => record.qualification || record.institution || record.university) || viewingEmployee.experience.some((record) => record.company || record.designation)) && (
+              <section className="space-y-3">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-fern">Background</p>
+                  <p className="mt-1 text-sm font-semibold text-ink/55">Education and work experience summary.</p>
+                </div>
+                <div className="grid gap-3 xl:grid-cols-2">
+                  {viewingEmployee.education.some((record) => record.qualification || record.institution || record.university) && (
+                    <div className="rounded-3xl border border-moss/10 bg-white/75 p-4">
+                      <p className="text-xs font-bold uppercase tracking-[0.14em] text-ink/45">Education</p>
+                      <div className="mt-3 space-y-3">
+                        {viewingEmployee.education.filter((record) => record.qualification || record.institution || record.university).map((record, index) => (
+                          <div key={`${record.id ?? index}`} className="rounded-2xl bg-oat/60 p-3">
+                            <p className="break-words text-sm font-bold text-ink">{record.qualification || "Qualification"}{record.specialization ? ` · ${record.specialization}` : ""}</p>
+                            <p className="mt-1 break-words text-sm font-semibold text-ink/60">{[record.institution, record.university].filter(Boolean).join(" · ") || "Not specified"}</p>
+                            <p className="mt-1 text-xs font-semibold text-ink/45">{[record.yearOfPassing, record.score].filter(Boolean).join(" · ") || ""}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {viewingEmployee.experience.some((record) => record.company || record.designation) && (
+                    <div className="rounded-3xl border border-moss/10 bg-white/75 p-4">
+                      <p className="text-xs font-bold uppercase tracking-[0.14em] text-ink/45">Experience</p>
+                      <div className="mt-3 space-y-3">
+                        {viewingEmployee.experience.filter((record) => record.company || record.designation).map((record, index) => (
+                          <div key={`${record.id ?? index}`} className="rounded-2xl bg-oat/60 p-3">
+                            <p className="break-words text-sm font-bold text-ink">{record.company || "Company"}</p>
+                            <p className="mt-1 break-words text-sm font-semibold text-ink/60">{record.designation || "Role not specified"}</p>
+                            <p className="mt-1 text-xs font-semibold text-ink/45">{[record.startDate, record.endDate].filter(Boolean).join(" to ") || "Dates not specified"}{record.totalExperience ? ` · ${record.totalExperience}` : ""}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
+          </div>
+        )}
+      </Modal>
 
       <Modal
         open={modalOpen}
