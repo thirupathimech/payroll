@@ -10,6 +10,8 @@ public class AttendanceRecord extends AuditableEntity {
     @Column(name="org_code", nullable=false, length=3) private String orgCode;
     @ManyToOne(fetch=FetchType.LAZY, optional=false) @JoinColumn(name="employee_id") private Employee employee;
     @Column(name="attendance_date", nullable=false) private LocalDate attendanceDate;
+    @Column(name="clock_in_date") private LocalDate clockInDate;
+    @Column(name="clock_out_date") private LocalDate clockOutDate;
     private LocalTime clockIn; private LocalTime clockOut;
     @Column(nullable=false, length=20) private String source;
 }

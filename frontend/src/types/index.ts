@@ -328,7 +328,7 @@ export interface CompanySettings {
   updatedAt: string;
 }
 export interface AttendanceSettings { id?: number; attendanceMode: AttendanceMode; biometricEnabled: boolean; biometricName?: string; biometricUrl?: string; biometricApiKey?: string; updatedAt?: string; }
-export interface AttendanceRecord { id: number; employeeId: number; employeeCode: string; employeeName: string; date: string; clockIn?: string; clockOut?: string; source: string; }
+export interface AttendanceRecord { id: number; employeeId: number; employeeCode: string; employeeName: string; date: string; clockInDate?: string; clockIn?: string; clockOutDate?: string; clockOut?: string; source: string; }
 
 export interface DashboardSummary {
   totalEmployees: number;

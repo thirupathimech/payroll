@@ -282,7 +282,7 @@ export const attendanceApi = {
   getSettings: async () => (await api.get<AttendanceSettings>("/attendance/settings")).data,
   updateSettings: async (payload: Omit<AttendanceSettings, "id" | "updatedAt">) => (await api.put<AttendanceSettings>("/attendance/settings", payload)).data,
   list: async (from: string, to: string) => (await api.get<AttendanceRecord[]>("/attendance", { params: { from, to } })).data,
-  save: async (payload: { employeeId: number; date: string; clockIn?: string; clockOut?: string; source: string }) => (await api.post<AttendanceRecord>("/attendance", payload)).data,
+  save: async (payload: { employeeId: number; date: string; clockInDate?: string; clockOutDate?: string; clockIn?: string; clockOut?: string; source: string }) => (await api.post<AttendanceRecord>("/attendance", payload)).data,
 };
 
 export const shiftApi = {
