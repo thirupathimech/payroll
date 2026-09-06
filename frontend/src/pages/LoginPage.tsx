@@ -1,9 +1,8 @@
 import { FormEvent, useState } from "react";
-import { BadgeDollarSign, ShieldCheck } from "lucide-react";
+import { ArrowRight, BadgeDollarSign } from "lucide-react";
 import { Navigate } from "react-router-dom";
 import { getErrorMessage } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
-import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 
 export function LoginPage() {
@@ -50,114 +49,104 @@ export function LoginPage() {
   }
 
   return (
-    <main className="grid min-h-screen bg-mesh p-4 lg:grid-cols-[1.05fr_0.95fr]">
-      <section className="hidden overflow-hidden rounded-[2.3rem] bg-ink p-10 text-white shadow-card lg:flex lg:flex-col lg:justify-between">
-        <div>
-          <div className="grid h-14 w-14 place-items-center rounded-2xl bg-ember text-ink">
-            <BadgeDollarSign size={28} />
+    <main className="relative isolate grid min-h-screen place-items-center overflow-hidden bg-shell px-5 py-8 sm:p-10">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_50%_-15%,rgba(47,111,79,0.16),transparent_42%),linear-gradient(180deg,#fcfcfb_0%,#f5f3ed_100%)]"
+      />
+
+      <form
+        onSubmit={handleSubmit}
+        className="w-full max-w-[25rem] animate-rise rounded-[1.75rem] border border-slate-200/80 bg-white p-6 shadow-[0_24px_70px_rgba(18,32,24,0.1)] sm:p-8 [&_input]:rounded-xl [&_input]:border-slate-200 [&_input]:bg-slate-50/80 [&_input]:py-3.5 [&_input]:focus:border-moss [&_input]:focus:ring-moss/10"
+      >
+        <div className="flex items-center gap-3">
+          <div className="grid h-10 w-10 place-items-center rounded-xl bg-ink text-ember shadow-[0_10px_22px_rgba(18,32,24,0.18)]">
+            <BadgeDollarSign size={21} strokeWidth={2.4} />
           </div>
-          <p className="mt-8 max-w-xl font-display text-6xl font-extrabold leading-[1.02]">
-            Payroll workspace for every organization.
-          </p>
-          <p className="mt-6 max-w-lg text-lg leading-8 text-white/62">
-            Register your company, receive a three-letter org code, and keep people records separated by workspace.
-          </p>
+          <span className="font-display text-lg font-extrabold tracking-[-0.03em] text-ink">Payroll</span>
         </div>
 
-        <div className="grid grid-cols-3 gap-4">
-          {["JWT secured", "Audit ready", "MySQL backed"].map((item) => (
-            <div key={item} className="rounded-3xl border border-white/10 bg-white/8 p-4">
-              <ShieldCheck className="mb-3 text-ember" size={20} />
-              <p className="text-sm font-bold">{item}</p>
-            </div>
-          ))}
-        </div>
-      </section>
+        <h1 className="mt-8 font-display text-[2rem] font-extrabold tracking-[-0.05em] text-ink">
+          {mode === "login" ? "Welcome back" : "Create workspace"}
+        </h1>
 
-      <section className="flex items-center justify-center px-2 py-10 sm:px-8">
-        <form onSubmit={handleSubmit} className="w-full max-w-md animate-rise rounded-[2rem] bg-white/78 p-8 shadow-card backdrop-blur-xl">
-          <p className="text-xs font-bold uppercase tracking-[0.24em] text-fern">Payroll</p>
-          <h1 className="mt-3 font-display text-4xl font-extrabold text-ink">
-            {mode === "login" ? "Welcome back" : "Create workspace"}
-          </h1>
-          <p className="mt-2 text-sm leading-6 text-ink/58">
-            {mode === "login"
-              ? "Sign in with your organization code."
-              : "Your organization code is generated automatically after registration."}
-          </p>
-
-          <div className="mt-6 grid grid-cols-2 rounded-2xl bg-oat/70 p-1">
-            <button
-              type="button"
-              className={`rounded-xl px-4 py-2 text-sm font-bold transition ${mode === "login" ? "bg-white text-ink shadow-sm" : "text-ink/60"}`}
-              onClick={() => {
-                setMode("login");
-                setError("");
-              }}
-            >
-              Login
-            </button>
-            <button
-              type="button"
-              className={`rounded-xl px-4 py-2 text-sm font-bold transition ${mode === "register" ? "bg-white text-ink shadow-sm" : "text-ink/60"}`}
-              onClick={() => {
-                setMode("register");
-                setError("");
-              }}
-            >
-              Register
-            </button>
-          </div>
-
-          <div className="mt-8 space-y-4">
-            {mode === "register" && (
-              <>
-                <Input
-                  label="Company name"
-                  name="companyName"
-                  value={companyName}
-                  onChange={(event) => setCompanyName(event.target.value)}
-                />
-                <Input
-                  label="Full name"
-                  name="fullName"
-                  value={fullName}
-                  onChange={(event) => setFullName(event.target.value)}
-                />
-              </>
-            )}
-            <Input
-              label={mode === "login" ? "Username or Email" : "Email"}
-              name="identifier"
-              type={mode === "login" ? "text" : "email"}
-              value={identifier}
-              onChange={(event) => setIdentifier(event.target.value)}
-            />
-            <Input
-              label="Password"
-              name="password"
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-            />
-            {mode === "login" && (
+        <div className="mt-7 space-y-4">
+          {mode === "register" && (
+            <>
               <Input
-                label="Org code"
-                name="orgCode"
-                value={orgCode}
-                maxLength={3}
-                onChange={(event) => setOrgCode(event.target.value.toUpperCase())}
+                label="Company name"
+                name="companyName"
+                value={companyName}
+                autoComplete="organization"
+                onChange={(event) => setCompanyName(event.target.value)}
               />
-            )}
-          </div>
+              <Input
+                label="Full name"
+                name="fullName"
+                autoComplete="name"
+                onChange={(event) => setFullName(event.target.value)}
+              />
+            </>
+          )}
+          {mode === "login" && (
+            <Input
+              label="Organization code"
+              name="orgCode"
+              value={orgCode}
+              maxLength={3}
+              autoCapitalize="characters"
+              placeholder="ABC"
+              className="font-semibold tracking-[0.2em] placeholder:tracking-[0.2em]"
+              onChange={(event) => setOrgCode(event.target.value.toUpperCase())}
+            />
+          )}
+          <Input
+            label={mode === "login" ? "Email or username" : "Email"}
+            name="identifier"
+            type={mode === "login" ? "text" : "email"}
+            autoComplete="username"
+            value={identifier}
+            onChange={(event) => setIdentifier(event.target.value)}
+          />
+          <Input
+            label="Password"
+            name="password"
+            type="password"
+            autoComplete={mode === "login" ? "current-password" : "new-password"}
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
+        </div>
 
-          {error && <p className="mt-4 rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
+        {error && (
+          <p role="alert" className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+            {error}
+          </p>
+        )}
 
-          <Button type="submit" className="mt-6 w-full py-3" disabled={submitting}>
-            {submitting ? "Please wait..." : mode === "login" ? "Sign in securely" : "Register organization"}
-          </Button>
-        </form>
-      </section>
+        <button
+          type="submit"
+          disabled={submitting}
+          className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-ink px-4 py-3.5 text-sm font-bold text-white shadow-[0_12px_24px_rgba(18,32,24,0.16)] transition hover:bg-moss focus:outline-none focus:ring-4 focus:ring-moss/15 disabled:cursor-not-allowed disabled:opacity-55"
+        >
+          {submitting ? "Please wait..." : mode === "login" ? "Sign in" : "Create workspace"}
+          {!submitting && <ArrowRight size={17} strokeWidth={2.5} />}
+        </button>
+
+        <p className="mt-5 text-center text-sm text-ink/55">
+          {mode === "login" ? "New organization?" : "Already have a workspace?"}{" "}
+          <button
+            type="button"
+            className="font-bold text-moss transition hover:text-ink focus:outline-none focus-visible:rounded focus-visible:ring-2 focus-visible:ring-moss/30"
+            onClick={() => {
+              setMode(mode === "login" ? "register" : "login");
+              setError("");
+            }}
+          >
+            {mode === "login" ? "Create workspace" : "Sign in"}
+          </button>
+        </p>
+      </form>
     </main>
   );
 }
