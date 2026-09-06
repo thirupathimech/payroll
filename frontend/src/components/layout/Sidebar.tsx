@@ -57,8 +57,8 @@ export function Sidebar() {
     viewMode === "personnel" ? personnelItems : navItems.filter((item) => hasRoleAccess(user, item.allowedRoles));
 
   return (
-    <aside className="hidden min-h-screen w-72 shrink-0 border-r border-white/60 bg-ink px-5 py-6 text-white lg:block">
-      <div className="mb-10 flex items-center gap-3">
+    <aside className="sticky top-0 hidden h-screen w-72 shrink-0 flex-col overflow-hidden border-r border-white/60 bg-ink px-5 py-6 text-white lg:flex">
+      <div className="mb-10 shrink-0 flex items-center gap-3">
         <div className="grid h-12 w-12 place-items-center rounded-2xl bg-ember text-ink shadow-glow">
           <BadgeDollarSign size={24} />
         </div>
@@ -71,7 +71,7 @@ export function Sidebar() {
         </div>
       </div>
 
-      <nav className="space-y-2">
+      <nav className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
         {visibleItems.map((item) => {
           const Icon = item.icon;
           return (

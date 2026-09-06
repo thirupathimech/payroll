@@ -40,7 +40,7 @@ public class SalaryComponent extends AuditableEntity {
     private String code;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
+    @Column(nullable = false, length = 32)
     private SalaryComponentCategory category;
 
     @Enumerated(EnumType.STRING)

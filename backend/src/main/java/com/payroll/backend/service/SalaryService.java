@@ -51,6 +51,7 @@ public class SalaryService {
     @Transactional
     public SalaryComponentResponse createComponent(SalaryComponentRequest request) {
         String orgCode = currentOrgService.orgCode();
+        ensureDefaultComponents();
         String code = normalizeCode(request.code());
         if (salaryComponentRepository.existsByOrgCodeAndCodeIgnoreCase(orgCode, code)) {
             throw new BadRequestException("Salary component code already exists");
@@ -92,7 +93,7 @@ public class SalaryService {
                 .stream().map(component -> {
                     EmployeeSalaryComponent item = configured.get(component.getId());
                     return item == null
-                            ? new EmployeeSalaryComponentResponse(null, component.getId(), component.getName(), component.getCode(), component.getCategory(), component.getValueType(), component.getDefaultValue(), component.isEnabled())
+                            ? new EmployeeSalaryComponentResponse(null, component.getId(), component.getName(), component.getCode(), component.getCategory(), component.getValueType(), component.getDefaultValue(), defaultEmployeeComponentEnabled(component))
                             : toEmployeeComponentResponse(item);
                 }).toList();
         return new EmployeeSalaryResponse(employee.getId(), employee.getEmployeeCode(), fullName(employee),
@@ -146,6 +147,7 @@ public class SalaryService {
     private void ensureDefaultComponents() {
         String orgCode = currentOrgService.orgCode();
         if (!salaryComponentRepository.findByOrgCodeOrderByCategoryAscNameAsc(orgCode).isEmpty()) {
+            ensureEmployerContributionDefaults(orgCode);
             return;
         }
         createDefault(orgCode, "Basic Salary", "BASIC", SalaryComponentCategory.EARNING, SalaryValueType.PERCENTAGE, BigDecimal.valueOf(50));
@@ -154,9 +156,36 @@ public class SalaryService {
         createDefault(orgCode, "Provident Fund", "PF", SalaryComponentCategory.DEDUCTION, SalaryValueType.PERCENTAGE, BigDecimal.valueOf(12));
         createDefault(orgCode, "Employee State Insurance", "ESI", SalaryComponentCategory.DEDUCTION, SalaryValueType.PERCENTAGE, BigDecimal.valueOf(0.75));
         createDefault(orgCode, "Professional Tax", "PT", SalaryComponentCategory.DEDUCTION, SalaryValueType.FIXED, BigDecimal.ZERO);
+        ensureEmployerContributionDefaults(orgCode);
     }
 
-    private void createDefault(String orgCode, String name, String code, SalaryComponentCategory category, SalaryValueType valueType, BigDecimal value) {
+    /**
+     * Adds the CTC-cost components without changing existing salary structures. They remain
+     * master-enabled so HR can opt an employee into them. Unconfigured employee
+     * rows for this category are deliberately disabled because legacy earning templates already
+     * allocate 100% of CTC. Templates start at zero so they do not imply a statutory rate. The
+     * configured percentage remains a percentage of annual CTC (the current salary-model
+     * contract), not a statutory percentage of Basic or another calculation base.
+     */
+    private void ensureEmployerContributionDefaults(String orgCode) {
+        createDefaultIfMissing(orgCode, "Employer Provident Fund", "EMPLOYER_PF",
+                SalaryComponentCategory.EMPLOYER_CONTRIBUTION, SalaryValueType.PERCENTAGE,
+                BigDecimal.ZERO, true);
+        createDefaultIfMissing(orgCode, "Employer State Insurance", "EMPLOYER_ESI",
+                SalaryComponentCategory.EMPLOYER_CONTRIBUTION, SalaryValueType.PERCENTAGE,
+                BigDecimal.ZERO, true);
+    }
+
+    private void createDefault(String orgCode, String name, String code, SalaryComponentCategory category,
+                               SalaryValueType valueType, BigDecimal value) {
+        createDefaultIfMissing(orgCode, name, code, category, valueType, value, true);
+    }
+
+    private void createDefaultIfMissing(String orgCode, String name, String code, SalaryComponentCategory category,
+                                        SalaryValueType valueType, BigDecimal value, boolean enabled) {
+        if (salaryComponentRepository.existsByOrgCodeAndCodeIgnoreCase(orgCode, code)) {
+            return;
+        }
         SalaryComponent component = new SalaryComponent();
         component.setOrgCode(orgCode);
         component.setName(name);
@@ -164,7 +193,7 @@ public class SalaryService {
         component.setCategory(category);
         component.setValueType(valueType);
         component.setDefaultValue(value);
-        component.setEnabled(true);
+        component.setEnabled(enabled);
         salaryComponentRepository.save(component);
     }
 
@@ -187,15 +216,25 @@ public class SalaryService {
     }
 
     private void validateCtcAllocation(List<EmployeeSalaryComponent> rows, BigDecimal ctc) {
-        BigDecimal allocatedEarnings = rows.stream()
-                .filter(item -> item.isEnabled() && item.getComponent().getCategory() == SalaryComponentCategory.EARNING)
+        BigDecimal allocatedCtc = rows.stream()
+                .filter(item -> item.isEnabled() && contributesToCtc(item.getComponent().getCategory()))
                 .map(item -> annualAmountFor(item, ctc))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        if (allocatedEarnings.compareTo(ctc) != 0) {
-            throw new BadRequestException("Enabled earning components must total exactly 100% of annual CTC. Allocated "
-                    + allocatedEarnings.toPlainString() + " of " + ctc.toPlainString() + ".");
+        if (allocatedCtc.compareTo(ctc) != 0) {
+            throw new BadRequestException("Enabled earning and employer contribution components must total exactly 100% of annual CTC. Allocated "
+                    + allocatedCtc.toPlainString() + " of " + ctc.toPlainString() + ".");
         }
+    }
+
+    private boolean contributesToCtc(SalaryComponentCategory category) {
+        return category == SalaryComponentCategory.EARNING
+                || category == SalaryComponentCategory.EMPLOYER_CONTRIBUTION;
+    }
+
+    private boolean defaultEmployeeComponentEnabled(SalaryComponent component) {
+        return component.isEnabled()
+                && component.getCategory() != SalaryComponentCategory.EMPLOYER_CONTRIBUTION;
     }
 
     private BigDecimal annualAmountFor(EmployeeSalaryComponent item, BigDecimal annualCtc) {

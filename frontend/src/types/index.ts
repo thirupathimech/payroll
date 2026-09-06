@@ -37,7 +37,7 @@ export interface HolidayPayload {
 }
 export type WeekDayName = "SUNDAY" | "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURSDAY" | "FRIDAY" | "SATURDAY";
 export type AttendanceMode = "MANUAL" | "PUNCHES";
-export type SalaryComponentCategory = "EARNING" | "DEDUCTION";
+export type SalaryComponentCategory = "EARNING" | "EMPLOYER_CONTRIBUTION" | "DEDUCTION";
 export type SalaryValueType = "PERCENTAGE" | "FIXED";
 
 export interface SalaryComponent {
