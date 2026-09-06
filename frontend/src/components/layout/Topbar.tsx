@@ -1,129 +1,106 @@
-import { useState } from "react";
 import { BriefcaseBusiness, LogOut, Menu, UserRound } from "lucide-react";
-import { NavLink } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
-import { ADMIN_ROLES, HR_ROLES, MANAGER_ROLES, hasRoleAccess } from "../../lib/access";
 import { initials } from "../../lib/format";
 import { Button } from "../ui/Button";
 
-const mobileItems = [
-  { label: "Dashboard", path: "/" },
-  { label: "Employees", path: "/employees" },
-  { label: "Organization Chart", path: "/organization-hierarchy", allowedRoles: ADMIN_ROLES },
-  { label: "Branches", path: "/branches", allowedRoles: HR_ROLES },
-  { label: "Departments", path: "/departments", allowedRoles: HR_ROLES },
-  { label: "Designations", path: "/designations", allowedRoles: HR_ROLES },
-  { label: "Shifts", path: "/shifts", allowedRoles: HR_ROLES },
-  { label: "Assignments", path: "/shift-assignments", allowedRoles: MANAGER_ROLES },
-  { label: "Leaves", path: "/leaves", allowedRoles: MANAGER_ROLES },
-  { label: "Settings", path: "/settings", allowedRoles: ADMIN_ROLES },
-  { label: "Users", path: "/users", allowedRoles: ADMIN_ROLES },
-  { label: "Audit Logs", path: "/audit-logs", allowedRoles: ADMIN_ROLES },
-];
+interface TopbarProps {
+  onMenuClick: () => void;
+}
 
-const personnelMobileItems = [
-  { label: "My Profile", path: "/employees" },
-  { label: "Apply Leave", path: "/leaves" },
-  { label: "My Shift", path: "/shift-assignments" },
-];
-
-export function Topbar() {
+export function Topbar({ onMenuClick }: TopbarProps) {
   const { user, logout, viewMode, setViewMode, canSwitchViewMode } = useAuth();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const visibleMobileItems =
-    viewMode === "personnel" ? personnelMobileItems : mobileItems.filter((item) => hasRoleAccess(user, item.allowedRoles));
 
   return (
-    <header className="sticky top-0 z-30 border-b border-white/70 bg-shell/80 px-4 py-4 backdrop-blur-xl sm:px-6">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          
+    <header className="sticky top-0 z-20 border-b border-line bg-shell/90 px-4 py-3.5 backdrop-blur-xl sm:px-6">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <button
+            type="button"
+            onClick={onMenuClick}
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-line bg-white text-ink/70 transition hover:border-fern/30 hover:text-moss lg:hidden"
+            aria-label="Open menu"
+          >
+            <Menu size={19} />
+          </button>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-bold text-ink sm:hidden">{user?.fullName}</p>
+            <p className="truncate text-xs font-semibold text-ink/45 sm:hidden">{user?.role}</p>
+          </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           {canSwitchViewMode && (
-            <div className="hidden rounded-2xl border border-moss/15 bg-white/70 p-1 sm:flex">
-              <Button
+            <div className="hidden items-center rounded-xl border border-line bg-white p-1 sm:flex">
+              <button
                 type="button"
-                variant={viewMode === "personnel" ? "primary" : "ghost"}
-                className="px-3 py-2"
                 onClick={() => setViewMode("personnel")}
+                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+                  viewMode === "personnel" ? "bg-moss text-white shadow-raised" : "text-ink/55 hover:text-moss"
+                }`}
               >
-                <UserRound size={15} />
+                <UserRound size={14} />
                 Personnel
-              </Button>
-              <Button
+              </button>
+              <button
                 type="button"
-                variant={viewMode === "management" ? "primary" : "ghost"}
-                className="px-3 py-2"
                 onClick={() => setViewMode("management")}
+                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+                  viewMode === "management" ? "bg-moss text-white shadow-raised" : "text-ink/55 hover:text-moss"
+                }`}
               >
-                <BriefcaseBusiness size={15} />
+                <BriefcaseBusiness size={14} />
                 Management
-              </Button>
+              </button>
             </div>
           )}
-          <div className="hidden text-right sm:block">
-            <p className="text-sm font-bold text-ink">{user?.fullName}</p>
-            <p className="text-xs font-semibold text-ink/50">
+
+          <div className="hidden text-right md:block">
+            <p className="text-sm font-bold leading-tight text-ink">{user?.fullName}</p>
+            <p className="text-xs font-semibold leading-tight text-ink/45">
               {user?.role} · {viewMode === "personnel" ? "Personnel" : "Management"}
             </p>
           </div>
-          <div className="grid h-11 w-11 place-items-center rounded-2xl bg-moss text-sm font-extrabold text-white">
+
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-moss text-sm font-extrabold text-white">
             {initials(user?.fullName ?? "User")}
           </div>
-          <Button type="button" variant="secondary" className="hidden sm:inline-flex" onClick={logout}>
+
+          <Button
+            type="button"
+            variant="secondary"
+            className="hidden !px-3 sm:inline-flex"
+            onClick={logout}
+            aria-label="Logout"
+          >
             <LogOut size={16} />
-            Logout
+            <span className="hidden lg:inline">Logout</span>
           </Button>
         </div>
       </div>
 
-      <details open={mobileMenuOpen} onToggle={(event) => setMobileMenuOpen(event.currentTarget.open)} className="mt-4 rounded-2xl bg-white/70 p-3 lg:hidden">
-        <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-bold text-moss">
-          <Menu size={18} />
-          Menu
-        </summary>
-        <div className="mt-3 grid gap-2 sm:grid-cols-3">
-          {canSwitchViewMode && (
-            <div className="grid grid-cols-2 gap-2 sm:col-span-3">
-              <button
-                type="button"
-                className={`rounded-xl px-3 py-2 text-left text-sm font-bold ${
-                  viewMode === "personnel" ? "bg-moss text-white" : "bg-white text-moss"
-                }`}
-                onClick={() => setViewMode("personnel")}
-              >
-                Personnel
-              </button>
-              <button
-                type="button"
-                className={`rounded-xl px-3 py-2 text-left text-sm font-bold ${
-                  viewMode === "management" ? "bg-moss text-white" : "bg-white text-moss"
-                }`}
-                onClick={() => setViewMode("management")}
-              >
-                Management
-              </button>
-            </div>
-          )}
-          {visibleMobileItems.map((item) => (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                className={({ isActive }) =>
-                  `rounded-xl px-3 py-2 text-sm font-bold ${isActive ? "bg-moss text-white" : "bg-white text-moss"}`
-                }
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                {item.label}
-              </NavLink>
-            ))}
-          <button className="rounded-xl bg-red-50 px-3 py-2 text-left text-sm font-bold text-red-700" onClick={() => { setMobileMenuOpen(false); logout(); }}>
-            Logout
+      {/* Compact view-mode switch for small screens */}
+      {canSwitchViewMode && (
+        <div className="mt-3 flex items-center gap-2 sm:hidden">
+          <button
+            type="button"
+            onClick={() => setViewMode("personnel")}
+            className={`flex-1 rounded-xl px-3 py-2 text-xs font-bold transition ${
+              viewMode === "personnel" ? "bg-moss text-white shadow-raised" : "border border-line bg-white text-ink/55"
+            }`}
+          >
+            Personnel
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("management")}
+            className={`flex-1 rounded-xl px-3 py-2 text-xs font-bold transition ${
+              viewMode === "management" ? "bg-moss text-white shadow-raised" : "border border-line bg-white text-ink/55"
+            }`}
+          >
+            Management
           </button>
         </div>
-      </details>
+      )}
     </header>
   );
 }

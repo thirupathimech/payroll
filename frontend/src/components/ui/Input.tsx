@@ -10,12 +10,12 @@ export function Input({ label, error, className, id, ...props }: InputProps) {
   const inputId = id ?? props.name;
 
   return (
-    <label className="block space-y-2 text-sm font-semibold text-ink/80" htmlFor={inputId}>
+    <label className="block space-y-1.5 text-sm font-semibold text-ink/80" htmlFor={inputId}>
       {label && <span>{label}</span>}
       <input
         id={inputId}
         className={clsx(
-          "w-full rounded-2xl border border-moss/15 bg-white/85 px-4 py-3 text-sm text-ink outline-none transition placeholder:text-ink/35 focus:border-fern focus:ring-4 focus:ring-fern/10",
+          "w-full rounded-xl border border-line bg-white px-3.5 py-2.5 text-sm text-ink outline-none transition placeholder:text-ink/35 focus:border-fern focus:ring-4 focus:ring-fern/10",
           error && "border-red-400 focus:border-red-500 focus:ring-red-100",
           className,
         )}

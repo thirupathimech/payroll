@@ -76,7 +76,7 @@ export function SearchableSelect({
     <label ref={wrapperRef} className="relative z-40 block space-y-2 text-sm font-semibold text-ink/80 focus-within:z-[200]">
       {label && <span>{label}</span>}
       <input
-        className="w-full rounded-2xl border border-moss/15 bg-white/85 px-4 py-3 text-sm text-ink outline-none transition placeholder:text-ink/35 focus:border-fern focus:ring-4 focus:ring-fern/10 disabled:cursor-not-allowed disabled:opacity-60"
+        className="w-full rounded-xl border border-line bg-white px-3.5 py-2.5 text-sm text-ink outline-none transition placeholder:text-ink/35 focus:border-fern focus:ring-4 focus:ring-fern/10 disabled:cursor-not-allowed disabled:opacity-60"
         disabled={disabled}
         aria-label={ariaLabel}
         placeholder={placeholder}
@@ -112,12 +112,12 @@ export function SearchableSelect({
       />
 
       {open && !disabled && (
-        <div className="absolute z-[200] mt-1 max-h-72 w-full overflow-auto rounded-2xl border border-moss/10 bg-white p-2 shadow-card">
+        <div className="absolute z-[200] mt-1 max-h-72 w-full overflow-auto rounded-xl border border-line bg-white p-2 shadow-card">
           {filteredOptions.map((option, index) => (
             <button
               key={option.value}
               type="button"
-              className={`block w-full rounded-xl px-3 py-2 text-left text-sm transition ${
+              className={`block w-full rounded-lg px-3 py-2 text-left text-sm transition ${
                 index === highlightedIndex ? "bg-moss text-white" : "text-ink hover:bg-moss/8"
               } ${option.disabled ? "cursor-not-allowed opacity-45" : ""}`}
               onMouseDown={(event) => event.preventDefault()}

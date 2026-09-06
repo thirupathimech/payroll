@@ -31,27 +31,27 @@ export function DataTable<T>({
   getRowKey,
 }: DataTableProps<T>) {
   return (
-    <div className="overflow-hidden rounded-[1.7rem] border border-moss/10 bg-white/80">
+    <div className="overflow-hidden rounded-2xl border border-line bg-white">
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-moss/10">
+        <table className="w-full min-w-[640px] divide-y divide-line">
           <thead className="bg-moss/5">
             <tr>
               {columns.map((column) => (
                 <th
                   key={column.header}
-                  className="px-5 py-4 text-left text-xs font-extrabold uppercase tracking-[0.16em] text-ink/55"
+                  className="whitespace-nowrap px-4 py-3.5 text-left text-xs font-extrabold uppercase tracking-[0.1em] text-ink/55 sm:px-5"
                 >
                   {column.header}
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-moss/10">
+          <tbody className="divide-y divide-line">
             {loading &&
               Array.from({ length: 5 }).map((_, index) => (
                 <tr key={index}>
                   {columns.map((column) => (
-                    <td key={column.header} className="px-5 py-4">
+                    <td key={column.header} className="px-4 py-3.5 sm:px-5">
                       <div className="h-4 w-28 animate-pulse rounded-full bg-moss/10" />
                     </td>
                   ))}
@@ -61,7 +61,7 @@ export function DataTable<T>({
               rows.map((row) => (
                 <tr key={getRowKey(row)} className="transition hover:bg-fern/5">
                   {columns.map((column) => (
-                    <td key={column.header} className={column.className ?? "px-5 py-4 text-sm text-ink/75"}>
+                    <td key={column.header} className={column.className ?? "px-4 py-3.5 text-sm text-ink/75 sm:px-5"}>
                       {column.cell(row)}
                     </td>
                   ))}
@@ -78,14 +78,16 @@ export function DataTable<T>({
         </div>
       )}
 
-      <div className="flex flex-col gap-3 border-t border-moss/10 px-5 py-4 text-sm text-ink/60 sm:flex-row sm:items-center sm:justify-between">
-        <span>
-          Page {totalPages === 0 ? 0 : page + 1} of {totalPages} - {totalElements} records
+      <div className="flex flex-col gap-3 border-t border-line px-4 py-3.5 text-sm text-ink/60 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <span className="text-xs font-semibold sm:text-sm">
+          Page {totalPages === 0 ? 0 : page + 1} of {totalPages} · {totalElements} records
         </span>
         <div className="flex gap-2">
           <Button
             type="button"
             variant="secondary"
+            size="sm"
+            className="flex-1 sm:flex-initial"
             disabled={page <= 0}
             onClick={() => onPageChange(page - 1)}
           >
@@ -94,6 +96,8 @@ export function DataTable<T>({
           <Button
             type="button"
             variant="secondary"
+            size="sm"
+            className="flex-1 sm:flex-initial"
             disabled={totalPages === 0 || page >= totalPages - 1}
             onClick={() => onPageChange(page + 1)}
           >

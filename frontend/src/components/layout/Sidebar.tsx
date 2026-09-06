@@ -10,6 +10,7 @@ import {
   ClipboardList,
   GitBranch,
   LayoutDashboard,
+  LogOut,
   Settings,
   ShieldCheck,
   UserCog,
@@ -17,6 +18,7 @@ import {
   Users,
   Fingerprint,
   FileText,
+  X,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
@@ -51,50 +53,98 @@ const personnelItems: Array<{ label: string; path: string; icon: typeof LayoutDa
   { label: "My Shift", path: "/shift-assignments", icon: Clock3 },
 ];
 
-export function Sidebar() {
-  const { user, viewMode } = useAuth();
+interface SidebarProps {
+  open: boolean;
+  onClose: () => void;
+}
+
+export function Sidebar({ open, onClose }: SidebarProps) {
+  const { user, viewMode, logout } = useAuth();
   const visibleItems =
     viewMode === "personnel" ? personnelItems : navItems.filter((item) => hasRoleAccess(user, item.allowedRoles));
 
   return (
-    <aside className="sticky top-0 hidden h-screen w-72 shrink-0 flex-col overflow-hidden border-r border-white/60 bg-ink px-5 py-6 text-white lg:flex">
-      <div className="mb-10 shrink-0 flex items-center gap-3">
-        <div className="grid h-12 w-12 place-items-center rounded-2xl bg-ember text-ink shadow-glow">
-          <BadgeDollarSign size={24} />
-        </div>
-        <div>
-          <p className="font-display text-xl font-extrabold">Payroll</p>
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/45">{user?.orgCode ?? "ORG"}</p>
-          <p className="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-white/35">
-            {viewMode === "personnel" ? "Personnel" : "Management"}
-          </p>
-        </div>
-      </div>
+    <>
+      {/* Mobile/tablet scrim */}
+      {open && (
+        <div
+          className="fixed inset-0 z-40 bg-ink/50 backdrop-blur-[2px] animate-fadeIn lg:hidden"
+          onClick={onClose}
+          aria-hidden="true"
+        />
+      )}
 
-      <nav className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
-        {visibleItems.map((item) => {
-          const Icon = item.icon;
-          return (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              end
-              className={({ isActive }) =>
-                clsx(
-                  "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold transition",
-                  isActive
-                    ? "bg-white text-ink shadow-glow"
-                    : "text-white/68 hover:bg-white/10 hover:text-white",
-                )
-              }
-            >
-              <Icon size={18} />
-              {item.label}
-            </NavLink>
-          );
-        })}
-      </nav>
+      <aside
+        className={clsx(
+          "fixed inset-y-0 left-0 z-50 flex h-screen w-[17rem] shrink-0 flex-col overflow-hidden bg-ink px-5 py-6 text-white transition-transform duration-300 ease-out",
+          "lg:sticky lg:top-0 lg:z-30 lg:translate-x-0",
+          open ? "translate-x-0" : "-translate-x-full",
+        )}
+      >
+        <div className="mb-8 flex shrink-0 items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="grid h-11 w-11 place-items-center rounded-xl bg-ember text-ink shadow-glow">
+              <BadgeDollarSign size={22} />
+            </div>
+            <div>
+              <p className="font-display text-lg font-extrabold leading-tight">Payroll</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/45">
+                {user?.orgCode ?? "ORG"}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-white/60 transition hover:bg-white/10 hover:text-white lg:hidden"
+            aria-label="Close menu"
+          >
+            <X size={18} />
+          </button>
+        </div>
 
-    </aside>
+        <div className="mb-4 shrink-0 rounded-lg bg-white/[0.06] px-3 py-2">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/40">Viewing as</p>
+          <p className="text-sm font-bold text-white/85">{viewMode === "personnel" ? "Personnel" : "Management"}</p>
+        </div>
+
+        <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
+          {visibleItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                end
+                onClick={onClose}
+                className={({ isActive }) =>
+                  clsx(
+                    "flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition",
+                    isActive
+                      ? "bg-white text-ink shadow-raised"
+                      : "text-white/65 hover:bg-white/10 hover:text-white",
+                  )
+                }
+              >
+                <Icon size={17} strokeWidth={2.25} />
+                <span className="truncate">{item.label}</span>
+              </NavLink>
+            );
+          })}
+        </nav>
+
+        <div className="mt-4 shrink-0 space-y-3 border-t border-white/10 pt-4">
+          <button
+            type="button"
+            onClick={logout}
+            className="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-white/65 transition hover:bg-red-500/15 hover:text-red-300 sm:hidden"
+          >
+            <LogOut size={17} strokeWidth={2.25} />
+            Logout
+          </button>
+          <p className="text-[11px] font-medium text-white/35">Payroll HRMS</p>
+        </div>
+      </aside>
+    </>
   );
 }
