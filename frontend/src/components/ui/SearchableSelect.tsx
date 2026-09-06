@@ -73,7 +73,7 @@ export function SearchableSelect({
   }
 
   return (
-    <label ref={wrapperRef} className="relative block space-y-2 text-sm font-semibold text-ink/80">
+    <label ref={wrapperRef} className="relative z-40 block space-y-2 text-sm font-semibold text-ink/80 focus-within:z-[200]">
       {label && <span>{label}</span>}
       <input
         className="w-full rounded-2xl border border-moss/15 bg-white/85 px-4 py-3 text-sm text-ink outline-none transition placeholder:text-ink/35 focus:border-fern focus:ring-4 focus:ring-fern/10 disabled:cursor-not-allowed disabled:opacity-60"
@@ -112,7 +112,7 @@ export function SearchableSelect({
       />
 
       {open && !disabled && (
-        <div className="absolute z-[80] mt-1 max-h-72 w-full overflow-auto rounded-2xl border border-moss/10 bg-white p-2 shadow-card">
+        <div className="absolute z-[200] mt-1 max-h-72 w-full overflow-auto rounded-2xl border border-moss/10 bg-white p-2 shadow-card">
           {filteredOptions.map((option, index) => (
             <button
               key={option.value}

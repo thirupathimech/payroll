@@ -23,7 +23,7 @@ export function Modal({ title, description, open, onClose, children }: ModalProp
             <h2 className="font-display text-2xl font-extrabold text-ink">{title}</h2>
             {description && <p className="mt-1 text-sm text-ink/60">{description}</p>}
           </div>
-          <Button type="button" variant="ghost" className="h-10 w-10 rounded-full p-0" onClick={onClose}>
+          <Button type="button" variant="secondary" className="h-10 w-10 rounded-full border-2 border-ink/20 bg-white p-0 text-ink shadow-sm hover:border-red-300 hover:bg-red-50 hover:text-red-700" onClick={onClose} aria-label="Close dialog" title="Close">
             <X size={18} />
           </Button>
         </div>

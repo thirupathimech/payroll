@@ -20,6 +20,7 @@ import { WeekOffAssignmentPage } from "./pages/WeekOffAssignmentPage";
 import { HolidayConfigurationPage } from "./pages/HolidayConfigurationPage";
 import { AttendancePage } from "./pages/AttendancePage";
 import { AttendanceReportPage } from "./pages/AttendanceReportPage";
+import { ReportsPage } from "./pages/ReportsPage";
 import { ADMIN_ROLES, HR_ROLES, MANAGER_ROLES } from "./lib/access";
 
 function HomeRoute() {
@@ -39,6 +40,9 @@ export default function App() {
           <Route path="/leaves" element={<LeavePage />} />
           <Route path="/attendance" element={<AttendancePage />} />
           <Route path="/attendance/report" element={<AttendanceReportPage />} />
+          <Route element={<ProtectedRoute allowedRoles={MANAGER_ROLES} />}>
+            <Route path="/reports" element={<ReportsPage />} />
+          </Route>
           <Route element={<ProtectedRoute allowedRoles={MANAGER_ROLES} />}>
             <Route path="/system-configuration" element={<SystemConfigurationPage />} />
           </Route>

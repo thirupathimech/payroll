@@ -15,6 +15,7 @@ import {
   UserRound,
   Users,
   Fingerprint,
+  FileText,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
@@ -36,6 +37,7 @@ const navItems: Array<{ label: string; path: string; icon: typeof LayoutDashboar
   { label: "Leaves", path: "/leaves", icon: CalendarDays, allowedRoles: MANAGER_ROLES },
   { label: "Attendance", path: "/attendance", icon: Fingerprint, allowedRoles: MANAGER_ROLES },
   { label: "Employee Attendance", path: "/attendance/report", icon: ClipboardList, allowedRoles: MANAGER_ROLES },
+  { label: "Reports", path: "/reports", icon: FileText, allowedRoles: MANAGER_ROLES },
   { label: "Settings", path: "/settings", icon: Settings, allowedRoles: ADMIN_ROLES },
   { label: "System Configuration", path: "/system-configuration", icon: Settings, allowedRoles: MANAGER_ROLES },
   { label: "Audit Logs", path: "/audit-logs", icon: ShieldCheck, allowedRoles: ADMIN_ROLES },
