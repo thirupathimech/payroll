@@ -37,6 +37,10 @@ import type {
   WeekOffExclusion,
   AttendanceSettings,
   AttendanceRecord,
+  EmployeeSalaryPayload,
+  EmployeeSalaryResponse,
+  SalaryComponent,
+  SalaryComponentPayload,
 } from "../types";
 
 export const authApi = {
@@ -385,4 +389,12 @@ export const userApi = {
     const { data } = await api.post<{ message: string }>(`/users/${id}/reset-password`);
     return data;
   },
+};
+
+export const salaryApi = {
+  components: async () => (await api.get<SalaryComponent[]>("/salary/components")).data,
+  createComponent: async (payload: SalaryComponentPayload) => (await api.post<SalaryComponent>("/salary/components", payload)).data,
+  updateComponent: async (id: number, payload: SalaryComponentPayload) => (await api.put<SalaryComponent>(`/salary/components/${id}`, payload)).data,
+  employee: async (employeeId: number) => (await api.get<EmployeeSalaryResponse>(`/salary/employees/${employeeId}`)).data,
+  saveEmployee: async (employeeId: number, payload: EmployeeSalaryPayload) => (await api.put<EmployeeSalaryResponse>(`/salary/employees/${employeeId}`, payload)).data,
 };

@@ -21,6 +21,7 @@ import { HolidayConfigurationPage } from "./pages/HolidayConfigurationPage";
 import { AttendancePage } from "./pages/AttendancePage";
 import { AttendanceReportPage } from "./pages/AttendanceReportPage";
 import { ReportsPage } from "./pages/ReportsPage";
+import { SalaryPage } from "./pages/SalaryPage";
 import { ADMIN_ROLES, HR_ROLES, MANAGER_ROLES } from "./lib/access";
 
 function HomeRoute() {
@@ -36,6 +37,9 @@ export default function App() {
         <Route element={<AppShell />}>
           <Route index element={<HomeRoute />} />
           <Route path="/employees" element={<EmployeesPage />} />
+          <Route element={<ProtectedRoute allowedRoles={HR_ROLES} />}>
+            <Route path="/salary" element={<SalaryPage />} />
+          </Route>
           <Route path="/shift-assignments" element={<ShiftAssignmentPage />} />
           <Route path="/leaves" element={<LeavePage />} />
           <Route path="/attendance" element={<AttendancePage />} />

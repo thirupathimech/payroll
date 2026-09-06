@@ -28,7 +28,7 @@ public record EmployeeRequest(
         LocalDate dateOfBirth,
         @NotNull LocalDate joiningDate,
         LocalDate confirmationDate,
-        @NotNull @DecimalMin(value = "0.0", inclusive = false) BigDecimal baseSalary,
+        @NotNull @DecimalMin(value = "0.0") BigDecimal baseSalary,
         @Size(max = 40) String employmentType,
         @Size(max = 80) String probationPeriod,
         @Size(max = 80) String biometricId,

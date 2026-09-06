@@ -37,6 +37,61 @@ export interface HolidayPayload {
 }
 export type WeekDayName = "SUNDAY" | "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURSDAY" | "FRIDAY" | "SATURDAY";
 export type AttendanceMode = "MANUAL" | "PUNCHES";
+export type SalaryComponentCategory = "EARNING" | "DEDUCTION";
+export type SalaryValueType = "PERCENTAGE" | "FIXED";
+
+export interface SalaryComponent {
+  id: number;
+  name: string;
+  code: string;
+  category: SalaryComponentCategory;
+  valueType: SalaryValueType;
+  defaultValue: number;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SalaryComponentPayload {
+  name: string;
+  code: string;
+  category: SalaryComponentCategory;
+  valueType: SalaryValueType;
+  defaultValue: number;
+  enabled: boolean;
+}
+
+export interface EmployeeSalaryComponent {
+  id?: number;
+  componentId: number;
+  name: string;
+  code: string;
+  category: SalaryComponentCategory;
+  valueType: SalaryValueType;
+  value: number;
+  enabled: boolean;
+}
+
+export interface EmployeeSalaryResponse {
+  employeeId: number;
+  employeeCode: string;
+  employeeName: string;
+  branchName?: string;
+  departmentName: string;
+  designationTitle: string;
+  ctc: number;
+  components: EmployeeSalaryComponent[];
+}
+
+export interface EmployeeSalaryPayload {
+  ctc: number;
+  components: Array<{
+    componentId: number;
+    valueType: SalaryValueType;
+    value: number;
+    enabled: boolean;
+  }>;
+}
 
 export interface PageResponse<T> {
   content: T[];

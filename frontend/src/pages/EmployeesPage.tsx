@@ -14,7 +14,7 @@ import { Modal } from "../components/ui/Modal";
 import { SearchableSelect } from "../components/ui/SearchableSelect";
 import { Select } from "../components/ui/Select";
 import { Textarea } from "../components/ui/Textarea";
-import { formatCurrency, formatDate } from "../lib/format";
+import { formatDate } from "../lib/format";
 import { useDebounce } from "../hooks/useDebounce";
 import { ADMIN_ROLES, HR_ROLES, MANAGEMENT_ROLES, hasRoleAccess } from "../lib/access";
 import type {
@@ -424,7 +424,7 @@ function HierarchyChart({ hierarchy }: { hierarchy: EmployeeHierarchy }) {
 }
 
 export function EmployeesPage() {
-  const { user, viewMode, currency } = useAuth();
+  const { user, viewMode } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [employees, setEmployees] = useState(emptyPage);
   const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
@@ -1072,10 +1072,6 @@ export function EmployeesPage() {
       showFormError("Department and designation are required.");
       return;
     }
-    if (!form.baseSalary || Number(form.baseSalary) <= 0) {
-      showFormError("Base salary must be greater than zero.");
-      return;
-    }
     const pendingDocumentTypes = (isPersonnelMode ? [] : form.documents.filter((item) => item.file)).map((item) => item.type.toLowerCase());
     const duplicatePendingType = pendingDocumentTypes.find((type, index) => pendingDocumentTypes.indexOf(type) !== index);
     if (duplicatePendingType) {
@@ -1178,7 +1174,6 @@ export function EmployeesPage() {
     },
     { header: "Department", cell: (employee) => employee.departmentName },
     { header: "Designation", cell: (employee) => employee.designationTitle },
-    { header: "Salary", cell: (employee) => formatCurrency(employee.baseSalary, currency) },
     { header: "Joined", cell: (employee) => formatDate(employee.joiningDate) },
     { header: "Status", cell: (employee) => <Badge value={employee.status} /> },
     {
@@ -1699,7 +1694,6 @@ export function EmployeesPage() {
                 onChange={(value) => setForm({ ...form, status: value as EmploymentStatus })}
               />
               <Input label="Biometric ID" value={form.biometricId} disabled={isPersonnelMode} onChange={(event) => setForm({ ...form, biometricId: event.target.value })} />
-              <Input label="Base Salary" type="number" min="1" value={form.baseSalary} disabled={isPersonnelMode} onChange={(event) => setForm({ ...form, baseSalary: event.target.value })} />
             </div>
           </Section>
 
