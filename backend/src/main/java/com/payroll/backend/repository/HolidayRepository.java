@@ -21,6 +21,20 @@ public interface HolidayRepository extends JpaRepository<Holiday, Long> {
         """)
     List<Holiday> search(@Param("orgCode") String orgCode, @Param("branchId") Long branchId);
 
+    @Query("""
+        select h from Holiday h
+        join fetch h.branch
+        join fetch h.department
+        join fetch h.designation
+        where h.orgCode = :orgCode
+          and h.holidayDate between :fromDate and :toDate
+        """)
+    List<Holiday> findForCalendarReport(
+            @Param("orgCode") String orgCode,
+            @Param("fromDate") LocalDate from,
+            @Param("toDate") LocalDate to
+    );
+
     Optional<Holiday> findByOrgCodeAndBranchIdAndDepartmentIdAndDesignationIdAndHolidayDate(
             String orgCode, Long branchId, Long departmentId, Long designationId, LocalDate holidayDate);
 }

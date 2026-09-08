@@ -43,7 +43,38 @@ public class CompanySetting extends AuditableEntity {
     @Column(length = 40)
     private String phone;
 
-    @Column(length = 700)
+    @Column(length = 160)
+    private String website;
+
+    @Column(length = 80)
+    private String registrationNumber;
+
+    @Column(length = 20)
+    private String gstin;
+
+    @Column(length = 20)
+    private String panNumber;
+
+    @Column(name = "address_line1", length = 250)
+    private String addressLine1;
+
+    @Column(name = "address_line2", length = 250)
+    private String addressLine2;
+
+    @Column(length = 100)
+    private String city;
+
+    @Column(length = 100)
+    private String state;
+
+    @Column(name = "postal_code", length = 20)
+    private String postalCode;
+
+    @Column(length = 80)
+    private String country;
+
+    /** A formatted address retained for existing reports and exports. */
+    @Column(length = 1200)
     private String address;
 
     @Column(nullable = false, length = 10)
@@ -54,4 +85,13 @@ public class CompanySetting extends AuditableEntity {
 
     @Column(nullable = false)
     private Integer payrollCutoffDay = 25;
+
+    @Column(nullable = false, length = 20)
+    private String payrollFrequency = "MONTHLY";
+
+    @Column(nullable = false)
+    private Integer payrollDisbursementDay = 1;
+
+    @Column(nullable = false, length = 20)
+    private String weekStartDay = "MONDAY";
 }

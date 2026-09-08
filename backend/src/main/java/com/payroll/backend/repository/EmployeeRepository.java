@@ -39,6 +39,33 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
         join fetch e.department
         join fetch e.designation
         left join fetch e.branch
+        where e.orgCode = :orgCode
+          and e.status = :status
+          and (:branchId is null or e.branch.id = :branchId)
+          and (:departmentId is null or e.department.id = :departmentId)
+          and (:designationId is null or e.designation.id = :designationId)
+          and (:employeeId is null or e.id = :employeeId)
+          and (:accessibleBranchId is null or e.branch.id = :accessibleBranchId)
+          and (:restrictToEmployeeIds = false or e.id in :employeeIds)
+        order by e.firstName asc, e.lastName asc, e.id asc
+        """)
+    List<Employee> findCalendarReportEmployees(
+            @Param("orgCode") String orgCode,
+            @Param("status") EmploymentStatus status,
+            @Param("branchId") Long branchId,
+            @Param("departmentId") Long departmentId,
+            @Param("designationId") Long designationId,
+            @Param("employeeId") Long employeeId,
+            @Param("accessibleBranchId") Long accessibleBranchId,
+            @Param("employeeIds") List<Long> employeeIds,
+            @Param("restrictToEmployeeIds") boolean restrictToEmployeeIds
+    );
+
+    @Query("""
+        select e from Employee e
+        join fetch e.department
+        join fetch e.designation
+        left join fetch e.branch
         left join fetch e.manager
         where e.orgCode = :orgCode
           and e.status <> :excludedStatus

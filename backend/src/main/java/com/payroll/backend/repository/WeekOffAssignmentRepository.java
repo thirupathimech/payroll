@@ -37,6 +37,26 @@ public interface WeekOffAssignmentRepository extends JpaRepository<WeekOffAssign
             @Param("restrictToEmployeeIds") boolean restrictToEmployeeIds
     );
 
+    @Query("""
+        select w from WeekOffAssignment w
+        left join fetch w.branch
+        left join fetch w.department
+        left join fetch w.designation
+        left join fetch w.employee
+        where w.orgCode = :orgCode
+          and (
+            w.assignmentType in :weeklyTypes
+            or (w.assignmentType = :dateType and w.weekOffDate between :fromDate and :toDate)
+          )
+        """)
+    List<WeekOffAssignment> findForCalendarReport(
+            @Param("orgCode") String orgCode,
+            @Param("weeklyTypes") List<WeekOffAssignmentType> weeklyTypes,
+            @Param("dateType") WeekOffAssignmentType dateType,
+            @Param("fromDate") LocalDate from,
+            @Param("toDate") LocalDate to
+    );
+
     Optional<WeekOffAssignment> findByOrgCodeAndAssignmentTypeAndBranchIdAndDepartmentIdAndDesignationIdAndDayOfWeek(
             String orgCode,
             WeekOffAssignmentType assignmentType,

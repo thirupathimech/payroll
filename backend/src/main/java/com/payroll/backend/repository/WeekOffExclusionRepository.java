@@ -14,4 +14,18 @@ public interface WeekOffExclusionRepository extends JpaRepository<WeekOffExclusi
     boolean existsByOrgCodeAndBranchIdAndDepartmentIdAndDesignationIdAndExcludedDate(String orgCode, Long branchId, Long departmentId, Long designationId, LocalDate date);
     @Query("select e from WeekOffExclusion e join fetch e.branch join fetch e.department join fetch e.designation where e.orgCode = :orgCode and (:branchId is null or e.branch.id = :branchId) order by e.excludedDate desc")
     List<WeekOffExclusion> search(@Param("orgCode") String orgCode, @Param("branchId") Long branchId);
+
+    @Query("""
+        select e from WeekOffExclusion e
+        join fetch e.branch
+        join fetch e.department
+        join fetch e.designation
+        where e.orgCode = :orgCode
+          and e.excludedDate between :fromDate and :toDate
+        """)
+    List<WeekOffExclusion> findForCalendarReport(
+            @Param("orgCode") String orgCode,
+            @Param("fromDate") LocalDate from,
+            @Param("toDate") LocalDate to
+    );
 }

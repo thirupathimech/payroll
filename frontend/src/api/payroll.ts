@@ -37,6 +37,8 @@ import type {
   WeekOffExclusion,
   AttendanceSettings,
   AttendanceRecord,
+  CalendarOffReportRow,
+  CalendarOffType,
   EmployeeSalaryPayload,
   EmployeeSalaryResponse,
   SalaryComponent,
@@ -398,4 +400,16 @@ export const salaryApi = {
   report: async () => (await api.get<EmployeeSalaryResponse[]>("/salary/report")).data,
   employee: async (employeeId: number) => (await api.get<EmployeeSalaryResponse>(`/salary/employees/${employeeId}`)).data,
   saveEmployee: async (employeeId: number, payload: EmployeeSalaryPayload) => (await api.put<EmployeeSalaryResponse>(`/salary/employees/${employeeId}`, payload)).data,
+};
+
+export const calendarOffReportApi = {
+  list: async (params: {
+    type: CalendarOffType;
+    from: string;
+    to: string;
+    branchId?: number;
+    departmentId?: number;
+    designationId?: number;
+    employeeId?: number;
+  }) => (await api.get<CalendarOffReportRow[]>("/reports/calendar-off", { params })).data,
 };
