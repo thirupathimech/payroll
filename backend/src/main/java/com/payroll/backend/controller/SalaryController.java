@@ -48,6 +48,11 @@ public class SalaryController {
         return salaryService.employeeSalary(employeeId, principal);
     }
 
+    @GetMapping("/report")
+    public List<EmployeeSalaryResponse> salaryReport(@AuthenticationPrincipal UserPrincipal principal) {
+        return salaryService.salaryReport(principal);
+    }
+
     @PutMapping("/employees/{employeeId}")
     public EmployeeSalaryResponse saveEmployeeSalary(
             @PathVariable Long employeeId,

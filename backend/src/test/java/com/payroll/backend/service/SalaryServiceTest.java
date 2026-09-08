@@ -6,6 +6,7 @@ import com.payroll.backend.domain.Employee;
 import com.payroll.backend.domain.SalaryComponent;
 import com.payroll.backend.domain.enums.SalaryComponentCategory;
 import com.payroll.backend.domain.enums.SalaryValueType;
+import com.payroll.backend.domain.enums.EmploymentStatus;
 import com.payroll.backend.dto.salary.EmployeeSalaryComponentRequest;
 import com.payroll.backend.dto.salary.EmployeeSalaryRequest;
 import com.payroll.backend.dto.salary.EmployeeSalaryResponse;
@@ -77,6 +78,24 @@ class SalaryServiceTest {
         assertThat(salary.components())
                 .filteredOn(component -> component.category() == SalaryComponentCategory.EMPLOYER_CONTRIBUTION)
                 .allMatch(component -> !component.enabled());
+    }
+
+    @Test
+    void buildsReportRowsForActiveEmployeesFromTheSalaryCatalog() {
+        Fixture fixture = new Fixture();
+        when(fixture.employeeRepository.findSalaryReportEmployees(ORG_CODE, EmploymentStatus.ACTIVE))
+                .thenReturn(List.of(fixture.employee));
+        when(fixture.employeeSalaryComponentRepository.findSalaryReportComponents(ORG_CODE))
+                .thenReturn(List.of());
+
+        List<EmployeeSalaryResponse> report = fixture.service.salaryReport(fixture.principal);
+
+        assertThat(report).singleElement().satisfies(row -> {
+            assertThat(row.employeeCode()).isEqualTo("EMP-10");
+            assertThat(row.employeeName()).isEqualTo("Ada Lovelace");
+            assertThat(row.ctc()).isEqualByComparingTo(CTC);
+            assertThat(row.components()).hasSize(4);
+        });
     }
 
     private static final class Fixture {

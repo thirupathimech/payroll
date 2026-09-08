@@ -20,9 +20,28 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-export function getErrorMessage(error: unknown) {
+export interface ApiErrorDetails {
+  status?: number;
+  message: string;
+  fieldErrors?: Record<string, string>;
+}
+
+export function getApiError(error: unknown): ApiErrorDetails {
   if (axios.isAxiosError(error)) {
-    return error.response?.data?.message ?? error.message;
+    const responseData = error.response?.data as
+      | { message?: unknown; fieldErrors?: Record<string, string> }
+      | undefined;
+
+    return {
+      status: error.response?.status,
+      message: typeof responseData?.message === "string" ? responseData.message : error.message,
+      fieldErrors: responseData?.fieldErrors,
+    };
   }
-  return "Something went wrong";
+
+  return { message: "Something went wrong" };
+}
+
+export function getErrorMessage(error: unknown) {
+  return getApiError(error).message;
 }

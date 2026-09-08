@@ -25,6 +25,20 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
         join fetch e.department
         join fetch e.designation
         left join fetch e.branch
+        where e.orgCode = :orgCode
+          and e.status = :status
+        order by e.firstName asc, e.lastName asc, e.id asc
+        """)
+    List<Employee> findSalaryReportEmployees(
+            @Param("orgCode") String orgCode,
+            @Param("status") EmploymentStatus status
+    );
+
+    @Query("""
+        select e from Employee e
+        join fetch e.department
+        join fetch e.designation
+        left join fetch e.branch
         left join fetch e.manager
         where e.orgCode = :orgCode
           and e.status <> :excludedStatus

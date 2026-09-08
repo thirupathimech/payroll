@@ -1,18 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Download, FileBarChart, FileSpreadsheet, FileText, FileType2, RectangleHorizontal, RectangleVertical, RefreshCw, RotateCcw, Save } from "lucide-react";
+import { ChevronDown, Download, FileBarChart, FileSpreadsheet, FileText, FileType2, RectangleHorizontal, RectangleVertical, RefreshCw, RotateCcw, Save, WalletCards } from "lucide-react";
 import { getErrorMessage } from "../api/client";
-import { attendanceApi, departmentApi, employeeApi, settingsApi, shiftAssignmentApi } from "../api/payroll";
+import { attendanceApi, departmentApi, employeeApi, salaryApi, settingsApi, shiftAssignmentApi } from "../api/payroll";
+import { useAuth } from "../auth/AuthContext";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { EmployeeAutocomplete } from "../components/ui/EmployeeAutocomplete";
 import { Input } from "../components/ui/Input";
 import { Modal } from "../components/ui/Modal";
 import { Select } from "../components/ui/Select";
-import type { AttendanceRecord, Employee, ShiftAssignment } from "../types";
+import { hasRoleAccess, HR_ROLES } from "../lib/access";
+import type { AttendanceRecord, Employee, EmployeeSalaryResponse, SalaryComponentCategory, ShiftAssignment } from "../types";
 
 const dayNumbers = Array.from({ length: 31 }, (_, index) => index + 1);
 const SHIFT_TEMPLATE_STORAGE_KEY = "payroll.report.shift-assignment.template";
 const PUNCH_TEMPLATE_STORAGE_KEY = "payroll.report.employee-punches.template";
+const SALARY_TEMPLATE_STORAGE_KEY = "payroll.report.salary.template";
+const MONTHS_IN_YEAR = 12;
 
 const defaultTemplate = `<!doctype html>
 <html>
@@ -104,6 +108,64 @@ function csvCell(value: string) {
   return /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 }
 
+function roundSalaryMoney(value: number) {
+  const safeValue = Number.isFinite(value) ? value : 0;
+  const rounded = Math.round((safeValue + Number.EPSILON) * 100) / 100;
+  return rounded === 0 ? 0 : rounded;
+}
+
+function monthlySalaryAmount(annualAmount: number) {
+  return roundSalaryMoney(annualAmount / MONTHS_IN_YEAR);
+}
+
+function formatReportSalary(value: number, currency: string) {
+  const options = {
+    style: "currency" as const,
+    currency: currency.toUpperCase(),
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  };
+  try {
+    return new Intl.NumberFormat("en-IN", options).format(roundSalaryMoney(value));
+  } catch {
+    return new Intl.NumberFormat("en-IN", { ...options, currency: "USD" }).format(roundSalaryMoney(value));
+  }
+}
+
+function salaryComponentAmount(component: EmployeeSalaryResponse["components"][number], annualCtc: number) {
+  const value = Number(component.value) || 0;
+  return roundSalaryMoney(component.valueType === "PERCENTAGE" ? annualCtc * value / 100 : value);
+}
+
+function salaryCategoryLabel(category: SalaryComponentCategory) {
+  if (category === "EMPLOYER_CONTRIBUTION") return "Employer contribution";
+  if (category === "DEDUCTION") return "Deduction";
+  return "Earning";
+}
+
+function summarizeSalary(profile: EmployeeSalaryResponse) {
+  const componentAmounts = Object.fromEntries(profile.components.map((component) => [
+    component.code,
+    component.enabled ? salaryComponentAmount(component, profile.ctc) : 0,
+  ]));
+  const totalFor = (category: SalaryComponentCategory) => profile.components
+    .filter((component) => component.enabled && component.category === category)
+    .reduce((total, component) => total + salaryComponentAmount(component, profile.ctc), 0);
+  const earningsAnnual = roundSalaryMoney(totalFor("EARNING"));
+  const employerContributionsAnnual = roundSalaryMoney(totalFor("EMPLOYER_CONTRIBUTION"));
+  const deductionsAnnual = roundSalaryMoney(totalFor("DEDUCTION"));
+  const takeHomeAnnual = roundSalaryMoney(earningsAnnual - deductionsAnnual);
+  return {
+    profile,
+    componentAmounts,
+    ctcAnnual: roundSalaryMoney(profile.ctc),
+    earningsAnnual,
+    employerContributionsAnnual,
+    deductionsAnnual,
+    takeHomeAnnual,
+  };
+}
+
 function downloadTextFile(content: string, filename: string) {
   const url = URL.createObjectURL(new Blob([content], { type: "text/csv;charset=utf-8" }));
   const anchor = document.createElement("a");
@@ -139,6 +201,7 @@ async function downloadXlsx(headers: string[], rows: string[][], filename: strin
 }
 
 export function ReportsPage() {
+  const { user, currency } = useAuth();
   const [month, setMonth] = useState(currentMonth());
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [companyName, setCompanyName] = useState("");
@@ -167,8 +230,22 @@ export function ReportsPage() {
   const [punchDownloadFormat, setPunchDownloadFormat] = useState<DownloadFormat>("pdf");
   const [punchReportOpen, setPunchReportOpen] = useState(false);
   const [punchPrintedAt, setPunchPrintedAt] = useState(() => new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short" }).format(new Date()));
+  const [salaryMonth, setSalaryMonth] = useState(currentMonth());
+  const [salaryProfiles, setSalaryProfiles] = useState<EmployeeSalaryResponse[]>([]);
+  const [salaryBranchFilter, setSalaryBranchFilter] = useState("");
+  const [salaryDepartmentFilter, setSalaryDepartmentFilter] = useState("");
+  const [salaryDesignationFilter, setSalaryDesignationFilter] = useState("");
+  const [selectedSalaryEmployeeCode, setSelectedSalaryEmployeeCode] = useState("");
+  const [salaryTemplate, setSalaryTemplate] = useState(() => loadTemplate(SALARY_TEMPLATE_STORAGE_KEY, defaultTemplate));
+  const [salaryPdfOrientation, setSalaryPdfOrientation] = useState<PdfOrientation>("landscape");
+  const [salaryDownloadFormat, setSalaryDownloadFormat] = useState<DownloadFormat>("pdf");
+  const [salaryReportOpen, setSalaryReportOpen] = useState(false);
+  const [salaryPrintedAt, setSalaryPrintedAt] = useState(() => new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short" }).format(new Date()));
+  const [salaryReportLoaded, setSalaryReportLoaded] = useState(false);
   const [loadingPunches, setLoadingPunches] = useState(false);
   const [downloadingPunches, setDownloadingPunches] = useState(false);
+  const [loadingSalaries, setLoadingSalaries] = useState(false);
+  const [downloadingSalaries, setDownloadingSalaries] = useState(false);
   const [templateMessage, setTemplateMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadingAssignments, setLoadingAssignments] = useState(false);
@@ -177,6 +254,7 @@ export function ReportsPage() {
   const reportRef = useRef<HTMLDivElement>(null);
   const pdfReportRef = useRef<HTMLDivElement>(null);
   const punchPdfReportRef = useRef<HTMLDivElement>(null);
+  const salaryPdfReportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -246,6 +324,73 @@ export function ReportsPage() {
     return [{ record, employee }];
   }), [employees, punchBranchFilter, punchDepartmentFilter, punchDesignationFilter, punchRecords, selectedPunchEmployeeCode]);
 
+  const filteredSalaryProfiles = useMemo(() => salaryProfiles.filter((profile) => {
+    const matchesBranch = !salaryBranchFilter || profile.branchName === salaryBranchFilter;
+    const matchesDepartment = !salaryDepartmentFilter || profile.departmentName === salaryDepartmentFilter;
+    const matchesDesignation = !salaryDesignationFilter || profile.designationTitle === salaryDesignationFilter;
+    const matchesEmployee = !selectedSalaryEmployeeCode || profile.employeeCode === selectedSalaryEmployeeCode;
+    return matchesBranch && matchesDepartment && matchesDesignation && matchesEmployee;
+  }), [salaryBranchFilter, salaryDepartmentFilter, salaryDesignationFilter, salaryProfiles, selectedSalaryEmployeeCode]);
+
+  const salaryComponentColumns = useMemo(() => {
+    const seen = new Set<string>();
+    return salaryProfiles.flatMap((profile) => profile.components.flatMap((component) => {
+      if (seen.has(component.code)) return [];
+      seen.add(component.code);
+      return [{ code: component.code, name: component.name, category: component.category }];
+    }));
+  }, [salaryProfiles]);
+
+  const salaryReportData = useMemo(() => {
+    const headers = [
+      "Employee Code", "Name", "Branch", "Department", "Designation",
+      "Annual CTC", "Monthly CTC", "Gross Annual", "Gross Monthly",
+      "Employer Contributions Annual", "Employer Contributions Monthly",
+      "Deductions Annual", "Deductions Monthly", "Take-home Annual", "Take-home Monthly",
+      ...salaryComponentColumns.map((component) => `${component.name} (${salaryCategoryLabel(component.category)}, Annual)`),
+    ];
+    const rows = filteredSalaryProfiles.map(summarizeSalary).map((summary) => {
+      const { profile } = summary;
+      return [
+        profile.employeeCode,
+        profile.employeeName,
+        profile.branchName || "-",
+        profile.departmentName,
+        profile.designationTitle,
+        formatReportSalary(summary.ctcAnnual, currency),
+        formatReportSalary(monthlySalaryAmount(summary.ctcAnnual), currency),
+        formatReportSalary(summary.earningsAnnual, currency),
+        formatReportSalary(monthlySalaryAmount(summary.earningsAnnual), currency),
+        formatReportSalary(summary.employerContributionsAnnual, currency),
+        formatReportSalary(monthlySalaryAmount(summary.employerContributionsAnnual), currency),
+        formatReportSalary(summary.deductionsAnnual, currency),
+        formatReportSalary(monthlySalaryAmount(summary.deductionsAnnual), currency),
+        formatReportSalary(summary.takeHomeAnnual, currency),
+        formatReportSalary(monthlySalaryAmount(summary.takeHomeAnnual), currency),
+        ...salaryComponentColumns.map((component) => formatReportSalary(summary.componentAmounts[component.code] || 0, currency)),
+      ];
+    });
+    const totals = filteredSalaryProfiles.map(summarizeSalary).reduce((total, summary) => ({
+      ctcAnnual: total.ctcAnnual + summary.ctcAnnual,
+      earningsAnnual: total.earningsAnnual + summary.earningsAnnual,
+      employerContributionsAnnual: total.employerContributionsAnnual + summary.employerContributionsAnnual,
+      deductionsAnnual: total.deductionsAnnual + summary.deductionsAnnual,
+      takeHomeAnnual: total.takeHomeAnnual + summary.takeHomeAnnual,
+      componentAmounts: salaryComponentColumns.reduce((components, component) => ({
+        ...components,
+        [component.code]: (components[component.code] || 0) + (summary.componentAmounts[component.code] || 0),
+      }), total.componentAmounts as Record<string, number>),
+    }), {
+      ctcAnnual: 0,
+      earningsAnnual: 0,
+      employerContributionsAnnual: 0,
+      deductionsAnnual: 0,
+      takeHomeAnnual: 0,
+      componentAmounts: {} as Record<string, number>,
+    });
+    return { headers, rows, totals };
+  }, [currency, filteredSalaryProfiles, salaryComponentColumns]);
+
   const tableHtml = useMemo(() => {
     const headerCells = ["Employee Code", "Name", "Branch", "Department", "Designation", ...dayNumbers.map(String)]
       .map((label) => `<th style="border:1px solid #c7d6d0;background:#e8f0ed;padding:5px 3px;font-size:9px;line-height:1.1;word-break:break-word;overflow:hidden">${escapeHtml(label)}</th>`)
@@ -305,6 +450,35 @@ export function ReportsPage() {
     .split("{{TABLE}}").join(punchTableHtml)
     .split("{{APPROVED_BY}}").join("____________________________"), punchTemplate, companyName, companyAddress), [companyAddress, companyName, punchFrom, punchPrintedAt, punchTableHtml, punchTemplate, punchTo]);
 
+  const salaryTableHtml = useMemo(() => {
+    const headerCells = salaryReportData.headers
+      .map((label) => `<th style="border:1px solid #c7d6d0;background:#e8f0ed;padding:5px 3px;font-size:8px;line-height:1.1;word-break:break-word;overflow:hidden">${escapeHtml(label)}</th>`)
+      .join("");
+    const bodyRows = salaryReportData.rows.map((row) => `<tr>${row.map((value, index) => `<td style="border:1px solid #d5e0dc;padding:5px 3px;font-size:8px;line-height:1.1;word-break:break-word;overflow:hidden;text-align:${index > 4 ? "right" : "left"}">${escapeHtml(value)}</td>`).join("")}</tr>`).join("");
+    const total = salaryReportData.totals;
+    const totalValues = [
+      "TOTAL", `${filteredSalaryProfiles.length} employee(s)`, "", "", "",
+      formatReportSalary(total.ctcAnnual, currency), formatReportSalary(monthlySalaryAmount(total.ctcAnnual), currency),
+      formatReportSalary(total.earningsAnnual, currency), formatReportSalary(monthlySalaryAmount(total.earningsAnnual), currency),
+      formatReportSalary(total.employerContributionsAnnual, currency), formatReportSalary(monthlySalaryAmount(total.employerContributionsAnnual), currency),
+      formatReportSalary(total.deductionsAnnual, currency), formatReportSalary(monthlySalaryAmount(total.deductionsAnnual), currency),
+      formatReportSalary(total.takeHomeAnnual, currency), formatReportSalary(monthlySalaryAmount(total.takeHomeAnnual), currency),
+      ...salaryComponentColumns.map((component) => formatReportSalary(total.componentAmounts[component.code] || 0, currency)),
+    ];
+    const totalRow = `<tr>${totalValues.map((value, index) => `<td style="border:1px solid #c7d6d0;background:#e8f0ed;padding:5px 3px;font-size:8px;font-weight:700;line-height:1.1;text-align:${index > 4 ? "right" : "left"}">${escapeHtml(value)}</td>`).join("")}</tr>`;
+    const emptyRow = `<tr><td colspan="${salaryReportData.headers.length}" style="border:1px solid #d5e0dc;padding:14px;text-align:center;color:#60736c;font-size:11px">No salary records found for the selected filters.</td></tr>`;
+    return `<table style="border-collapse:collapse;width:100%;table-layout:fixed"><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows || emptyRow}</tbody>${bodyRows ? `<tfoot>${totalRow}</tfoot>` : ""}</table>`;
+  }, [currency, filteredSalaryProfiles.length, salaryComponentColumns, salaryReportData]);
+
+  const renderedSalaryHtml = useMemo(() => companyHeaderFallback(salaryTemplate
+    .split("{{REPORT_TITLE}}").join("Salary Report")
+    .split("{{COMPANY_NAME}}").join(escapeHtml(companyName || "Company"))
+    .split("{{COMPANY_ADDRESS}}").join(escapeHtml(companyAddress || "").replace(/\r?\n/g, "<br />"))
+    .split("{{MONTH}}").join(new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(new Date(`${salaryMonth}-01T00:00:00`)))
+    .split("{{PRINTED_AT}}").join(salaryPrintedAt)
+    .split("{{TABLE}}").join(salaryTableHtml)
+    .split("{{APPROVED_BY}}").join("____________________________"), salaryTemplate, companyName, companyAddress), [companyAddress, companyName, salaryMonth, salaryPrintedAt, salaryTableHtml, salaryTemplate]);
+
   function saveTemplate(storageKey: string, value: string, label: string) {
     try {
       window.localStorage.setItem(storageKey, value);
@@ -322,6 +496,24 @@ export function ReportsPage() {
     } catch (storageError) {
       setTemplateMessage(storageError instanceof Error ? storageError.message : "Unable to reset the template.");
     }
+  }
+
+  async function loadSalaryReport() {
+    setLoadingSalaries(true);
+    setError("");
+    try {
+      setSalaryProfiles(await salaryApi.report());
+      setSalaryReportLoaded(true);
+    } catch (apiError) {
+      setError(getErrorMessage(apiError));
+    } finally {
+      setLoadingSalaries(false);
+    }
+  }
+
+  function openSalaryReport() {
+    setSalaryReportOpen(true);
+    if (!salaryReportLoaded && !loadingSalaries) void loadSalaryReport();
   }
 
   async function downloadPdf() {
@@ -425,10 +617,59 @@ export function ReportsPage() {
     }
   }
 
+  async function downloadSalaryPdf() {
+    if (!salaryPdfReportRef.current) return;
+    setDownloadingSalaries(true);
+    setError("");
+    try {
+      setSalaryPrintedAt(new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short" }).format(new Date()));
+      await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import("html2canvas"), import("jspdf")]);
+      const canvas = await html2canvas(salaryPdfReportRef.current, { scale: 2, backgroundColor: "#ffffff", useCORS: true, windowWidth: salaryPdfReportRef.current.clientWidth, width: salaryPdfReportRef.current.clientWidth });
+      const pdf = new jsPDF({ orientation: salaryPdfOrientation, unit: "pt", format: "a4" });
+      const margin = 24;
+      const pageWidth = pdf.internal.pageSize.getWidth() - margin * 2;
+      const pageHeight = pdf.internal.pageSize.getHeight() - margin * 2;
+      const sourcePageHeight = Math.max(1, Math.floor(canvas.width * (pageHeight / pageWidth)));
+      const pageCanvas = document.createElement("canvas");
+      const context = pageCanvas.getContext("2d");
+      if (!context) throw new Error("Unable to prepare the salary report PDF preview.");
+      for (let sourceY = 0; sourceY < canvas.height; sourceY += sourcePageHeight) {
+        const sliceHeight = Math.min(sourcePageHeight, canvas.height - sourceY);
+        pageCanvas.width = canvas.width;
+        pageCanvas.height = sliceHeight;
+        context.clearRect(0, 0, pageCanvas.width, pageCanvas.height);
+        context.drawImage(canvas, 0, sourceY, canvas.width, sliceHeight, 0, 0, canvas.width, sliceHeight);
+        if (sourceY > 0) pdf.addPage();
+        pdf.addImage(pageCanvas.toDataURL("image/png"), "PNG", margin, margin, pageWidth, (sliceHeight / canvas.width) * pageWidth);
+      }
+      pdf.save(`salary-report-${salaryMonth}-${salaryPdfOrientation}.pdf`);
+    } catch (apiError) {
+      setError(apiError instanceof Error ? apiError.message : getErrorMessage(apiError));
+    } finally {
+      setDownloadingSalaries(false);
+    }
+  }
+
+  async function downloadSalaryReport() {
+    if (salaryDownloadFormat === "pdf") return downloadSalaryPdf();
+    setDownloadingSalaries(true);
+    setError("");
+    try {
+      if (salaryDownloadFormat === "csv") downloadTextFile([[companyName || "Company"], [companyAddress || ""], [], salaryReportData.headers, ...salaryReportData.rows].map((row) => row.map(csvCell).join(",")).join("\r\n"), `salary-report-${salaryMonth}.csv`);
+      else await downloadXlsx(salaryReportData.headers, salaryReportData.rows, `salary-report-${salaryMonth}.xlsx`, companyName, companyAddress);
+    } catch (apiError) {
+      setError(apiError instanceof Error ? apiError.message : getErrorMessage(apiError));
+    } finally {
+      setDownloadingSalaries(false);
+    }
+  }
+
   return <div className="space-y-6">
     <Card><div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"><div><p className="text-sm font-bold uppercase tracking-[0.18em] text-fern">Reports</p><h2 className="mt-2 font-display text-3xl font-extrabold text-ink">Reports</h2><p className="mt-2 text-sm text-ink/60">Choose a report to open its filters, preview, and download options.</p></div><div className="grid h-12 w-12 place-items-center rounded-2xl bg-ember text-ink shadow-glow"><FileBarChart size={22} /></div></div></Card>
     <Card className="cursor-pointer transition hover:-translate-y-0.5 hover:shadow-card" onClick={() => setShiftReportOpen(true)}><div className="flex items-center justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-fern">Attendance Setup</p><h3 className="mt-2 font-display text-2xl font-extrabold text-ink">Shift Assignment</h3><p className="mt-2 text-sm text-ink/60">View role-scoped employee schedules by month and download the formatted report.</p></div><Button type="button" onClick={() => setShiftReportOpen(true)}>Open report</Button></div></Card>
     <Card className="cursor-pointer transition hover:-translate-y-0.5 hover:shadow-card" onClick={() => setPunchReportOpen(true)}><div className="flex items-center justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-fern">Attendance</p><h3 className="mt-2 font-display text-2xl font-extrabold text-ink">Employee Punches</h3><p className="mt-2 text-sm text-ink/60">Download employee IN/OUT punch details with date, time, branch, and department filters.</p></div><Button type="button" onClick={() => setPunchReportOpen(true)}>Open report</Button></div></Card>
+    {hasRoleAccess(user, HR_ROLES) && <Card className="cursor-pointer transition hover:-translate-y-0.5 hover:shadow-card" onClick={openSalaryReport}><div className="flex items-center justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-fern">Payroll</p><h3 className="mt-2 font-display text-2xl font-extrabold text-ink">Salary Report</h3><p className="mt-2 text-sm text-ink/60">Review employee CTC, earnings, employer contributions, deductions, and estimated take-home.</p></div><Button type="button" onClick={(event) => { event.stopPropagation(); openSalaryReport(); }}><WalletCards size={17} />Open report</Button></div></Card>}
     <Modal title="Shift Assignment Report" description="Filters, full HTML template, live preview, and A4 PDF download" open={shiftReportOpen} onClose={() => setShiftReportOpen(false)}>
       <div className="space-y-6">
         <Card><div className="mb-5 flex items-center justify-between"><div><h3 className="font-display text-xl font-extrabold">Shift Assignment</h3><p className="mt-1 text-sm text-ink/60">Filters apply only to the employees and assignments allowed for your role.</p></div>{loadingAssignments && <RefreshCw className="animate-spin text-fern" size={18} />}</div><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3"><Input label="Report month" type="month" value={month} onChange={(event) => setMonth(event.target.value)} /><Select label="Branch" value={branchFilter} onChange={(event) => setBranchFilter(event.target.value)}><option value="">All branches</option>{branchOptions.map((branch) => <option key={branch} value={branch}>{branch}</option>)}</Select><Select label="Department" value={departmentFilter} onChange={(event) => setDepartmentFilter(event.target.value)}><option value="">All departments</option>{departments.filter((department) => employees.some((employee) => employee.departmentId === department.id)).map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</Select><Select label="Designation" value={designationFilter} onChange={(event) => setDesignationFilter(event.target.value)}><option value="">All designations</option>{designationOptions.map((designation) => <option key={designation} value={designation}>{designation}</option>)}</Select><Select label="Shift" value={shiftFilter} onChange={(event) => setShiftFilter(event.target.value)}><option value="">All shifts</option>{shiftOptions.map((shift) => <option key={shift} value={shift}>{shift}</option>)}</Select><EmployeeAutocomplete label="Employee code / name" value={selectedEmployeeCode} employees={employees} onChange={setSelectedEmployeeCode} placeholder="Search code or name" /></div><p className="mt-4 text-xs font-semibold text-ink/50">Showing {filteredEmployees.length} of {employees.length} role-scoped employee(s).</p></Card>
@@ -445,6 +686,15 @@ export function ReportsPage() {
         {error && <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
         <Card><div className="mb-4 flex items-center justify-between"><div><h3 className="font-display text-xl font-extrabold">Live preview</h3><p className="mt-1 text-sm text-ink/60">This exact HTML preview is converted to PDF.</p></div><span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">{filteredPunchRows.length} punch record(s)</span></div><div className="overflow-x-auto rounded-2xl border border-moss/10 bg-white p-2" dangerouslySetInnerHTML={{ __html: renderedPunchHtml }} /></Card>
         <div ref={punchPdfReportRef} aria-hidden="true" className="pointer-events-none absolute -left-[10000px] top-0 bg-white" style={{ width: punchPdfOrientation === "landscape" ? "1123px" : "794px" }} dangerouslySetInnerHTML={{ __html: renderedPunchHtml }} />
+      </div>
+    </Modal>
+    <Modal title="Salary Report" description="Current employee salary structures, full HTML template, live preview, and A4 PDF download" open={salaryReportOpen} onClose={() => setSalaryReportOpen(false)}>
+      <div className="space-y-6">
+        <Card><div className="mb-5 flex items-center justify-between"><div><h3 className="font-display text-xl font-extrabold">Salary breakup</h3><p className="mt-1 text-sm text-ink/60">Salary figures are based on the current annual CTC structure. Only active employees are included.</p></div>{loadingSalaries && <RefreshCw className="animate-spin text-fern" size={18} />}</div><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3"><Input label="Report month" type="month" value={salaryMonth} onChange={(event) => setSalaryMonth(event.target.value)} /><Select label="Branch" value={salaryBranchFilter} onChange={(event) => setSalaryBranchFilter(event.target.value)}><option value="">All branches</option>{branchOptions.map((branch) => <option key={branch} value={branch}>{branch}</option>)}</Select><Select label="Department" value={salaryDepartmentFilter} onChange={(event) => setSalaryDepartmentFilter(event.target.value)}><option value="">All departments</option>{departments.filter((department) => employees.some((employee) => employee.departmentId === department.id)).map((department) => <option key={department.id} value={department.name}>{department.name}</option>)}</Select><Select label="Designation" value={salaryDesignationFilter} onChange={(event) => setSalaryDesignationFilter(event.target.value)}><option value="">All designations</option>{designationOptions.map((designation) => <option key={designation} value={designation}>{designation}</option>)}</Select><EmployeeAutocomplete label="Employee code / name" value={selectedSalaryEmployeeCode} employees={employees} onChange={setSelectedSalaryEmployeeCode} placeholder="Search code or name" /></div><p className="mt-4 text-xs font-semibold text-ink/50">{salaryReportLoaded ? `Showing ${filteredSalaryProfiles.length} of ${salaryProfiles.length} active employee(s).` : loadingSalaries ? "Loading salary structures..." : "Open the report to load salary structures."}</p></Card>
+        <Card><div className="flex flex-col gap-3 border-b border-moss/10 pb-4 lg:flex-row lg:items-center lg:justify-between"><div><h3 className="font-display text-xl font-extrabold">Full HTML template</h3><p className="mt-1 text-sm text-ink/60">Edit the complete HTML/CSS. Placeholders: &#123;&#123;COMPANY_NAME&#125;&#125;, &#123;&#123;COMPANY_ADDRESS&#125;&#125;, &#123;&#123;REPORT_TITLE&#125;&#125;, &#123;&#123;MONTH&#125;&#125;, &#123;&#123;PRINTED_AT&#125;&#125;, &#123;&#123;TABLE&#125;&#125;, &#123;&#123;APPROVED_BY&#125;&#125;.</p></div><div className="flex flex-wrap items-end gap-3"><OrientationDropdown value={salaryPdfOrientation} onChange={setSalaryPdfOrientation} /><DownloadFormatDropdown value={salaryDownloadFormat} onChange={setSalaryDownloadFormat} /><Button type="button" variant="secondary" onClick={() => saveTemplate(SALARY_TEMPLATE_STORAGE_KEY, salaryTemplate, "Salary")}><Save size={17} />Save template</Button><Button type="button" variant="ghost" onClick={() => resetTemplate(SALARY_TEMPLATE_STORAGE_KEY, setSalaryTemplate, "Salary")}><RotateCcw size={17} />Reset template</Button><Button onClick={downloadSalaryReport} disabled={downloadingSalaries || loading || loadingSalaries || !salaryReportLoaded}><Download size={17} />{downloadingSalaries ? `Creating ${salaryDownloadFormat.toUpperCase()}...` : `Download ${salaryDownloadFormat.toUpperCase()}`}</Button></div></div><textarea className="mt-5 min-h-80 w-full rounded-2xl border border-moss/15 bg-ink/[0.03] p-4 font-mono text-xs leading-5 text-ink outline-none focus:border-fern focus:ring-4 focus:ring-fern/10" value={salaryTemplate} onChange={(event) => setSalaryTemplate(event.target.value)} aria-label="Full salary report HTML template" />{templateMessage && <p className="mt-3 text-sm font-semibold text-fern">{templateMessage}</p>}</Card>
+        {error && <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
+        <Card><div className="mb-4 flex items-center justify-between"><div><h3 className="font-display text-xl font-extrabold">Live preview</h3><p className="mt-1 text-sm text-ink/60">This exact HTML preview is converted to PDF.</p></div><span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">{filteredSalaryProfiles.length} employee(s)</span></div><div className="overflow-x-auto rounded-2xl border border-moss/10 bg-white p-2" dangerouslySetInnerHTML={{ __html: renderedSalaryHtml }} /></Card>
+        <div ref={salaryPdfReportRef} aria-hidden="true" className="pointer-events-none absolute -left-[10000px] top-0 bg-white" style={{ width: salaryPdfOrientation === "landscape" ? "1123px" : "794px" }} dangerouslySetInnerHTML={{ __html: renderedSalaryHtml }} />
       </div>
     </Modal>
   </div>;

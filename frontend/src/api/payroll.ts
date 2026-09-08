@@ -395,6 +395,7 @@ export const salaryApi = {
   components: async () => (await api.get<SalaryComponent[]>("/salary/components")).data,
   createComponent: async (payload: SalaryComponentPayload) => (await api.post<SalaryComponent>("/salary/components", payload)).data,
   updateComponent: async (id: number, payload: SalaryComponentPayload) => (await api.put<SalaryComponent>(`/salary/components/${id}`, payload)).data,
+  report: async () => (await api.get<EmployeeSalaryResponse[]>("/salary/report")).data,
   employee: async (employeeId: number) => (await api.get<EmployeeSalaryResponse>(`/salary/employees/${employeeId}`)).data,
   saveEmployee: async (employeeId: number, payload: EmployeeSalaryPayload) => (await api.put<EmployeeSalaryResponse>(`/salary/employees/${employeeId}`, payload)).data,
 };

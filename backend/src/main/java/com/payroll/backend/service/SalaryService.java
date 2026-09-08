@@ -5,6 +5,7 @@ import com.payroll.backend.domain.EmployeeSalaryComponent;
 import com.payroll.backend.domain.SalaryComponent;
 import com.payroll.backend.domain.enums.SalaryComponentCategory;
 import com.payroll.backend.domain.enums.SalaryValueType;
+import com.payroll.backend.domain.enums.EmploymentStatus;
 import com.payroll.backend.dto.salary.EmployeeSalaryComponentRequest;
 import com.payroll.backend.dto.salary.EmployeeSalaryComponentResponse;
 import com.payroll.backend.dto.salary.EmployeeSalaryRequest;
@@ -27,6 +28,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -89,16 +91,30 @@ public class SalaryService {
         Map<Long, EmployeeSalaryComponent> configured = new HashMap<>();
         employeeSalaryComponentRepository.findByOrgCodeAndEmployeeId(orgCode, employeeId)
                 .forEach(item -> configured.put(item.getComponent().getId(), item));
-        List<EmployeeSalaryComponentResponse> rows = salaryComponentRepository.findByOrgCodeOrderByCategoryAscNameAsc(orgCode)
-                .stream().map(component -> {
-                    EmployeeSalaryComponent item = configured.get(component.getId());
-                    return item == null
-                            ? new EmployeeSalaryComponentResponse(null, component.getId(), component.getName(), component.getCode(), component.getCategory(), component.getValueType(), component.getDefaultValue(), defaultEmployeeComponentEnabled(component))
-                            : toEmployeeComponentResponse(item);
-                }).toList();
-        return new EmployeeSalaryResponse(employee.getId(), employee.getEmployeeCode(), fullName(employee),
-                employee.getBranch() == null ? null : employee.getBranch().getName(),
-                employee.getDepartment().getName(), employee.getDesignation().getTitle(), employee.getBaseSalary(), rows);
+        return toEmployeeSalaryResponse(employee, salaryComponentRepository.findByOrgCodeOrderByCategoryAscNameAsc(orgCode), configured);
+    }
+
+    @Transactional
+    public List<EmployeeSalaryResponse> salaryReport(UserPrincipal principal) {
+        String orgCode = currentOrgService.orgCode();
+        ensureDefaultComponents();
+        List<SalaryComponent> catalog = salaryComponentRepository.findByOrgCodeOrderByCategoryAscNameAsc(orgCode);
+        Map<Long, Map<Long, EmployeeSalaryComponent>> configuredByEmployee = employeeSalaryComponentRepository
+                .findSalaryReportComponents(orgCode)
+                .stream()
+                .collect(Collectors.groupingBy(
+                        item -> item.getEmployee().getId(),
+                        Collectors.toMap(item -> item.getComponent().getId(), item -> item, (left, right) -> left)
+                ));
+
+        return employeeRepository.findSalaryReportEmployees(orgCode, EmploymentStatus.ACTIVE)
+                .stream()
+                .map(employee -> toEmployeeSalaryResponse(
+                        employee,
+                        catalog,
+                        configuredByEmployee.getOrDefault(employee.getId(), Map.of())
+                ))
+                .toList();
     }
 
     @Transactional
@@ -263,6 +279,24 @@ public class SalaryService {
 
     private SalaryComponentResponse toComponentResponse(SalaryComponent component) {
         return new SalaryComponentResponse(component.getId(), component.getName(), component.getCode(), component.getCategory(), component.getValueType(), component.getDefaultValue(), component.isEnabled(), component.getCreatedAt(), component.getUpdatedAt());
+    }
+
+    private EmployeeSalaryResponse toEmployeeSalaryResponse(
+            Employee employee,
+            List<SalaryComponent> catalog,
+            Map<Long, EmployeeSalaryComponent> configured
+    ) {
+        List<EmployeeSalaryComponentResponse> rows = catalog.stream()
+                .map(component -> {
+                    EmployeeSalaryComponent item = configured.get(component.getId());
+                    return item == null
+                            ? new EmployeeSalaryComponentResponse(null, component.getId(), component.getName(), component.getCode(), component.getCategory(), component.getValueType(), component.getDefaultValue(), defaultEmployeeComponentEnabled(component))
+                            : toEmployeeComponentResponse(item);
+                })
+                .toList();
+        return new EmployeeSalaryResponse(employee.getId(), employee.getEmployeeCode(), fullName(employee),
+                employee.getBranch() == null ? null : employee.getBranch().getName(),
+                employee.getDepartment().getName(), employee.getDesignation().getTitle(), employee.getBaseSalary(), rows);
     }
 
     private EmployeeSalaryComponentResponse toEmployeeComponentResponse(EmployeeSalaryComponent item) {

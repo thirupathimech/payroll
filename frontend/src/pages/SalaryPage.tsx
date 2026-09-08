@@ -1,7 +1,7 @@
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Edit3, Plus, Save, ToggleLeft, ToggleRight, WalletCards } from "lucide-react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { Download, Edit3, Plus, Save, ToggleLeft, ToggleRight, WalletCards } from "lucide-react";
 import { getErrorMessage } from "../api/client";
-import { employeeApi, salaryApi } from "../api/payroll";
+import { employeeApi, salaryApi, settingsApi } from "../api/payroll";
 import { useAuth } from "../auth/AuthContext";
 import { EmployeeAutocomplete } from "../components/ui/EmployeeAutocomplete";
 import { Badge } from "../components/ui/Badge";
@@ -12,6 +12,7 @@ import { Modal } from "../components/ui/Modal";
 import { Select } from "../components/ui/Select";
 import type {
   Employee,
+  CompanySettings,
   EmployeeSalaryComponent,
   EmployeeSalaryResponse,
   SalaryComponent,
@@ -127,6 +128,11 @@ function formatAllocationPercentage(value: number, ctcFullyAllocated: boolean) {
 
 interface SalaryBreakdownProps {
   annualCtc: number;
+  employeeName: string;
+  employeeCode: string;
+  designationTitle: string;
+  departmentName: string;
+  branchName?: string;
   currency: string;
   earnings: EmployeeSalaryComponent[];
   employerContributions: EmployeeSalaryComponent[];
@@ -138,6 +144,151 @@ interface SalaryBreakdownProps {
   allocationPercentage: number;
   allocationBalance: number;
   ctcFullyAllocated: boolean;
+  onDownloadPdf: () => void;
+  downloadingPdf: boolean;
+}
+
+interface SalaryPdfReportProps {
+  profile: EmployeeSalaryResponse;
+  companySettings: CompanySettings | null;
+  currency: string;
+  annualCtc: number;
+  earnings: EmployeeSalaryComponent[];
+  employerContributions: EmployeeSalaryComponent[];
+  deductions: EmployeeSalaryComponent[];
+  earningsTotal: number;
+  employerContributionTotal: number;
+  deductionsTotal: number;
+  ctcComponentsTotal: number;
+  allocationPercentage: number;
+  allocationBalance: number;
+  ctcFullyAllocated: boolean;
+  printedAt: string;
+}
+
+const reportColors = {
+  ink: "#18332d",
+  moss: "#214e45",
+  muted: "#64756f",
+  line: "#d7e1dd",
+  soft: "#f2f7f5",
+  earning: "#e9f7ef",
+  employer: "#f2edff",
+  deduction: "#fff0f1",
+};
+
+function SalaryPdfReport({
+  profile,
+  companySettings,
+  currency,
+  annualCtc,
+  earnings,
+  employerContributions,
+  deductions,
+  earningsTotal,
+  employerContributionTotal,
+  deductionsTotal,
+  ctcComponentsTotal,
+  allocationPercentage,
+  allocationBalance,
+  ctcFullyAllocated,
+  printedAt,
+}: SalaryPdfReportProps) {
+  const takeHome = roundMoney(earningsTotal - deductionsTotal);
+  const ctcAnnualAdjustment = roundMoney(ctcComponentsTotal - earningsTotal - employerContributionTotal);
+  const ctcMonthlyAdjustment = roundMoney(monthlyAmount(ctcComponentsTotal) - monthlyAmount(earningsTotal) - monthlyAmount(employerContributionTotal));
+  const companyName = companySettings?.companyName || "Payroll HRMS";
+  const legalName = companySettings?.legalName && companySettings.legalName !== companyName ? companySettings.legalName : "";
+  const contactDetails = [companySettings?.email, companySettings?.phone, companySettings?.taxId ? `Tax ID: ${companySettings.taxId}` : ""].filter(Boolean).join("  •  ");
+  const employeeMeta = [profile.employeeCode, profile.designationTitle, profile.departmentName, profile.branchName].filter(Boolean).join("  •  ");
+  const tableCellStyle: CSSProperties = { borderBottom: `1px solid ${reportColors.line}`, padding: "9px 12px", fontSize: "11px", lineHeight: 1.3 };
+  const amountCellStyle: CSSProperties = { ...tableCellStyle, textAlign: "right", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" };
+
+  function renderSection(title: string, items: EmployeeSalaryComponent[], background: string, totalLabel: string, total: number) {
+    return (
+      <>
+        <tr>
+          <td colSpan={3} style={{ ...tableCellStyle, background, color: reportColors.ink, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "10px" }}>{title}</td>
+        </tr>
+        {items.map((item) => {
+          const annualAmount = amountFor(item, annualCtc);
+          return (
+            <tr key={item.componentId}>
+              <td style={tableCellStyle}><strong>{item.name}</strong><div style={{ color: reportColors.muted, fontSize: "10px", marginTop: "2px" }}>{item.code}</div></td>
+              <td style={{ ...tableCellStyle, color: reportColors.muted }}>{item.valueType === "PERCENTAGE" ? `${item.value}% of annual CTC` : "Annual fixed amount"}</td>
+              <td style={amountCellStyle}>{formatSalaryCurrency(annualAmount, currency)}<div style={{ color: reportColors.muted, fontSize: "10px", marginTop: "2px" }}>{formatSalaryCurrency(monthlyAmount(annualAmount), currency)} / month</div></td>
+            </tr>
+          );
+        })}
+        {items.length === 0 && <tr><td colSpan={3} style={{ ...tableCellStyle, color: reportColors.muted }}>No enabled components.</td></tr>}
+        <tr>
+          <td colSpan={2} style={{ ...tableCellStyle, fontWeight: 800 }}>{totalLabel}</td>
+          <td style={{ ...amountCellStyle, fontWeight: 800 }}>{formatSalaryCurrency(total, currency)}<div style={{ color: reportColors.muted, fontSize: "10px", marginTop: "2px" }}>{formatSalaryCurrency(monthlyAmount(total), currency)} / month</div></td>
+        </tr>
+      </>
+    );
+  }
+
+  return (
+    <article style={{ width: "794px", boxSizing: "border-box", padding: "34px 40px 30px", background: "#ffffff", color: reportColors.ink, fontFamily: "Arial, Helvetica, sans-serif" }}>
+      <header style={{ borderBottom: `3px solid ${reportColors.moss}`, paddingBottom: "18px", marginBottom: "22px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "28px" }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ color: reportColors.moss, fontSize: "22px", fontWeight: 800, letterSpacing: "0.01em" }}>{companyName}</div>
+            {legalName && <div style={{ color: reportColors.muted, fontSize: "11px", marginTop: "4px" }}>{legalName}</div>}
+            {companySettings?.address && <div style={{ color: reportColors.muted, fontSize: "10px", lineHeight: 1.45, marginTop: "8px", whiteSpace: "pre-line" }}>{companySettings.address}</div>}
+            {contactDetails && <div style={{ color: reportColors.muted, fontSize: "10px", lineHeight: 1.4, marginTop: "4px" }}>{contactDetails}</div>}
+          </div>
+          <div style={{ textAlign: "right", minWidth: "180px" }}>
+            <div style={{ color: reportColors.moss, fontSize: "10px", fontWeight: 800, letterSpacing: "0.16em", textTransform: "uppercase" }}>Confidential</div>
+            <div style={{ color: reportColors.ink, fontSize: "18px", fontWeight: 800, marginTop: "8px" }}>Salary Breakup</div>
+            <div style={{ color: reportColors.muted, fontSize: "10px", marginTop: "5px" }}>Compensation statement</div>
+          </div>
+        </div>
+      </header>
+
+      <section style={{ border: `1px solid ${reportColors.line}`, borderRadius: "10px", padding: "16px 18px", background: reportColors.soft, marginBottom: "22px" }}>
+        <div style={{ color: reportColors.muted, fontSize: "10px", fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase" }}>Employee details</div>
+        <div style={{ color: reportColors.ink, fontSize: "19px", fontWeight: 800, marginTop: "6px" }}>{profile.employeeName}</div>
+        <div style={{ color: reportColors.muted, fontSize: "11px", marginTop: "5px" }}>{employeeMeta}</div>
+      </section>
+
+      <section style={{ marginBottom: "22px" }}>
+        <div style={{ color: reportColors.moss, fontSize: "12px", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "9px" }}>Compensation summary</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px" }}>
+          {[
+            ["Annual CTC", formatSalaryCurrency(annualCtc, currency)],
+            ["Gross earnings", formatSalaryCurrency(earningsTotal, currency)],
+            ["Deductions", formatSalaryCurrency(deductionsTotal, currency)],
+            ["Estimated take-home", formatSalaryCurrency(takeHome, currency)],
+          ].map(([label, value]) => <div key={label} style={{ border: `1px solid ${reportColors.line}`, borderRadius: "8px", padding: "11px 10px", background: "#ffffff" }}><div style={{ color: reportColors.muted, fontSize: "9px", fontWeight: 700, textTransform: "uppercase", lineHeight: 1.2 }}>{label}</div><div style={{ color: reportColors.ink, fontSize: "13px", fontWeight: 800, marginTop: "6px", whiteSpace: "nowrap" }}>{value}</div></div>)}
+        </div>
+      </section>
+
+      <section>
+        <div style={{ color: reportColors.moss, fontSize: "12px", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "9px" }}>Salary breakup</div>
+        <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
+          <thead><tr style={{ background: reportColors.moss, color: "#ffffff" }}><th style={{ ...tableCellStyle, borderBottom: 0, textAlign: "left", width: "42%" }}>Component</th><th style={{ ...tableCellStyle, borderBottom: 0, textAlign: "left", width: "28%" }}>Calculation</th><th style={{ ...tableCellStyle, borderBottom: 0, textAlign: "right", width: "30%" }}>Annual amount</th></tr></thead>
+          <tbody>
+            <tr style={{ background: "#edf5f2" }}><td colSpan={2} style={{ ...tableCellStyle, fontWeight: 800 }}>Annual CTC</td><td style={{ ...amountCellStyle, fontWeight: 800 }}>{formatSalaryCurrency(annualCtc, currency)}<div style={{ color: reportColors.muted, fontSize: "10px", marginTop: "2px" }}>{formatSalaryCurrency(monthlyAmount(annualCtc), currency)} / month</div></td></tr>
+            {renderSection("Earnings", earnings, reportColors.earning, "Gross earnings", earningsTotal)}
+            {renderSection("Employer contributions · part of CTC", employerContributions, reportColors.employer, "Total employer contributions", employerContributionTotal)}
+            {ctcAnnualAdjustment !== 0 || ctcMonthlyAdjustment !== 0 ? <tr><td colSpan={2} style={{ ...tableCellStyle, color: reportColors.muted }}>CTC rounding adjustment</td><td style={{ ...amountCellStyle, color: reportColors.muted }}>{formatSalaryCurrency(ctcAnnualAdjustment, currency)}<div style={{ fontSize: "10px", marginTop: "2px" }}>{formatSalaryCurrency(ctcMonthlyAdjustment, currency)} / month</div></td></tr> : null}
+            <tr style={{ background: "#e5f1ed" }}><td colSpan={2} style={{ ...tableCellStyle, fontWeight: 800 }}>Total CTC components</td><td style={{ ...amountCellStyle, fontWeight: 800 }}>{formatSalaryCurrency(ctcComponentsTotal, currency)}<div style={{ color: reportColors.muted, fontSize: "10px", marginTop: "2px" }}>{formatSalaryCurrency(monthlyAmount(ctcComponentsTotal), currency)} / month</div></td></tr>
+            {renderSection("Employee deductions · outside CTC", deductions, reportColors.deduction, "Total deductions", deductionsTotal)}
+            <tr style={{ background: takeHome < 0 ? "#fee2e2" : reportColors.moss, color: takeHome < 0 ? "#7f1d1d" : "#ffffff" }}><td colSpan={2} style={{ ...tableCellStyle, borderBottom: 0, fontWeight: 800 }}>Estimated take-home</td><td style={{ ...amountCellStyle, borderBottom: 0, fontWeight: 800 }}>{formatSalaryCurrency(takeHome, currency)}<div style={{ fontSize: "10px", marginTop: "2px" }}>{formatSalaryCurrency(monthlyAmount(takeHome), currency)} / month</div></td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section style={{ marginTop: "20px", borderRadius: "8px", padding: "12px 14px", background: ctcFullyAllocated ? "#edf9f1" : "#fff8e7", color: ctcFullyAllocated ? "#166534" : "#92400e", border: `1px solid ${ctcFullyAllocated ? "#bbebc9" : "#f3d28a"}` }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: "18px", fontSize: "11px", fontWeight: 800 }}><span>CTC allocation</span><span>{formatAllocationPercentage(allocationPercentage, ctcFullyAllocated)}</span></div>
+        <div style={{ fontSize: "10px", lineHeight: 1.45, marginTop: "5px" }}>{ctcFullyAllocated ? "All enabled earnings and employer contributions are allocated to the annual CTC." : allocationBalance > 0 ? `${formatSalaryCurrency(allocationBalance, currency)} remains unallocated.` : `${formatSalaryCurrency(Math.abs(allocationBalance), currency)} is over allocated.`}</div>
+      </section>
+
+      <footer style={{ borderTop: `1px solid ${reportColors.line}`, marginTop: "26px", paddingTop: "12px", display: "flex", justifyContent: "space-between", gap: "20px", color: reportColors.muted, fontSize: "9px" }}><span>Generated by {companyName} Payroll HRMS</span><span>Printed: {printedAt}</span></footer>
+    </article>
+  );
 }
 
 interface SalaryBreakdownSectionProps {
@@ -208,6 +359,11 @@ function SalaryBreakdownSection({
 
 function SalaryBreakdown({
   annualCtc,
+  employeeName,
+  employeeCode,
+  designationTitle,
+  departmentName,
+  branchName,
   currency,
   earnings,
   employerContributions,
@@ -219,6 +375,8 @@ function SalaryBreakdown({
   allocationPercentage,
   allocationBalance,
   ctcFullyAllocated,
+  onDownloadPdf,
+  downloadingPdf,
 }: SalaryBreakdownProps) {
   const takeHome = roundMoney(earningsTotal - deductionsTotal);
   const ctcAnnualAdjustment = roundMoney(ctcComponentsTotal - earningsTotal - employerContributionTotal);
@@ -237,9 +395,15 @@ function SalaryBreakdown({
   return (
     <Card className="overflow-hidden p-0">
       <div className="border-b border-moss/10 px-5 py-5">
-        <p className="text-xs font-bold uppercase tracking-[0.18em] text-fern">Live calculation</p>
-        <h3 className="mt-1 font-display text-2xl font-extrabold text-ink">Salary Breakup</h3>
-        <p className="mt-1 text-sm leading-5 text-ink/55">Annual CTC includes enabled earnings and employer contributions. Employee deductions are shown separately and reduce take-home only.</p>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-fern">Live calculation</p>
+          <Button type="button" variant="secondary" className="shrink-0" onClick={onDownloadPdf} disabled={downloadingPdf} title="Download salary breakup as PDF"><Download size={17} />{downloadingPdf ? "Creating PDF..." : "Download PDF"}</Button>
+        </div>
+        <h3 className="mt-3 font-display text-2xl font-extrabold leading-tight text-ink">Salary Breakup</h3>
+        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold leading-5 text-ink/55">
+          <span>{employeeName}</span><span aria-hidden="true">·</span><span>{employeeCode}</span><span aria-hidden="true">·</span><span>{designationTitle}</span><span aria-hidden="true">·</span><span>{departmentName}</span>{branchName && <><span aria-hidden="true">·</span><span>{branchName}</span></>}
+        </div>
+        <p className="mt-2 text-sm leading-5 text-ink/55">Annual CTC includes enabled earnings and employer contributions. Employee deductions are shown separately and reduce take-home only.</p>
       </div>
 
       <div className="max-h-[calc(100vh-10rem)] overflow-auto">
@@ -332,6 +496,7 @@ export function SalaryPage() {
   const { currency } = useAuth();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [components, setComponents] = useState<SalaryComponent[]>([]);
+  const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
   const [profile, setProfile] = useState<EmployeeSalaryResponse | null>(null);
   const [employeeCode, setEmployeeCode] = useState("");
   const [ctc, setCtc] = useState("");
@@ -344,7 +509,10 @@ export function SalaryPage() {
   const [editingComponent, setEditingComponent] = useState<SalaryComponent | null>(null);
   const [componentForm, setComponentForm] = useState<ComponentForm>(initialComponent);
   const [componentSaving, setComponentSaving] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [printedAt, setPrintedAt] = useState(() => new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short" }).format(new Date()));
   const employeeSelectionRequestRef = useRef(0);
+  const salaryPdfReportRef = useRef<HTMLDivElement>(null);
 
   const loadInitialData = useCallback(async () => {
     setLoading(true);
@@ -366,6 +534,10 @@ export function SalaryPage() {
   useEffect(() => {
     loadInitialData();
   }, [loadInitialData]);
+
+  useEffect(() => {
+    settingsApi.get().then(setCompanySettings).catch(() => setCompanySettings(null));
+  }, []);
 
   const selectedEmployee = useMemo(
     () => employees.find((employee) => employee.employeeCode === employeeCode),
@@ -470,6 +642,47 @@ export function SalaryPage() {
       setError(getErrorMessage(apiError));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function downloadSalaryBreakdownPdf() {
+    if (!profile || !salaryPdfReportRef.current) return;
+    setDownloadingPdf(true);
+    setError("");
+    try {
+      setPrintedAt(new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short" }).format(new Date()));
+      await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import("html2canvas"), import("jspdf")]);
+      const canvas = await html2canvas(salaryPdfReportRef.current, {
+        scale: 2,
+        backgroundColor: "#ffffff",
+        useCORS: true,
+        windowWidth: salaryPdfReportRef.current.clientWidth,
+        width: salaryPdfReportRef.current.clientWidth,
+      });
+      const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
+      const margin = 24;
+      const pageWidth = pdf.internal.pageSize.getWidth() - margin * 2;
+      const pageHeight = pdf.internal.pageSize.getHeight() - margin * 2;
+      const sourcePageHeight = Math.max(1, Math.floor(canvas.width * (pageHeight / pageWidth)));
+      const pageCanvas = document.createElement("canvas");
+      const context = pageCanvas.getContext("2d");
+      if (!context) throw new Error("Unable to prepare the salary breakup PDF preview.");
+      for (let sourceY = 0; sourceY < canvas.height; sourceY += sourcePageHeight) {
+        const sliceHeight = Math.min(sourcePageHeight, canvas.height - sourceY);
+        pageCanvas.width = canvas.width;
+        pageCanvas.height = sliceHeight;
+        context.clearRect(0, 0, pageCanvas.width, pageCanvas.height);
+        context.drawImage(canvas, 0, sourceY, canvas.width, sliceHeight, 0, 0, canvas.width, sliceHeight);
+        if (sourceY > 0) pdf.addPage();
+        pdf.addImage(pageCanvas.toDataURL("image/png"), "PNG", margin, margin, pageWidth, (sliceHeight / canvas.width) * pageWidth);
+      }
+      const safeEmployeeCode = profile.employeeCode.replace(/[^a-z0-9_-]+/gi, "-");
+      pdf.save(`salary-breakup-${safeEmployeeCode || "employee"}.pdf`);
+    } catch (apiError) {
+      setError(apiError instanceof Error ? apiError.message : getErrorMessage(apiError));
+    } finally {
+      setDownloadingPdf(false);
     }
   }
 
@@ -771,6 +984,11 @@ export function SalaryPage() {
             <aside className="xl:sticky xl:top-24 xl:self-start">
               <SalaryBreakdown
                 annualCtc={ctcNumber}
+                employeeName={profile.employeeName}
+                employeeCode={profile.employeeCode}
+                designationTitle={profile.designationTitle}
+                departmentName={profile.departmentName}
+                branchName={profile.branchName}
                 currency={currency}
                 earnings={earnings}
                 employerContributions={employerContributions}
@@ -782,8 +1000,29 @@ export function SalaryPage() {
                 allocationPercentage={allocationPercentage}
                 allocationBalance={allocationBalance}
                 ctcFullyAllocated={ctcFullyAllocated}
+                onDownloadPdf={downloadSalaryBreakdownPdf}
+                downloadingPdf={downloadingPdf}
               />
             </aside>
+          </div>
+          <div ref={salaryPdfReportRef} aria-hidden="true" className="pointer-events-none absolute -left-[10000px] top-0 w-[794px] bg-white">
+            <SalaryPdfReport
+              profile={profile}
+              companySettings={companySettings}
+              currency={currency}
+              annualCtc={ctcNumber}
+              earnings={earnings}
+              employerContributions={employerContributions}
+              deductions={deductions}
+              earningsTotal={earningsTotal}
+              employerContributionTotal={employerContributionTotal}
+              deductionsTotal={deductionsTotal}
+              ctcComponentsTotal={ctcComponentsTotal}
+              allocationPercentage={allocationPercentage}
+              allocationBalance={allocationBalance}
+              ctcFullyAllocated={ctcFullyAllocated}
+              printedAt={printedAt}
+            />
           </div>
         </form>
       ) : (
