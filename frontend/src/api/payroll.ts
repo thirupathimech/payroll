@@ -23,6 +23,8 @@ import type {
   HolidayPayload,
   EmploymentStatus,
   LeavePayload,
+  LeaveBalance,
+  LeaveBalanceUpdatePayload,
   LeaveRequest,
   LeaveStatus,
   PageResponse,
@@ -238,6 +240,14 @@ export const leaveApi = {
     });
     return data;
   },
+  balances: async (params: { employeeId?: number; year?: number }) => {
+    const { data } = await api.get<LeaveBalance[]>("/leaves/balances", { params });
+    return data;
+  },
+  updateBalances: async (employeeId: number, payload: LeaveBalanceUpdatePayload) => {
+    const { data } = await api.put<LeaveBalance[]>(`/leaves/balances/${employeeId}`, payload);
+    return data;
+  },
 };
 
 export const settingsApi = {
@@ -412,4 +422,9 @@ export const calendarOffReportApi = {
     designationId?: number;
     employeeId?: number;
   }) => (await api.get<CalendarOffReportRow[]>("/reports/calendar-off", { params })).data,
+};
+
+export const myCalendarOffApi = {
+  list: async (params: { type: CalendarOffType; from: string; to: string }) =>
+    (await api.get<CalendarOffReportRow[]>("/my-calendar-off", { params })).data,
 };

@@ -385,6 +385,31 @@ export interface LeavePayload {
     reason: string;
 }
 
+export interface LeaveBalance {
+  employeeId: number;
+  employeeCode: string;
+  employeeName: string;
+  year: number;
+  leaveType: Exclude<LeaveType, "UNPAID">;
+  allocatedMinutes: number;
+  carriedForwardMinutes: number;
+  creditedMinutes: number;
+  approvedMinutes: number;
+  pendingMinutes: number;
+  availableMinutes: number;
+}
+
+export interface LeaveBalanceAllocationPayload {
+  leaveType: Exclude<LeaveType, "UNPAID">;
+  allocatedMinutes: number;
+  carriedForwardMinutes: number;
+}
+
+export interface LeaveBalanceUpdatePayload {
+  year: number;
+  balances: LeaveBalanceAllocationPayload[];
+}
+
 export interface CompanySettings {
   id: number;
   companyName: string;

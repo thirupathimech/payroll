@@ -89,6 +89,22 @@ public class CalendarOffReportService {
                 : weekOffRows(employees, from, to);
     }
 
+    /**
+     * Returns calendar-off days for the signed-in employee only. The employee
+     * id is resolved on the server instead of being accepted from the client,
+     * so personnel users cannot request another employee's calendar.
+     */
+    @Transactional(readOnly = true)
+    public List<CalendarOffReportRow> myCalendarOff(
+            CalendarOffType type,
+            LocalDate from,
+            LocalDate to,
+            UserPrincipal principal
+    ) {
+        Employee employee = employeeAccessService.findCurrentEmployee(principal);
+        return calendarOff(type, from, to, null, null, null, employee.getId(), principal);
+    }
+
     private List<CalendarOffReportRow> holidayRows(List<Employee> employees, LocalDate from, LocalDate to) {
         Map<GroupDateKey, Holiday> holidays = new HashMap<>();
         holidayRepository.findForCalendarReport(currentOrgService.orgCode(), from, to)

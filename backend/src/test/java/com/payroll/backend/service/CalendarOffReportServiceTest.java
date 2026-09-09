@@ -28,6 +28,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class CalendarOffReportServiceTest {
@@ -78,6 +79,19 @@ class CalendarOffReportServiceTest {
                         org.assertj.core.groups.Tuple.tuple(MONDAY, "Employee weekly"),
                         org.assertj.core.groups.Tuple.tuple(MONDAY.plusDays(1), "Employee date")
                 );
+    }
+
+    @Test
+    void resolvesMyCalendarUsingTheAuthenticatedEmployeesId() {
+        Fixture fixture = new Fixture();
+        when(fixture.employeeAccessService.findCurrentEmployee(fixture.principal)).thenReturn(fixture.employee);
+
+        fixture.service.myCalendarOff(CalendarOffType.HOLIDAY, MONDAY, MONDAY, fixture.principal);
+
+        verify(fixture.employeeRepository).findCalendarReportEmployees(
+                anyString(), any(), any(), any(), any(), org.mockito.ArgumentMatchers.eq(fixture.employee.getId()),
+                any(), anyList(), anyBoolean()
+        );
     }
 
     private static WeekOffAssignment groupWeekly(Fixture fixture, DayOfWeek day) {

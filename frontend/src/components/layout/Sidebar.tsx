@@ -51,6 +51,7 @@ const personnelItems: Array<{ label: string; path: string; icon: typeof LayoutDa
   { label: "My Profile", path: "/employees", icon: UserRound },
   { label: "Apply Leave", path: "/leaves", icon: CalendarDays },
   { label: "My Shift", path: "/shift-assignments", icon: Clock3 },
+  { label: "My Holidays & Week Off", path: "/my-calendar-off", icon: CalendarOff },
 ];
 
 interface SidebarProps {

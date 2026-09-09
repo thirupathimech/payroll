@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { Check, Plus, Search, X } from "lucide-react";
+import { Check, Pencil, Plus, Search, X } from "lucide-react";
 import { getErrorMessage } from "../api/client";
 import { employeeApi, leaveApi, shiftAssignmentApi } from "../api/payroll";
 import { useAuth } from "../auth/AuthContext";
@@ -13,8 +13,18 @@ import { Modal } from "../components/ui/Modal";
 import { SearchableSelect } from "../components/ui/SearchableSelect";
 import { Textarea } from "../components/ui/Textarea";
 import { formatDate } from "../lib/format";
+import { hasRoleAccess, HR_ROLES } from "../lib/access";
 import { useDebounce } from "../hooks/useDebounce";
-import type { Employee, LeavePayload, LeaveRequest, LeaveStatus, LeaveType, PageResponse } from "../types";
+import type {
+  Employee,
+  LeaveBalance,
+  LeaveBalanceAllocationPayload,
+  LeavePayload,
+  LeaveRequest,
+  LeaveStatus,
+  LeaveType,
+  PageResponse,
+} from "../types";
 
 const emptyPage: PageResponse<LeaveRequest> = {
   content: [],
@@ -26,12 +36,30 @@ const emptyPage: PageResponse<LeaveRequest> = {
 };
 
 const leaveTypes: LeaveType[] = ["ANNUAL", "SICK", "CASUAL", "MATERNITY", "PATERNITY", "UNPAID"];
+const trackedLeaveTypes: Exclude<LeaveType, "UNPAID">[] = ["ANNUAL", "SICK", "CASUAL", "MATERNITY", "PATERNITY"];
 const leaveStatuses: LeaveStatus[] = ["PENDING", "APPROVED", "REJECTED", "CANCELLED"];
 
+interface BalanceDraft {
+  leaveType: Exclude<LeaveType, "UNPAID">;
+  allocatedHours: string;
+  carriedForwardHours: string;
+}
+
 function formatLeaveHours(minutes: number) {
-  const hours = Math.floor(minutes / 60);
-  const remainingMinutes = minutes % 60;
-  return `${hours}h ${String(remainingMinutes).padStart(2, "0")}m`;
+  const absoluteMinutes = Math.abs(minutes);
+  const hours = Math.floor(absoluteMinutes / 60);
+  const remainingMinutes = absoluteMinutes % 60;
+  return `${minutes < 0 ? "-" : ""}${hours}h ${String(remainingMinutes).padStart(2, "0")}m`;
+}
+
+function minutesToHours(minutes: number) {
+  const hours = minutes / 60;
+  return Number.isInteger(hours) ? String(hours) : String(Number(hours.toFixed(2)));
+}
+
+function hoursToMinutes(hours: string) {
+  const value = Number(hours);
+  return Number.isFinite(value) && value >= 0 ? Math.round(value * 60) : null;
 }
 
 const initialForm: LeavePayload = {
@@ -45,8 +73,9 @@ const initialForm: LeavePayload = {
 };
 
 export function LeavePage() {
-  const { viewMode } = useAuth();
+  const { viewMode, user } = useAuth();
   const isPersonnelMode = viewMode === "personnel";
+  const canManageBalances = !isPersonnelMode && hasRoleAccess(user, HR_ROLES);
   const [leaves, setLeaves] = useState(emptyPage);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [search, setSearch] = useState("");
@@ -61,6 +90,15 @@ export function LeavePage() {
   const [decisionComment, setDecisionComment] = useState("");
   const [decisionError, setDecisionError] = useState("");
   const [decisionLoading, setDecisionLoading] = useState(false);
+  const [balanceYear, setBalanceYear] = useState(new Date().getFullYear());
+  const [selectedBalanceEmployeeCode, setSelectedBalanceEmployeeCode] = useState("");
+  const [balances, setBalances] = useState<LeaveBalance[]>([]);
+  const [balanceLoading, setBalanceLoading] = useState(false);
+  const [balanceError, setBalanceError] = useState("");
+  const [balanceModalOpen, setBalanceModalOpen] = useState(false);
+  const [balanceDraft, setBalanceDraft] = useState<BalanceDraft[]>([]);
+  const [balanceSaveError, setBalanceSaveError] = useState("");
+  const [balanceSaving, setBalanceSaving] = useState(false);
   const debouncedSearch = useDebounce(search);
 
   useEffect(() => {
@@ -72,8 +110,33 @@ export function LeavePage() {
       setEmployees(employeeItems);
       setForm((current) => ({ ...current, employeeId: current.employeeId || employeeItems[0]?.id || 0 }));
       setSelectedEmployeeCode((current) => current || employeeItems[0]?.employeeCode || "");
+      setSelectedBalanceEmployeeCode((current) => current || employeeItems[0]?.employeeCode || "");
     });
   }, [isPersonnelMode]);
+
+  const selectedBalanceEmployee = employees.find((employee) => employee.employeeCode === selectedBalanceEmployeeCode);
+
+  const loadBalances = useCallback(() => {
+    if (!selectedBalanceEmployee) {
+      setBalances([]);
+      setBalanceError("");
+      return Promise.resolve();
+    }
+    setBalanceLoading(true);
+    setBalanceError("");
+    return leaveApi
+      .balances({ employeeId: selectedBalanceEmployee.id, year: balanceYear })
+      .then(setBalances)
+      .catch((apiError) => {
+        setBalances([]);
+        setBalanceError(getErrorMessage(apiError));
+      })
+      .finally(() => setBalanceLoading(false));
+  }, [balanceYear, selectedBalanceEmployee]);
+
+  useEffect(() => {
+    loadBalances();
+  }, [loadBalances]);
 
   useEffect(() => {
     if (!form.employeeId || !form.startDate || !form.endDate || new Date(form.endDate) < new Date(form.startDate)) {
@@ -152,6 +215,7 @@ export function LeavePage() {
       await leaveApi.create(form);
       setModalOpen(false);
       loadLeaves();
+      loadBalances();
     } catch (apiError) {
       setError(getErrorMessage(apiError));
     }
@@ -171,10 +235,61 @@ export function LeavePage() {
       await leaveApi.decide(decision.leave.id, decision.status, decisionComment.trim());
       setDecision(null);
       loadLeaves();
+      loadBalances();
     } catch (apiError) {
       setDecisionError(getErrorMessage(apiError));
     } finally {
       setDecisionLoading(false);
+    }
+  }
+
+  function openBalanceEditor() {
+    setBalanceDraft(trackedLeaveTypes.map((leaveType) => {
+      const balance = balances.find((item) => item.leaveType === leaveType);
+      return {
+        leaveType,
+        allocatedHours: minutesToHours(balance?.allocatedMinutes || 0),
+        carriedForwardHours: minutesToHours(balance?.carriedForwardMinutes || 0),
+      };
+    }));
+    setBalanceSaveError("");
+    setBalanceModalOpen(true);
+  }
+
+  function updateBalanceDraft(leaveType: BalanceDraft["leaveType"], field: "allocatedHours" | "carriedForwardHours", value: string) {
+    setBalanceDraft((current) => current.map((balance) => (
+      balance.leaveType === leaveType ? { ...balance, [field]: value } : balance
+    )));
+  }
+
+  async function saveBalances(event: FormEvent) {
+    event.preventDefault();
+    if (!selectedBalanceEmployee) return;
+
+    const balancePayload: LeaveBalanceAllocationPayload[] = [];
+    for (const balance of balanceDraft) {
+      const allocatedMinutes = hoursToMinutes(balance.allocatedHours);
+      const carriedForwardMinutes = hoursToMinutes(balance.carriedForwardHours);
+      if (allocatedMinutes === null || carriedForwardMinutes === null) {
+        setBalanceSaveError("Enter zero or a positive number of hours for every leave type.");
+        return;
+      }
+      balancePayload.push({ leaveType: balance.leaveType, allocatedMinutes, carriedForwardMinutes });
+    }
+
+    setBalanceSaving(true);
+    setBalanceSaveError("");
+    try {
+      const updatedBalances = await leaveApi.updateBalances(selectedBalanceEmployee.id, {
+        year: balanceYear,
+        balances: balancePayload,
+      });
+      setBalances(updatedBalances);
+      setBalanceModalOpen(false);
+    } catch (apiError) {
+      setBalanceSaveError(getErrorMessage(apiError));
+    } finally {
+      setBalanceSaving(false);
     }
   }
 
@@ -247,10 +362,18 @@ export function LeavePage() {
               {isPersonnelMode ? "Apply Leave" : "Leave Management"}
             </h2>
           </div>
-          <Button type="button" onClick={openCreate}>
-            <Plus size={18} />
-            New Leave Request
-          </Button>
+          <div className="flex flex-wrap gap-3">
+            {canManageBalances && (
+              <Button type="button" variant="secondary" onClick={openBalanceEditor} disabled={!selectedBalanceEmployee}>
+                <Pencil size={17} />
+                Edit Leave Balances
+              </Button>
+            )}
+            <Button type="button" onClick={openCreate}>
+              <Plus size={18} />
+              New Leave Request
+            </Button>
+          </div>
         </div>
 
         <div className={`mt-6 grid gap-3 ${isPersonnelMode ? "md:grid-cols-[220px]" : "md:grid-cols-[1fr_220px]"}`}>
@@ -279,6 +402,60 @@ export function LeavePage() {
             }}
           />
         </div>
+      </Card>
+
+      <Card>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="text-sm font-bold uppercase tracking-[0.18em] text-fern">Leave Balance</p>
+            <h3 className="mt-2 font-display text-2xl font-extrabold text-ink">{balanceYear} time-off summary</h3>
+            <p className="mt-2 text-sm text-ink/60">Available balance reserves both approved and pending paid leave. Unpaid leave is not tracked.</p>
+          </div>
+          <div className={`grid gap-3 ${isPersonnelMode ? "sm:grid-cols-[160px]" : "sm:grid-cols-[minmax(220px,1fr)_160px]"}`}>
+            {!isPersonnelMode && (
+              <EmployeeAutocomplete
+                label="Employee"
+                value={selectedBalanceEmployeeCode}
+                employees={employees}
+                onChange={setSelectedBalanceEmployeeCode}
+              />
+            )}
+            <Input
+              label="Leave year"
+              type="number"
+              min="2000"
+              max="2100"
+              value={balanceYear}
+              onChange={(event) => setBalanceYear(Number(event.target.value) || new Date().getFullYear())}
+            />
+          </div>
+        </div>
+
+        {balanceError && <p className="mt-5 rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{balanceError}</p>}
+        {balanceLoading ? (
+          <p className="mt-6 text-sm font-semibold text-ink/55">Loading leave balances...</p>
+        ) : (
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            {balances.map((balance) => (
+              <div key={balance.leaveType} className="rounded-2xl border border-line bg-mist/45 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-ink/55">{balance.leaveType}</p>
+                  <p className={balance.availableMinutes < 0 ? "text-sm font-extrabold text-red-700" : "text-sm font-extrabold text-fern"}>
+                    {formatLeaveHours(balance.availableMinutes)}
+                  </p>
+                </div>
+                <p className="mt-4 text-xs text-ink/50">Available</p>
+                <dl className="mt-3 space-y-1.5 text-xs text-ink/65">
+                  <div className="flex justify-between gap-3"><dt>Allocated</dt><dd className="font-semibold text-ink">{formatLeaveHours(balance.allocatedMinutes)}</dd></div>
+                  <div className="flex justify-between gap-3"><dt>Carry-forward</dt><dd className="font-semibold text-ink">{formatLeaveHours(balance.carriedForwardMinutes)}</dd></div>
+                  <div className="flex justify-between gap-3"><dt>Approved</dt><dd className="font-semibold text-ink">{formatLeaveHours(balance.approvedMinutes)}</dd></div>
+                  <div className="flex justify-between gap-3"><dt>Pending</dt><dd className="font-semibold text-ink">{formatLeaveHours(balance.pendingMinutes)}</dd></div>
+                </dl>
+              </div>
+            ))}
+            {!balances.length && !balanceError && <p className="text-sm text-ink/55">Choose an employee to view leave balances.</p>}
+          </div>
+        )}
       </Card>
 
       <DataTable
@@ -333,6 +510,37 @@ export function LeavePage() {
               Cancel
             </Button>
             <Button type="submit">Submit request</Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        open={balanceModalOpen}
+        onClose={() => !balanceSaving && setBalanceModalOpen(false)}
+        title={`Edit leave balances for ${selectedBalanceEmployee?.fullName || "employee"}`}
+        description={`Set paid leave credits in hours for ${balanceYear}. Pending and approved leave are calculated automatically.`}
+      >
+        <form onSubmit={saveBalances} className="space-y-4">
+          <div className="overflow-x-auto rounded-2xl border border-line">
+            <table className="w-full min-w-[620px] text-left text-sm">
+              <thead className="border-b border-line bg-mist/60 text-xs uppercase tracking-[0.12em] text-ink/55">
+                <tr><th className="px-4 py-3">Leave type</th><th className="px-4 py-3">Allocated hours</th><th className="px-4 py-3">Carry-forward hours</th></tr>
+              </thead>
+              <tbody>
+                {balanceDraft.map((balance) => (
+                  <tr key={balance.leaveType} className="border-b border-line last:border-0">
+                    <td className="px-4 py-3 font-bold text-ink">{balance.leaveType}</td>
+                    <td className="px-4 py-3"><Input aria-label={`${balance.leaveType} allocated hours`} type="number" min="0" step="0.01" value={balance.allocatedHours} onChange={(event) => updateBalanceDraft(balance.leaveType, "allocatedHours", event.target.value)} /></td>
+                    <td className="px-4 py-3"><Input aria-label={`${balance.leaveType} carry-forward hours`} type="number" min="0" step="0.01" value={balance.carriedForwardHours} onChange={(event) => updateBalanceDraft(balance.leaveType, "carriedForwardHours", event.target.value)} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {balanceSaveError && <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{balanceSaveError}</p>}
+          <div className="flex justify-end gap-3">
+            <Button type="button" variant="secondary" onClick={() => setBalanceModalOpen(false)} disabled={balanceSaving}>Cancel</Button>
+            <Button type="submit" disabled={balanceSaving}>{balanceSaving ? "Saving..." : "Save balances"}</Button>
           </div>
         </form>
       </Modal>

@@ -29,6 +29,13 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long
             LocalDate startDate
     );
 
+    List<LeaveRequest> findByOrgCodeAndEmployeeIdAndStartDateLessThanEqualAndEndDateGreaterThanEqual(
+            String orgCode,
+            Long employeeId,
+            LocalDate endDate,
+            LocalDate startDate
+    );
+
     @Query("""
         select l from LeaveRequest l
         join l.employee e

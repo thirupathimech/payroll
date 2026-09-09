@@ -126,6 +126,8 @@ Leaves:
 
 - `GET /api/v1/leaves`
 - `GET /api/v1/leaves/{id}`
+- `GET /api/v1/leaves/balances?employeeId={id}&year={year}`
+- `PUT /api/v1/leaves/balances/{employeeId}` (admin/HR)
 - `POST /api/v1/leaves`
 - `PATCH /api/v1/leaves/{id}/decision`
 
