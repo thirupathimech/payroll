@@ -544,6 +544,25 @@ export interface ShiftAssignmentPayload {
   overrideExisting: boolean;
 }
 
+export interface ShiftAssignmentUploadRowPayload {
+  employeeCode: string;
+  shiftCode: string;
+  startDate: string;
+  endDate: string;
+}
+
+export interface ShiftAssignmentBulkUploadPayload {
+  overrideExisting: boolean;
+  assignments: ShiftAssignmentUploadRowPayload[];
+}
+
+export interface ShiftAssignmentBulkUploadResponse {
+  uploadedRows: number;
+  savedAssignments: number;
+  replacedAssignments: number;
+  assignments: ShiftAssignment[];
+}
+
 export interface WeekOffAssignment {
   id: number;
   type: WeekOffAssignmentType;

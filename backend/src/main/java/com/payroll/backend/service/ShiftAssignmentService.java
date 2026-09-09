@@ -3,6 +3,9 @@ package com.payroll.backend.service;
 import com.payroll.backend.domain.Employee;
 import com.payroll.backend.domain.Shift;
 import com.payroll.backend.domain.ShiftAssignment;
+import com.payroll.backend.dto.shift.ShiftAssignmentBulkUploadRequest;
+import com.payroll.backend.dto.shift.ShiftAssignmentBulkUploadResponse;
+import com.payroll.backend.dto.shift.ShiftAssignmentBulkUploadRowRequest;
 import com.payroll.backend.dto.shift.ShiftAssignmentRequest;
 import com.payroll.backend.dto.shift.ShiftAssignmentResponse;
 import com.payroll.backend.exception.BadRequestException;
@@ -17,7 +20,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -108,6 +114,90 @@ public class ShiftAssignmentService {
         return saved.stream().map(this::toResponse).toList();
     }
 
+    /**
+     * Saves a spreadsheet batch atomically. Validation and conflict detection happen before any
+     * existing assignment is deleted, so an upload can never leave a partially changed schedule.
+    */
+    @Transactional
+    public ShiftAssignmentBulkUploadResponse bulkCreate(ShiftAssignmentBulkUploadRequest request, UserPrincipal principal) {
+        String orgCode = currentOrgService.orgCode();
+        Map<Long, PreparedUploadRow> rowsByEmployeeId = new LinkedHashMap<>();
+        for (ShiftAssignmentBulkUploadRowRequest row : request.assignments()) {
+            if (row.endDate().isBefore(row.startDate())) {
+                throw new BadRequestException("To Date cannot be before From Date for Employee Code " + row.employeeCode().trim());
+            }
+            if (row.endDate().isAfter(row.startDate().plusDays(365))) {
+                throw new BadRequestException("A shift upload row can cover a maximum of 366 days");
+            }
+            String employeeCode = row.employeeCode().trim();
+            String shiftCode = row.shiftCode().trim();
+            Employee employee = employeeRepository.findByOrgCodeAndEmployeeCodeIgnoreCase(orgCode, employeeCode)
+                    .orElseThrow(() -> new BadRequestException("Employee Code " + employeeCode + " was not found"));
+            employeeAccessService.assertCanAccessEmployee(principal, employee);
+            Shift shift = shiftRepository.findByOrgCodeAndCodeIgnoreCase(orgCode, shiftCode)
+                    .filter(Shift::isActive)
+                    .orElseThrow(() -> new BadRequestException("Active Shift Code " + shiftCode + " was not found"));
+
+            List<LocalDate> dates = datesBetween(row.startDate(), row.endDate());
+            if (rowsByEmployeeId.putIfAbsent(employee.getId(), new PreparedUploadRow(employee, shift, dates)) != null) {
+                throw new BadRequestException("Employee Code " + employee.getEmployeeCode() + " appears more than once in the upload");
+            }
+        }
+
+        List<ShiftAssignment> existing = rowsByEmployeeId.values().stream()
+                .flatMap(row -> shiftAssignmentRepository.findByOrgCodeAndEmployeeIdAndAssignmentDateIn(
+                        orgCode,
+                        row.employee().getId(),
+                        row.dates()
+                ).stream())
+                .toList();
+        if (!existing.isEmpty() && !request.overrideExisting()) {
+            String employeesWithConflicts = existing.stream()
+                    .map(assignment -> assignment.getEmployee().getEmployeeCode())
+                    .distinct()
+                    .limit(5)
+                    .collect(Collectors.joining(", "));
+            String suffix = existing.stream().map(assignment -> assignment.getEmployee().getId()).distinct().count() > 5 ? ", and others" : "";
+            Map<String, String> conflictErrors = new LinkedHashMap<>();
+            existing.stream()
+                    .map(assignment -> assignment.getEmployee().getEmployeeCode())
+                    .distinct()
+                    .forEach(employeeCode -> conflictErrors.put(
+                            "employeeCode:" + employeeCode.toUpperCase(),
+                            "Existing shift assignment found for one or more selected dates. Enable overwrite to replace it."
+                    ));
+            throw new BadRequestException(
+                    "Existing shift assignments found for " + employeesWithConflicts + suffix
+                            + ". Enable overwrite to replace them; no assignments were saved.",
+                    conflictErrors
+            );
+        }
+
+        if (!existing.isEmpty()) {
+            shiftAssignmentRepository.deleteAll(existing);
+            shiftAssignmentRepository.flush();
+        }
+
+        List<ShiftAssignment> saved = new ArrayList<>();
+        for (PreparedUploadRow row : rowsByEmployeeId.values()) {
+            for (LocalDate date : row.dates()) {
+                ShiftAssignment assignment = new ShiftAssignment();
+                assignment.setOrgCode(orgCode);
+                assignment.setEmployee(row.employee());
+                assignment.setShift(row.shift());
+                assignment.setAssignmentDate(date);
+                saved.add(shiftAssignmentRepository.save(assignment));
+            }
+        }
+        auditService.log("SHIFT_ASSIGNMENT_BULK_UPLOADED", "ShiftAssignment", null, "rows=" + rowsByEmployeeId.size());
+        return new ShiftAssignmentBulkUploadResponse(
+                rowsByEmployeeId.size(),
+                saved.size(),
+                existing.size(),
+                saved.stream().map(this::toResponse).toList()
+        );
+    }
+
     @Transactional
     public void delete(Long id, UserPrincipal principal) {
         ShiftAssignment assignment = shiftAssignmentRepository.findByOrgCodeAndId(currentOrgService.orgCode(), id)
@@ -160,5 +250,8 @@ public class ShiftAssignmentService {
                 assignment.getCreatedAt(),
                 assignment.getUpdatedAt()
         );
+    }
+
+    private record PreparedUploadRow(Employee employee, Shift shift, List<LocalDate> dates) {
     }
 }

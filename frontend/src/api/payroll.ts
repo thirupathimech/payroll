@@ -30,6 +30,8 @@ import type {
   PageResponse,
   Shift,
   ShiftAssignment,
+  ShiftAssignmentBulkUploadPayload,
+  ShiftAssignmentBulkUploadResponse,
   ShiftAssignmentPayload,
   ShiftPayload,
   UserSummary,
@@ -350,6 +352,10 @@ export const shiftAssignmentApi = {
   },
   create: async (payload: ShiftAssignmentPayload) => {
     const { data } = await api.post<ShiftAssignment[]>("/shift-assignments", payload);
+    return data;
+  },
+  bulkCreate: async (payload: ShiftAssignmentBulkUploadPayload) => {
+    const { data } = await api.post<ShiftAssignmentBulkUploadResponse>("/shift-assignments/bulk", payload);
     return data;
   },
   delete: async (id: number) => {

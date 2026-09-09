@@ -1,6 +1,8 @@
 package com.payroll.backend.controller;
 
 import com.payroll.backend.dto.common.MessageResponse;
+import com.payroll.backend.dto.shift.ShiftAssignmentBulkUploadRequest;
+import com.payroll.backend.dto.shift.ShiftAssignmentBulkUploadResponse;
 import com.payroll.backend.dto.shift.ShiftAssignmentRequest;
 import com.payroll.backend.dto.shift.ShiftAssignmentResponse;
 import com.payroll.backend.security.UserPrincipal;
@@ -45,6 +47,15 @@ public class ShiftAssignmentController {
             @AuthenticationPrincipal UserPrincipal principal
     ) {
         return shiftAssignmentService.create(request, principal);
+    }
+
+    @PostMapping("/bulk")
+    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER','LEAD')")
+    public ShiftAssignmentBulkUploadResponse bulkCreate(
+            @Valid @RequestBody ShiftAssignmentBulkUploadRequest request,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return shiftAssignmentService.bulkCreate(request, principal);
     }
 
     @DeleteMapping("/{id}")
