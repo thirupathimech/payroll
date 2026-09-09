@@ -160,7 +160,12 @@ public class SalaryService {
         return employee;
     }
 
-    private void ensureDefaultComponents() {
+    /**
+     * Makes the standard component catalog available before a salary structure
+     * or payroll run is calculated. This is idempotent for every organization.
+     */
+    @Transactional
+    public void ensureDefaultComponents() {
         String orgCode = currentOrgService.orgCode();
         if (!salaryComponentRepository.findByOrgCodeOrderByCategoryAscNameAsc(orgCode).isEmpty()) {
             ensureEmployerContributionDefaults(orgCode);

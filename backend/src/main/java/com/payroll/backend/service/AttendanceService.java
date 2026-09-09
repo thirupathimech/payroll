@@ -31,6 +31,7 @@ public class AttendanceService {
     private final CurrentOrgService currentOrgService;
     private final AuditService auditService;
     private final EmployeeAccessService employeeAccessService;
+    private final PayrollLockService payrollLockService;
 
     @Transactional(readOnly = true)
     public AttendanceSettingsResponse getSettings() {
@@ -69,6 +70,10 @@ public class AttendanceService {
         LocalTime now = LocalTime.now().withSecond(0).withNano(0);
 
         validatePunchTimes(request, attendanceDate, clockInDate, clockOutDate, today, now);
+        payrollLockService.assertUnlocked(
+                attendanceDate.isBefore(clockInDate) ? attendanceDate : clockInDate,
+                attendanceDate.isAfter(clockOutDate) ? attendanceDate : clockOutDate
+        );
 
         Employee employee = findEmployee(request.employeeId());
         employeeAccessService.assertCanAccessEmployee(principal, employee);

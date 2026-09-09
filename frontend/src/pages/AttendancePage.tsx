@@ -90,6 +90,12 @@ interface UploadAttendanceRow {
   errors: string[];
 }
 
+interface OpenUploadPunch {
+  employeeId: number;
+  date: string;
+  time: string;
+}
+
 export function AttendancePage() {
   const [settings, setSettings] = useState<AttendanceSettings>({ attendanceMode: "MANUAL", biometricEnabled: false });
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -270,7 +276,6 @@ export function AttendancePage() {
       if (!sourceRows.length) return setError("The upload file has no data rows.");
       const allowedEmployees = new Map(employees.map((employee) => [employee.employeeCode.trim().toUpperCase(), employee]));
       const preview: UploadAttendanceRow[] = [];
-      const stagedOpen = new Map<number, { date: string; time: string }>();
       for (let index = 0; index < sourceRows.length; index += 1) {
         const [rawCode = "", rawDate = "", rawTime = "", rawType = ""] = sourceRows[index];
         const employeeCode = rawCode.trim();
@@ -290,32 +295,51 @@ export function AttendancePage() {
         if (!punchTime || !isTime(punchTime)) row.errors.push("Punch time must be HH:mm.");
         if (type !== "IN" && type !== "OUT") row.errors.push("Type must be IN or OUT.");
 
-        if (!row.errors.length && row.employeeId) {
-          const staged = stagedOpen.get(row.employeeId);
-          if (type === "IN") {
-            const records = await attendanceApi.list(punchDate, punchDate);
-            const current = records.find((record) => record.employeeId === row.employeeId && record.date === punchDate);
-            if (current?.clockIn) row.errors.push("IN punch already exists for this date.");
-            else if (staged) row.errors.push("Another open IN punch exists in this upload.");
-            else stagedOpen.set(row.employeeId, { date: punchDate, time: punchTime });
-          } else {
-            const records = await attendanceApi.list(shiftDate(punchDate, -7), punchDate);
-            const current = staged && staged.date <= punchDate
-              ? undefined
-              : records.find((record) => record.employeeId === row.employeeId && Boolean(record.clockIn && !record.clockOut));
-            if (staged && staged.date <= punchDate) {
-              row.recordDate = staged.date;
-              if (staged.date === punchDate && punchTime <= staged.time) row.errors.push("OUT time must be after IN time.");
-              stagedOpen.delete(row.employeeId);
-            } else if (!current?.clockIn) row.errors.push("No open IN punch was found for this employee.");
-            else {
-              row.recordDate = current.date;
-              if (current.clockInDate === punchDate && current.clockIn && punchTime <= current.clockIn) row.errors.push("OUT time must be after IN time.");
-            }
-          }
-        }
         preview.push(row);
       }
+
+      const validRows = preview.filter((row) => !row.errors.length && row.employeeId);
+      if (validRows.length) {
+        const punchDates = validRows.map((row) => row.punchDate).sort();
+        const records = await attendanceApi.list(shiftDate(punchDates[0], -7), punchDates[punchDates.length - 1]);
+        const uploadedInKeys = new Set<string>();
+        const openPunches: OpenUploadPunch[] = records
+          .filter((record) => record.clockIn && !record.clockOut)
+          .map((record) => ({
+            employeeId: record.employeeId,
+            date: record.clockInDate || record.date,
+            time: timeOnly(record.clockIn || ""),
+          }));
+
+        for (const row of validRows.filter((candidate) => candidate.type === "IN")) {
+          const key = `${row.employeeId}:${row.punchDate}`;
+          const existing = records.find((record) => record.employeeId === row.employeeId && record.date === row.punchDate);
+          if (existing?.clockIn) row.errors.push("IN punch already exists for this date.");
+          else if (uploadedInKeys.has(key)) row.errors.push("IN punch already exists in this upload for this date.");
+          else {
+            uploadedInKeys.add(key);
+            openPunches.push({ employeeId: row.employeeId!, date: row.punchDate, time: row.punchTime });
+          }
+        }
+
+        for (const row of validRows.filter((candidate) => candidate.type === "OUT")) {
+          const matchingPunches = openPunches
+            .map((punch, index) => ({ punch, index }))
+            .filter(({ punch }) => punch.employeeId === row.employeeId
+              && (punch.date < row.punchDate || (punch.date === row.punchDate && row.punchTime > punch.time)))
+            .sort(({ punch: left }, { punch: right }) => right.date.localeCompare(left.date) || right.time.localeCompare(left.time));
+          const match = matchingPunches[0];
+
+          if (match) {
+            row.recordDate = match.punch.date;
+            openPunches.splice(match.index, 1);
+          } else {
+            const sameDayIn = openPunches.some((punch) => punch.employeeId === row.employeeId && punch.date === row.punchDate);
+            row.errors.push(sameDayIn ? "OUT time must be after IN time." : "No open IN punch was found for this employee.");
+          }
+        }
+      }
+
       setUploadRows(preview);
       if (!preview.some((row) => row.errors.length)) setMessage(`${preview.length} row(s) validated. Review and save the upload.`);
     } catch (apiError) {
@@ -331,20 +355,31 @@ export function AttendancePage() {
     setSavingUpload(true);
     setError("");
     try {
-      for (const row of uploadRows) {
+      const inRows = uploadRows.filter((row) => row.type === "IN");
+      const outRows = uploadRows.filter((row) => row.type === "OUT");
+      for (const row of inRows) {
         if (!row.employeeId) throw new Error(`Employee is missing on line ${row.line}.`);
-        const records = await attendanceApi.list(row.type === "OUT" ? shiftDate(row.punchDate, -7) : row.punchDate, row.punchDate);
-        const current = row.type === "OUT"
-          ? records.find((record) => record.employeeId === row.employeeId && Boolean(record.clockIn && !record.clockOut))
-          : records.find((record) => record.employeeId === row.employeeId && record.date === row.punchDate);
-        if (row.type === "OUT" && !current?.clockIn) throw new Error(`No open IN punch was found on line ${row.line}.`);
         await attendanceApi.save({
           employeeId: row.employeeId,
-          date: row.type === "OUT" ? current?.date || row.recordDate || row.punchDate : row.punchDate,
-          clockInDate: row.type === "OUT" ? current?.clockInDate || current?.date : row.punchDate,
-          clockOutDate: row.type === "OUT" ? row.punchDate : current?.clockOutDate,
-          clockIn: row.type === "OUT" ? current?.clockIn : row.punchTime,
-          clockOut: row.type === "OUT" ? row.punchTime : current?.clockOut,
+          date: row.punchDate,
+          clockInDate: row.punchDate,
+          clockIn: row.punchTime,
+          source: "PUNCH",
+        });
+      }
+      for (const row of outRows) {
+        if (!row.employeeId) throw new Error(`Employee is missing on line ${row.line}.`);
+        if (!row.recordDate) throw new Error(`No matching IN punch was found on line ${row.line}.`);
+        const records = await attendanceApi.list(row.recordDate, row.recordDate);
+        const current = records.find((record) => record.employeeId === row.employeeId && record.date === row.recordDate);
+        if (!current?.clockIn || current.clockOut) throw new Error(`No open IN punch was found on line ${row.line}.`);
+        await attendanceApi.save({
+          employeeId: row.employeeId,
+          date: current.date,
+          clockInDate: current.clockInDate || current.date,
+          clockOutDate: row.punchDate,
+          clockIn: current.clockIn,
+          clockOut: row.punchTime,
           source: "PUNCH",
         });
       }

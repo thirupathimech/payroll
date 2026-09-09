@@ -45,6 +45,11 @@ interface BalanceDraft {
   carriedForwardHours: string;
 }
 
+interface LeaveShiftStatus {
+  loading: boolean;
+  error: string;
+}
+
 function formatLeaveHours(minutes: number) {
   const absoluteMinutes = Math.abs(minutes);
   const hours = Math.floor(absoluteMinutes / 60);
@@ -60,6 +65,17 @@ function minutesToHours(minutes: number) {
 function hoursToMinutes(hours: string) {
   const value = Number(hours);
   return Number.isFinite(value) && value >= 0 ? Math.round(value * 60) : null;
+}
+
+function datesBetween(startDate: string, endDate: string) {
+  const dates: string[] = [];
+  const current = new Date(`${startDate}T00:00:00`);
+  const end = new Date(`${endDate}T00:00:00`);
+  while (current <= end) {
+    dates.push(`${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, "0")}-${String(current.getDate()).padStart(2, "0")}`);
+    current.setDate(current.getDate() + 1);
+  }
+  return dates;
 }
 
 const initialForm: LeavePayload = {
@@ -86,6 +102,7 @@ export function LeavePage() {
   const [form, setForm] = useState<LeavePayload>(initialForm);
   const [selectedEmployeeCode, setSelectedEmployeeCode] = useState("");
   const [error, setError] = useState("");
+  const [leaveShiftStatus, setLeaveShiftStatus] = useState<LeaveShiftStatus>({ loading: false, error: "" });
   const [decision, setDecision] = useState<{ leave: LeaveRequest; status: LeaveStatus } | null>(null);
   const [decisionComment, setDecisionComment] = useState("");
   const [decisionError, setDecisionError] = useState("");
@@ -139,15 +156,23 @@ export function LeavePage() {
   }, [loadBalances]);
 
   useEffect(() => {
-    if (!form.employeeId || !form.startDate || !form.endDate || new Date(form.endDate) < new Date(form.startDate)) {
+    if (!modalOpen || !form.employeeId || !form.startDate || !form.endDate || new Date(form.endDate) < new Date(form.startDate)) {
+      setLeaveShiftStatus({ loading: false, error: "" });
       return;
     }
+    let cancelled = false;
+    setLeaveShiftStatus({ loading: true, error: "" });
     shiftAssignmentApi.search({
       employeeId: form.employeeId,
       startDate: form.startDate,
       endDate: form.endDate,
     }).then((assignments) => {
-      if (assignments.length === 0) return;
+      if (cancelled) return;
+      const missingDate = datesBetween(form.startDate, form.endDate).find((date) => !assignments.some((assignment) => assignment.date === date));
+      if (missingDate) {
+        setLeaveShiftStatus({ loading: false, error: `No shift is assigned on ${missingDate}. Leave can only be applied on assigned shift dates.` });
+        return;
+      }
       const first = assignments[0];
       const last = assignments[assignments.length - 1];
       const [hours, minutes] = last.startTime.slice(0, 5).split(":").map(Number);
@@ -159,8 +184,14 @@ export function LeavePage() {
         startTime: first.startTime.slice(0, 5),
         endTime: `${endHour}:${endMinute}`,
       }));
-    }).catch(() => undefined);
-  }, [form.employeeId, form.startDate, form.endDate]);
+      setLeaveShiftStatus({ loading: false, error: "" });
+    }).catch(() => {
+      if (!cancelled) setLeaveShiftStatus({ loading: false, error: "Unable to confirm the employee's shift assignments. Try again." });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [form.employeeId, form.startDate, form.endDate, modalOpen]);
 
   const loadLeaves = useCallback(() => {
     if (isPersonnelMode && !employees[0]?.id) {
@@ -189,6 +220,7 @@ export function LeavePage() {
     setForm({ ...initialForm, employeeId: employees[0]?.id || 0 });
     setSelectedEmployeeCode(employees[0]?.employeeCode || "");
     setError("");
+    setLeaveShiftStatus({ loading: false, error: "" });
     setModalOpen(true);
   }
 
@@ -208,6 +240,14 @@ export function LeavePage() {
     }
     if (new Date(form.endDate) < new Date(form.startDate)) {
       setError("End date cannot be before start date.");
+      return;
+    }
+    if (leaveShiftStatus.loading) {
+      setError("Checking shift assignments. Try again in a moment.");
+      return;
+    }
+    if (leaveShiftStatus.error) {
+      setError(leaveShiftStatus.error);
       return;
     }
 
@@ -501,15 +541,17 @@ export function LeavePage() {
             <Input label="End Time" type="time" value={form.endTime} onChange={(event) => setForm({ ...form, endTime: event.target.value })} />
           </div>
           <p className="rounded-2xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
-            Leave hours are calculated for every selected date using the employee&apos;s assigned shift hours.
+            Leave can only be applied on assigned shift dates and within shift hours. Break time is excluded from leave hours.
           </p>
+          {leaveShiftStatus.loading && <p className="text-sm font-semibold text-ink/55">Checking assigned shifts...</p>}
+          {leaveShiftStatus.error && <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{leaveShiftStatus.error}</p>}
           <Textarea label="Reason" value={form.reason} onChange={(event) => setForm({ ...form, reason: event.target.value })} />
           {error && <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
           <div className="flex justify-end gap-3">
             <Button type="button" variant="secondary" onClick={() => setModalOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit">Submit request</Button>
+            <Button type="submit" disabled={leaveShiftStatus.loading || Boolean(leaveShiftStatus.error)}>Submit request</Button>
           </div>
         </form>
       </Modal>

@@ -50,6 +50,8 @@ import type {
   EmployeeSalaryResponse,
   SalaryComponent,
   SalaryComponentPayload,
+  PayrollEntry,
+  PayrollRun,
 } from "../types";
 
 export const authApi = {
@@ -435,6 +437,18 @@ export const salaryApi = {
   report: async () => (await api.get<EmployeeSalaryResponse[]>("/salary/report")).data,
   employee: async (employeeId: number) => (await api.get<EmployeeSalaryResponse>(`/salary/employees/${employeeId}`)).data,
   saveEmployee: async (employeeId: number, payload: EmployeeSalaryPayload) => (await api.put<EmployeeSalaryResponse>(`/salary/employees/${employeeId}`, payload)).data,
+};
+
+export const payrollRunApi = {
+  runs: async () => (await api.get<PayrollRun[]>("/payroll/runs")).data,
+  run: async (id: number) => (await api.get<PayrollRun>(`/payroll/runs/${id}`)).data,
+  create: async (payload: { year: number; month: number; anchorDate?: string }) => (await api.post<PayrollRun>("/payroll/runs", payload)).data,
+  recalculate: async (id: number) => (await api.post<PayrollRun>(`/payroll/runs/${id}/recalculate`)).data,
+  approve: async (id: number) => (await api.post<PayrollRun>(`/payroll/runs/${id}/approve`)).data,
+  lock: async (id: number) => (await api.post<PayrollRun>(`/payroll/runs/${id}/lock`)).data,
+  deleteDraft: async (id: number) => (await api.delete<{ message: string }>(`/payroll/runs/${id}`)).data,
+  entry: async (id: number) => (await api.get<PayrollEntry>(`/payroll/entries/${id}`)).data,
+  myPayslips: async () => (await api.get<PayrollEntry[]>("/payroll/my/payslips")).data,
 };
 
 export const calendarOffReportApi = {

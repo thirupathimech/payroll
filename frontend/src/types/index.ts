@@ -57,6 +57,7 @@ export type WeekDayName = "SUNDAY" | "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURS
 export type AttendanceMode = "MANUAL" | "PUNCHES";
 export type SalaryComponentCategory = "EARNING" | "EMPLOYER_CONTRIBUTION" | "DEDUCTION";
 export type SalaryValueType = "PERCENTAGE" | "FIXED";
+export type PayrollRunStatus = "DRAFT" | "APPROVED" | "LOCKED";
 
 export interface SalaryComponent {
   id: number;
@@ -109,6 +110,62 @@ export interface EmployeeSalaryPayload {
     value: number;
     enabled: boolean;
   }>;
+}
+
+export interface PayrollComponentLine {
+  name: string;
+  code: string;
+  category: SalaryComponentCategory;
+  amount: number;
+}
+
+export interface PayrollEntry {
+  id: number;
+  payrollRunId: number;
+  periodYear: number;
+  periodMonth: number;
+  employeeCode: string;
+  employeeName: string;
+  departmentName?: string;
+  designationTitle?: string;
+  bankAccountNumber?: string;
+  annualCtc: number;
+  periodDays: number;
+  eligibleDays: number;
+  workingDays: number;
+  attendanceDays: number;
+  paidLeaveDays: number;
+  unpaidLeaveDays: number;
+  payableDays: number;
+  grossEarnings: number;
+  totalDeductions: number;
+  employerContributions: number;
+  netPay: number;
+  componentLines: PayrollComponentLine[];
+  createdAt: string;
+}
+
+export interface PayrollRun {
+  id: number;
+  periodYear: number;
+  periodMonth: number;
+  periodStart: string;
+  periodEnd: string;
+  payrollFrequency: "WEEKLY" | "BIWEEKLY" | "MONTHLY";
+  disbursementDate?: string;
+  status: PayrollRunStatus;
+  employeeCount: number;
+  grossEarnings: number;
+  totalDeductions: number;
+  employerContributions: number;
+  netPay: number;
+  approvedBy?: string;
+  approvedAt?: string;
+  lockedBy?: string;
+  lockedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  entries: PayrollEntry[];
 }
 
 export interface PageResponse<T> {

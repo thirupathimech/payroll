@@ -1,8 +1,10 @@
 package com.payroll.backend.service;
 
 import com.payroll.backend.domain.Employee;
+import com.payroll.backend.domain.LeaveRequest;
 import com.payroll.backend.domain.Shift;
 import com.payroll.backend.domain.ShiftAssignment;
+import com.payroll.backend.domain.enums.LeaveStatus;
 import com.payroll.backend.dto.shift.ShiftAssignmentBulkUploadRequest;
 import com.payroll.backend.dto.shift.ShiftAssignmentBulkUploadResponse;
 import com.payroll.backend.dto.shift.ShiftAssignmentBulkUploadRowRequest;
@@ -11,6 +13,7 @@ import com.payroll.backend.dto.shift.ShiftAssignmentResponse;
 import com.payroll.backend.exception.BadRequestException;
 import com.payroll.backend.exception.ResourceNotFoundException;
 import com.payroll.backend.repository.EmployeeRepository;
+import com.payroll.backend.repository.LeaveRequestRepository;
 import com.payroll.backend.repository.ShiftAssignmentRepository;
 import com.payroll.backend.repository.ShiftRepository;
 import com.payroll.backend.security.UserPrincipal;
@@ -32,9 +35,11 @@ public class ShiftAssignmentService {
     private final ShiftAssignmentRepository shiftAssignmentRepository;
     private final EmployeeRepository employeeRepository;
     private final ShiftRepository shiftRepository;
+    private final LeaveRequestRepository leaveRequestRepository;
     private final CurrentOrgService currentOrgService;
     private final AuditService auditService;
     private final EmployeeAccessService employeeAccessService;
+    private final PayrollLockService payrollLockService;
 
     @Transactional(readOnly = true)
     public List<ShiftAssignmentResponse> search(Long employeeId, LocalDate startDate, LocalDate endDate, UserPrincipal principal) {
@@ -80,6 +85,7 @@ public class ShiftAssignmentService {
         if (request.endDate().isBefore(request.startDate())) {
             throw new BadRequestException("End date cannot be before start date");
         }
+        payrollLockService.assertUnlocked(request.startDate(), request.endDate());
         String orgCode = currentOrgService.orgCode();
         Employee employee = employeeRepository.findByOrgCodeAndId(orgCode, request.employeeId())
                 .orElseThrow(() -> new ResourceNotFoundException("Employee not found"));
@@ -89,6 +95,7 @@ public class ShiftAssignmentService {
                 .orElseThrow(() -> new ResourceNotFoundException("Active shift not found"));
 
         List<LocalDate> dates = datesBetween(request.startDate(), request.endDate());
+        assertNoActiveLeaveRequests(orgCode, employee, dates);
         List<ShiftAssignment> existing = shiftAssignmentRepository.findByOrgCodeAndEmployeeIdAndAssignmentDateIn(
                 orgCode,
                 employee.getId(),
@@ -129,6 +136,7 @@ public class ShiftAssignmentService {
             if (row.endDate().isAfter(row.startDate().plusDays(365))) {
                 throw new BadRequestException("A shift upload row can cover a maximum of 366 days");
             }
+            payrollLockService.assertUnlocked(row.startDate(), row.endDate());
             String employeeCode = row.employeeCode().trim();
             String shiftCode = row.shiftCode().trim();
             Employee employee = employeeRepository.findByOrgCodeAndEmployeeCodeIgnoreCase(orgCode, employeeCode)
@@ -151,6 +159,27 @@ public class ShiftAssignmentService {
                         row.dates()
                 ).stream())
                 .toList();
+        Map<String, String> leaveConflictErrors = new LinkedHashMap<>();
+        for (PreparedUploadRow row : rowsByEmployeeId.values()) {
+            if (!activeLeaveRequests(orgCode, row.employee(), row.dates()).isEmpty()) {
+                leaveConflictErrors.put(
+                        "employeeCode:" + row.employee().getEmployeeCode().toUpperCase(),
+                        "A pending or approved leave request exists for one or more selected dates. Shift assignments cannot be changed."
+                );
+            }
+        }
+        if (!leaveConflictErrors.isEmpty()) {
+            String employeesWithLeave = leaveConflictErrors.keySet().stream()
+                    .map(key -> key.substring("employeeCode:".length()))
+                    .limit(5)
+                    .collect(Collectors.joining(", "));
+            String suffix = leaveConflictErrors.size() > 5 ? ", and others" : "";
+            throw new BadRequestException(
+                    "Shift upload cannot be saved because pending or approved leave requests exist for "
+                            + employeesWithLeave + suffix + ". Cancel or reject the leave request before changing the shift.",
+                    leaveConflictErrors
+            );
+        }
         if (!existing.isEmpty() && !request.overrideExisting()) {
             String employeesWithConflicts = existing.stream()
                     .map(assignment -> assignment.getEmployee().getEmployeeCode())
@@ -203,6 +232,8 @@ public class ShiftAssignmentService {
         ShiftAssignment assignment = shiftAssignmentRepository.findByOrgCodeAndId(currentOrgService.orgCode(), id)
                 .orElseThrow(() -> new ResourceNotFoundException("Shift assignment not found"));
         employeeAccessService.assertCanAccessEmployee(principal, assignment.getEmployee());
+        payrollLockService.assertUnlocked(assignment.getAssignmentDate());
+        assertNoActiveLeaveRequests(currentOrgService.orgCode(), assignment.getEmployee(), List.of(assignment.getAssignmentDate()));
         shiftAssignmentRepository.delete(assignment);
         auditService.log("SHIFT_ASSIGNMENT_DELETED", "ShiftAssignment", assignment.getId(), assignment.getEmployee().getEmployeeCode());
     }
@@ -215,6 +246,26 @@ public class ShiftAssignmentService {
             current = current.plusDays(1);
         }
         return dates;
+    }
+
+    private void assertNoActiveLeaveRequests(String orgCode, Employee employee, List<LocalDate> dates) {
+        if (!activeLeaveRequests(orgCode, employee, dates).isEmpty()) {
+            throw new BadRequestException(
+                    "Shift assignments cannot be changed because a pending or approved leave request exists for "
+                            + employee.getEmployeeCode() + " on the selected date(s). Cancel or reject the leave request first."
+            );
+        }
+    }
+
+    private List<LeaveRequest> activeLeaveRequests(String orgCode, Employee employee, List<LocalDate> dates) {
+        return leaveRequestRepository.findByOrgCodeAndEmployeeIdAndStartDateLessThanEqualAndEndDateGreaterThanEqual(
+                        orgCode,
+                        employee.getId(),
+                        dates.get(dates.size() - 1),
+                        dates.get(0)
+                ).stream()
+                .filter(leave -> leave.getStatus() == LeaveStatus.PENDING || leave.getStatus() == LeaveStatus.APPROVED)
+                .toList();
     }
 
     private Employee findCurrentEmployee(UserPrincipal principal) {

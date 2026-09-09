@@ -39,6 +39,7 @@ public class WeekOffAssignmentService {
     private final CurrentOrgService currentOrgService;
     private final AuditService auditService;
     private final EmployeeAccessService employeeAccessService;
+    private final PayrollLockService payrollLockService;
 
     @Transactional(readOnly = true)
     public List<WeekOffAssignmentResponse> search(WeekOffAssignmentType type, Long employeeId, UserPrincipal principal) {
@@ -76,6 +77,9 @@ public class WeekOffAssignmentService {
             employeeAccessService.assertCanAccessEmployee(principal, assignment.getEmployee());
         } else if (assignment.getBranch() != null) {
             employeeAccessService.assertCanAccessBranch(principal, assignment.getBranch().getId());
+        }
+        if (assignment.getWeekOffDate() != null) {
+            payrollLockService.assertUnlocked(assignment.getWeekOffDate());
         }
         weekOffAssignmentRepository.delete(assignment);
         auditService.log("WEEK_OFF_ASSIGNMENT_DELETED", "WeekOffAssignment", assignment.getId(), assignment.getAssignmentType().name());
@@ -136,6 +140,7 @@ public class WeekOffAssignmentService {
         Employee employee = findEmployee(request.employeeId());
         employeeAccessService.assertCanAccessEmployee(principal, employee);
         Set<LocalDate> dates = requireDates(request.dates());
+        payrollLockService.assertUnlocked(dates.stream().min(LocalDate::compareTo).orElseThrow(), dates.stream().max(LocalDate::compareTo).orElseThrow());
         List<WeekOffAssignment> assignments = dates.stream()
                 .sorted()
                 .map(date -> weekOffAssignmentRepository

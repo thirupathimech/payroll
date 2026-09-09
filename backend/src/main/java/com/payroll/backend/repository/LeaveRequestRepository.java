@@ -36,6 +36,28 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long
             LocalDate startDate
     );
 
+    List<LeaveRequest> findByOrgCodeAndStatusAndStartDateLessThanEqualAndEndDateGreaterThanEqual(
+            String orgCode,
+            LeaveStatus status,
+            LocalDate endDate,
+            LocalDate startDate
+    );
+
+    @Query("""
+        select l from LeaveRequest l
+        join fetch l.employee
+        where l.orgCode = :orgCode
+          and l.status = :status
+          and l.startDate <= :periodEnd
+          and l.endDate >= :periodStart
+        """)
+    List<LeaveRequest> findApprovedOverlapping(
+            @Param("orgCode") String orgCode,
+            @Param("status") LeaveStatus status,
+            @Param("periodStart") LocalDate periodStart,
+            @Param("periodEnd") LocalDate periodEnd
+    );
+
     @Query("""
         select l from LeaveRequest l
         join l.employee e

@@ -40,6 +40,27 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
         join fetch e.designation
         left join fetch e.branch
         where e.orgCode = :orgCode
+          and e.joiningDate <= :periodEnd
+          and (
+            e.status in :currentStatuses
+            or (e.status = com.payroll.backend.domain.enums.EmploymentStatus.TERMINATED
+                and e.lastWorkingDate is not null and e.lastWorkingDate >= :periodStart)
+          )
+        order by e.firstName asc, e.lastName asc, e.id asc
+        """)
+    List<Employee> findPayrollEmployees(
+            @Param("orgCode") String orgCode,
+            @Param("currentStatuses") List<EmploymentStatus> currentStatuses,
+            @Param("periodStart") java.time.LocalDate periodStart,
+            @Param("periodEnd") java.time.LocalDate periodEnd
+    );
+
+    @Query("""
+        select e from Employee e
+        join fetch e.department
+        join fetch e.designation
+        left join fetch e.branch
+        where e.orgCode = :orgCode
           and e.status = :status
           and (:branchId is null or e.branch.id = :branchId)
           and (:departmentId is null or e.department.id = :departmentId)

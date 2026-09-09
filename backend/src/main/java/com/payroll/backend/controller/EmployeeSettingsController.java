@@ -25,7 +25,7 @@ public class EmployeeSettingsController {
     }
 
     @PutMapping
-    @PreAuthorize("hasAnyRole('ADMIN','HR')")
+    @PreAuthorize("hasRole('ADMIN')")
     public EmployeeSettingsResponse update(@Valid @RequestBody EmployeeSettingsRequest request) {
         return employeeSettingsService.update(request);
     }

@@ -44,7 +44,7 @@ public class AttendanceController {
     }
 
     @PutMapping("/settings")
-    @PreAuthorize("hasAnyRole('ADMIN','HR')")
+    @PreAuthorize("hasRole('ADMIN')")
     public AttendanceSettingsResponse update(@Valid @RequestBody AttendanceSettingsRequest request) {
         return attendanceService.updateSettings(request);
     }

@@ -32,15 +32,15 @@ Status: Complete
 
 ## Phase 4 - Payroll Processing And Compliance
 
-- Monthly payroll runs
-- Payslip generation
+- Monthly payroll runs with joining/last-working-day and approved-unpaid-leave proration
+- Payslip generation from immutable payroll snapshots
 - Payroll approval and payroll-lock workflow
-- Employee payroll history with effective-dated salary structures
+- Employee payroll history from approved or locked payroll runs
 - Tax rules by country/region
 - Statutory deductions
 - Leave balance reports
 
-Status: Planned
+Status: In progress (payroll run, payslip, approval, lock, and history complete; regional tax rules and statutory policy configuration remain planned)
 
 ## Phase 5 - Production Hardening
 
@@ -58,8 +58,7 @@ Status: Planned
 
 ## Suggested Next Work
 
-1. Add payroll run entities, calculation APIs, approval, and locking.
-2. Add payslip generation and payroll-history snapshots.
-3. Add leave balance calculations, accruals, and carry-forward rules.
-4. Add secure user invitation, password reset, and session management.
-5. Add automated backend integration tests and frontend component tests.
+1. Add country/region statutory rules and configurable attendance loss-of-pay policy.
+2. Add leave balance calculations, accruals, and carry-forward rules.
+3. Add secure user invitation, password reset, and session management.
+4. Add automated backend integration tests and frontend component tests.

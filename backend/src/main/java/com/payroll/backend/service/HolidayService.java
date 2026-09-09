@@ -23,6 +23,7 @@ public class HolidayService {
     private final CurrentOrgService currentOrgService;
     private final EmployeeAccessService employeeAccessService;
     private final AuditService auditService;
+    private final PayrollLockService payrollLockService;
 
     @Transactional(readOnly = true)
     public List<HolidayResponse> search(UserPrincipal principal) {
@@ -32,6 +33,7 @@ public class HolidayService {
 
     @Transactional
     public HolidayResponse create(HolidayRequest request, UserPrincipal principal) {
+        payrollLockService.assertUnlocked(request.date());
         Branch branch = branchRepository.findByOrgCodeAndId(currentOrgService.orgCode(), request.branchId())
                 .orElseThrow(() -> new ResourceNotFoundException("Branch not found"));
         employeeAccessService.assertCanAccessBranch(principal, branch.getId());
@@ -58,6 +60,7 @@ public class HolidayService {
         Holiday holiday = holidayRepository.findByOrgCodeAndId(currentOrgService.orgCode(), id)
                 .orElseThrow(() -> new ResourceNotFoundException("Holiday not found"));
         employeeAccessService.assertCanAccessBranch(principal, holiday.getBranch().getId());
+        payrollLockService.assertUnlocked(holiday.getHolidayDate());
         holidayRepository.delete(holiday);
         auditService.log("HOLIDAY_DELETED", "Holiday", id, holiday.getTitle());
     }

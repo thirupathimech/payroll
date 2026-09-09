@@ -630,13 +630,14 @@ export function ShiftAssignmentPage() {
       if (conflictingEmployeeCodes.size) {
         setShiftUploadRows((current) => current.map((row) => {
           if (!conflictingEmployeeCodes.has(row.employeeCode)) return row;
+          const rowError = conflictFieldErrors[`${shiftUploadConflictFieldPrefix}${row.employeeCode}`] || shiftUploadConflictMessage;
           return {
             ...row,
-            errors: row.errors.includes(shiftUploadConflictMessage) ? row.errors : [...row.errors, shiftUploadConflictMessage],
+            errors: row.errors.includes(rowError) ? row.errors : [...row.errors, rowError],
           };
         }));
         setShiftUploadMessage("");
-        setShiftUploadError("Existing assignments are marked in the upload preview. No rows were saved.");
+        setShiftUploadError(apiDetails.message);
       } else {
         setShiftUploadError(apiDetails.message);
       }

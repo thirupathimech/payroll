@@ -41,6 +41,7 @@ public class MissingPunchService {
     private final CurrentOrgService currentOrgService;
     private final EmployeeAccessService employeeAccessService;
     private final AuditService auditService;
+    private final PayrollLockService payrollLockService;
 
     @Transactional(readOnly = true)
     public PageResponse<MissingPunchResponse> search(
@@ -76,6 +77,7 @@ public class MissingPunchService {
     public MissingPunchResponse create(MissingPunchCreateRequest request, UserPrincipal principal) {
         Employee employee = employeeAccessService.findCurrentEmployee(principal);
         validateRequestedPunchTime(request.punchDate(), request.punchTime());
+        payrollLockService.assertUnlocked(request.punchDate());
         if (missingPunchRequestRepository.existsByOrgCodeAndEmployeeIdAndPunchDateAndPunchTypeAndStatusIn(
                 currentOrgService.orgCode(),
                 employee.getId(),
@@ -86,6 +88,13 @@ public class MissingPunchService {
             throw new BadRequestException("A pending or approved request already exists for this punch");
         }
         assertPunchCanBeApplied(employee, request.punchDate(), request.punchTime(), request.punchType());
+        if (request.punchType() == MissingPunchType.OUT) {
+            AttendanceRecord openAttendance = findOpenAttendance(employee, request.punchDate());
+            LocalDate clockInDate = openAttendance.getClockInDate() == null
+                    ? openAttendance.getAttendanceDate()
+                    : openAttendance.getClockInDate();
+            payrollLockService.assertUnlocked(clockInDate, request.punchDate());
+        }
 
         MissingPunchRequest missingPunchRequest = new MissingPunchRequest();
         missingPunchRequest.setOrgCode(currentOrgService.orgCode());
@@ -105,6 +114,15 @@ public class MissingPunchService {
     public MissingPunchResponse decide(Long id, MissingPunchDecisionRequest request, UserPrincipal principal) {
         MissingPunchRequest missingPunchRequest = findRequest(id);
         employeeAccessService.assertCanAccessEmployee(principal, missingPunchRequest.getEmployee());
+        payrollLockService.assertUnlocked(missingPunchRequest.getPunchDate());
+        if (missingPunchRequest.getPunchType() == MissingPunchType.OUT) {
+            AttendanceRecord openAttendance = findOpenAttendance(
+                    missingPunchRequest.getEmployee(), missingPunchRequest.getPunchDate());
+            LocalDate clockInDate = openAttendance.getClockInDate() == null
+                    ? openAttendance.getAttendanceDate()
+                    : openAttendance.getClockInDate();
+            payrollLockService.assertUnlocked(clockInDate, missingPunchRequest.getPunchDate());
+        }
         if (missingPunchRequest.getStatus() != MissingPunchStatus.PENDING) {
             throw new BadRequestException("Only pending missing punch requests can be decided");
         }

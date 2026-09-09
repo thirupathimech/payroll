@@ -2,12 +2,15 @@ package com.payroll.backend.service;
 
 import com.payroll.backend.domain.Department;
 import com.payroll.backend.domain.Employee;
+import com.payroll.backend.domain.LeaveRequest;
 import com.payroll.backend.domain.Shift;
 import com.payroll.backend.domain.ShiftAssignment;
+import com.payroll.backend.domain.enums.LeaveStatus;
 import com.payroll.backend.dto.shift.ShiftAssignmentBulkUploadRequest;
 import com.payroll.backend.dto.shift.ShiftAssignmentBulkUploadRowRequest;
 import com.payroll.backend.exception.BadRequestException;
 import com.payroll.backend.repository.EmployeeRepository;
+import com.payroll.backend.repository.LeaveRequestRepository;
 import com.payroll.backend.repository.ShiftAssignmentRepository;
 import com.payroll.backend.repository.ShiftRepository;
 import com.payroll.backend.security.UserPrincipal;
@@ -73,6 +76,26 @@ class ShiftAssignmentServiceTest {
         verify(fixture.assignmentRepository, times(2)).save(any(ShiftAssignment.class));
     }
 
+    @Test
+    void rejectsUploadOverrideWhenPendingLeaveExists() {
+        Fixture fixture = new Fixture();
+        LeaveRequest leave = new LeaveRequest();
+        leave.setStatus(LeaveStatus.PENDING);
+        leave.setStartDate(LocalDate.of(2026, 9, 10));
+        leave.setEndDate(LocalDate.of(2026, 9, 11));
+        when(fixture.leaveRequestRepository.findByOrgCodeAndEmployeeIdAndStartDateLessThanEqualAndEndDateGreaterThanEqual(
+                Fixture.ORG_CODE, fixture.employee.getId(), LocalDate.of(2026, 9, 11), LocalDate.of(2026, 9, 10)
+        )).thenReturn(List.of(leave));
+
+        assertThatThrownBy(() -> fixture.service.bulkCreate(fixture.request(true), fixture.principal))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("pending or approved leave requests")
+                .hasMessageContaining("Cancel or reject");
+
+        verify(fixture.assignmentRepository, never()).deleteAll(any());
+        verify(fixture.assignmentRepository, never()).save(any(ShiftAssignment.class));
+    }
+
     private static ShiftAssignment assignment(Employee employee, Shift shift, LocalDate date) {
         ShiftAssignment assignment = new ShiftAssignment();
         assignment.setEmployee(employee);
@@ -87,16 +110,20 @@ class ShiftAssignmentServiceTest {
         private final ShiftAssignmentRepository assignmentRepository = mock(ShiftAssignmentRepository.class);
         private final EmployeeRepository employeeRepository = mock(EmployeeRepository.class);
         private final ShiftRepository shiftRepository = mock(ShiftRepository.class);
+        private final LeaveRequestRepository leaveRequestRepository = mock(LeaveRequestRepository.class);
         private final CurrentOrgService currentOrgService = mock(CurrentOrgService.class);
         private final AuditService auditService = mock(AuditService.class);
         private final EmployeeAccessService employeeAccessService = mock(EmployeeAccessService.class);
+        private final PayrollLockService payrollLockService = mock(PayrollLockService.class);
         private final ShiftAssignmentService service = new ShiftAssignmentService(
                 assignmentRepository,
                 employeeRepository,
                 shiftRepository,
+                leaveRequestRepository,
                 currentOrgService,
                 auditService,
-                employeeAccessService
+                employeeAccessService,
+                payrollLockService
         );
         private final Employee employee = employee();
         private final Shift shift = shift();

@@ -57,6 +57,7 @@ public class LeaveService {
     private final WeekOffAssignmentRepository weekOffAssignmentRepository;
     private final WeekOffExclusionRepository weekOffExclusionRepository;
     private final ObjectMapper objectMapper;
+    private final PayrollLockService payrollLockService;
 
     private static final TypeReference<List<ShiftSegmentResponse>> SHIFT_SEGMENTS_TYPE = new TypeReference<>() { };
 
@@ -122,6 +123,7 @@ public class LeaveService {
     @Transactional
     public LeaveResponse create(LeaveCreateRequest request, UserPrincipal principal) {
         validateDates(request.startDate(), request.endDate(), request.startTime(), request.endTime());
+        payrollLockService.assertUnlocked(request.startDate(), request.endDate());
         String orgCode = currentOrgService.orgCode();
         Employee employee = isEmployee(principal)
                 ? findCurrentEmployee(principal)
@@ -161,6 +163,7 @@ public class LeaveService {
     public LeaveResponse decide(Long id, LeaveDecisionRequest request, UserPrincipal principal) {
         LeaveRequest leaveRequest = findLeave(id);
         employeeAccessService.assertCanAccessEmployee(principal, leaveRequest.getEmployee());
+        payrollLockService.assertUnlocked(leaveRequest.getStartDate(), leaveRequest.getEndDate());
         if (request.status() == LeaveStatus.PENDING) {
             throw new BadRequestException("Decision status must be APPROVED, REJECTED, or CANCELLED");
         }
@@ -193,15 +196,16 @@ public class LeaveService {
             throw new BadRequestException("No shift assigned in the selected leave dates. Leave cannot be applied.");
         }
 
-        Shift fallbackShift = assignments.get(0).getShift();
         int minutes = 0;
         for (LocalDate date = request.startDate(); !date.isAfter(request.endDate()); date = date.plusDays(1)) {
             LocalDate currentDate = date;
             ShiftAssignment assignment = assignments.stream()
                     .filter(item -> item.getAssignmentDate().equals(currentDate))
                     .findFirst()
-                    .orElse(null);
-            Shift shift = assignment == null ? fallbackShift : assignment.getShift();
+                    .orElseThrow(() -> new BadRequestException(
+                            "No shift is assigned on " + currentDate + ". Leave can only be applied on assigned shift dates."
+                    ));
+            Shift shift = assignment.getShift();
             LocalTime shiftStart = shift.getStartTime();
             LocalTime shiftEnd = shiftStart.plusHours(shift.getDurationHours())
                     .plusMinutes(shift.getDurationMinutes());
@@ -210,7 +214,11 @@ public class LeaveService {
             if (from.isBefore(shiftStart) || to.isAfter(shiftEnd) || !to.isAfter(from)) {
                 throw new BadRequestException("Leave time on " + date + " must be within shift hours (" + shiftStart + " to " + shiftEnd + ")");
             }
-            minutes += workingMinutesWithin(shift, from, to);
+            int requestedWorkingMinutes = workingMinutesWithin(shift, from, to);
+            if (requestedWorkingMinutes == 0) {
+                throw new BadRequestException("Leave time on " + date + " falls entirely within a break. Choose working shift hours.");
+            }
+            minutes += requestedWorkingMinutes;
         }
         return new LeaveCalculation(minutes);
     }

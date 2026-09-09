@@ -29,6 +29,7 @@ const navItems: Array<{ label: string; path: string; icon: typeof LayoutDashboar
   { label: "Dashboard", path: "/", icon: LayoutDashboard },
   { label: "Employees", path: "/employees", icon: Users },
   { label: "Salary", path: "/salary", icon: WalletCards, allowedRoles: HR_ROLES },
+  { label: "Payroll", path: "/payroll", icon: BadgeDollarSign, allowedRoles: HR_ROLES },
   { label: "Organization Chart", path: "/organization-hierarchy", icon: GitBranch, allowedRoles: ADMIN_ROLES },
   { label: "Users", path: "/users", icon: UserCog, allowedRoles: ADMIN_ROLES },
   { label: "Branches", path: "/branches", icon: GitBranch, allowedRoles: HR_ROLES },
@@ -44,7 +45,7 @@ const navItems: Array<{ label: string; path: string; icon: typeof LayoutDashboar
   { label: "Employee Attendance", path: "/attendance/report", icon: ClipboardList, allowedRoles: MANAGER_ROLES },
   { label: "Reports", path: "/reports", icon: FileText, allowedRoles: MANAGER_ROLES },
   { label: "Settings", path: "/settings", icon: Settings, allowedRoles: ADMIN_ROLES },
-  { label: "System Configuration", path: "/system-configuration", icon: Settings, allowedRoles: MANAGER_ROLES },
+  { label: "System Configuration", path: "/system-configuration", icon: Settings, allowedRoles: ADMIN_ROLES },
   { label: "Audit Logs", path: "/audit-logs", icon: ShieldCheck, allowedRoles: ADMIN_ROLES },
 ];
 
@@ -54,6 +55,7 @@ const personnelItems: Array<{ label: string; path: string; icon: typeof LayoutDa
   { label: "Missing Punch", path: "/missing-punch-requests", icon: Fingerprint },
   { label: "My Shift", path: "/shift-assignments", icon: Clock3 },
   { label: "My Holidays & Week Off", path: "/my-calendar-off", icon: CalendarOff },
+  { label: "My Payslips", path: "/my-payslips", icon: WalletCards },
 ];
 
 interface SidebarProps {

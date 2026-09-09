@@ -19,6 +19,7 @@ public class WeekOffExclusionService {
     private final CurrentOrgService currentOrgService;
     private final EmployeeAccessService accessService;
     private final AuditService auditService;
+    private final PayrollLockService payrollLockService;
 
     @Transactional(readOnly = true)
     public List<WeekOffExclusionResponse> search(UserPrincipal principal) {
@@ -27,6 +28,7 @@ public class WeekOffExclusionService {
 
     @Transactional
     public WeekOffExclusionResponse create(WeekOffExclusionRequest request, UserPrincipal principal) {
+        payrollLockService.assertUnlocked(request.date());
         Branch branch = branchRepository.findByOrgCodeAndId(currentOrgService.orgCode(), request.branchId()).orElseThrow(() -> new ResourceNotFoundException("Branch not found"));
         accessService.assertCanAccessBranch(principal, branch.getId());
         Department department = departmentRepository.findByOrgCodeAndId(currentOrgService.orgCode(), request.departmentId()).orElseThrow(() -> new ResourceNotFoundException("Department not found"));
@@ -40,7 +42,7 @@ public class WeekOffExclusionService {
     @Transactional
     public void delete(Long id, UserPrincipal principal) {
         WeekOffExclusion item = repository.findByOrgCodeAndId(currentOrgService.orgCode(), id).orElseThrow(() -> new ResourceNotFoundException("Week off exclusion not found"));
-        accessService.assertCanAccessBranch(principal, item.getBranch().getId()); repository.delete(item); auditService.log("WEEK_OFF_EXCLUSION_DELETED", "WeekOffExclusion", id, item.getExcludedDate().toString());
+        accessService.assertCanAccessBranch(principal, item.getBranch().getId()); payrollLockService.assertUnlocked(item.getExcludedDate()); repository.delete(item); auditService.log("WEEK_OFF_EXCLUSION_DELETED", "WeekOffExclusion", id, item.getExcludedDate().toString());
     }
 
     private WeekOffExclusionResponse response(WeekOffExclusion e) { return new WeekOffExclusionResponse(e.getId(), e.getBranch().getId(), e.getBranch().getName(), e.getDepartment().getId(), e.getDepartment().getName(), e.getDesignation().getId(), e.getDesignation().getTitle(), e.getExcludedDate(), e.getCreatedAt(), e.getUpdatedAt()); }

@@ -67,6 +67,7 @@ payroll/
 - Holiday, week-off, and week-off exclusion management
 - Shift-aware leave management with approval flow
 - Salary components and employee CTC structures
+- Monthly payroll runs with proration, approval, locking, immutable payslips, and employee payroll history
 - Calendar-off, shift-assignment, attendance-punch, and salary reports with CSV/XLSX/PDF export
 - Company and employee-code settings
 - Dashboard summaries
