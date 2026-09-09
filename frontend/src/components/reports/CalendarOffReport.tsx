@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Download, RefreshCw } from "lucide-react";
+import { CalendarOff, Download, RefreshCw } from "lucide-react";
 import { getErrorMessage } from "../../api/client";
 import { calendarOffReportApi, employeeApi, settingsApi } from "../../api/payroll";
 import { Button } from "../ui/Button";
@@ -211,15 +211,30 @@ export function CalendarOffReport() {
   </table>;
 
   return <>
-    <Card className="cursor-pointer transition hover:-translate-y-0.5 hover:shadow-card" onClick={() => setOpen(true)}>
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-fern">Attendance</p>
-          <h3 className="mt-2 font-display text-2xl font-extrabold text-ink">Calendar Off Report</h3>
-          <p className="mt-2 text-sm text-ink/60">Choose Holiday or Week Off, then review the employee-wise calendar days resolved from the applicable rules.</p>
+    <Card
+      className="group flex h-full cursor-pointer flex-col transition hover:-translate-y-0.5 hover:shadow-card"
+      onClick={() => setOpen(true)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          setOpen(true);
+        }
+      }}
+      role="button"
+      tabIndex={0}
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-fern text-white">
+          <CalendarOff size={26} />
         </div>
-        <Button type="button" onClick={(event) => { event.stopPropagation(); setOpen(true); }}>Open report</Button>
+        <span className="rounded-full bg-moss/5 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-ink/50">Report</span>
       </div>
+      <div className="mt-6 flex-1">
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-fern">Attendance</p>
+        <h3 className="mt-2 font-display text-2xl font-extrabold text-ink">Calendar Off Report</h3>
+        <p className="mt-2 text-sm leading-6 text-ink/60">Choose Holiday or Week Off, then review the employee-wise calendar days resolved from the applicable rules.</p>
+      </div>
+      <Button type="button" className="mt-6 w-full justify-center" onClick={(event) => { event.stopPropagation(); setOpen(true); }}>Open report</Button>
     </Card>
 
     <Modal title="Calendar Off Report" description="Employee-wise holiday and week-off days, resolved from the applicable branch, department, designation, and employee rules." open={open} onClose={() => setOpen(false)}>

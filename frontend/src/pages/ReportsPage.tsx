@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Download, FileBarChart, RefreshCw, RotateCcw, Save } from "lucide-react";
+import { CalendarClock, ChevronDown, ClipboardList, Download, FileBarChart, RefreshCw, RotateCcw, Save, WalletCards, type LucideIcon } from "lucide-react";
 import { getErrorMessage } from "../api/client";
 import { attendanceApi, departmentApi, employeeApi, salaryApi, settingsApi, shiftAssignmentApi } from "../api/payroll";
 import { useAuth } from "../auth/AuthContext";
@@ -31,6 +31,47 @@ const SHIFT_TEMPLATE_STORAGE_KEY = "payroll.report.shift-assignment.template";
 const PUNCH_TEMPLATE_STORAGE_KEY = "payroll.report.employee-punches.template";
 const SALARY_TEMPLATE_STORAGE_KEY = "payroll.report.salary.template";
 const MONTHS_IN_YEAR = 12;
+
+type ReportCardProps = {
+  eyebrow: string;
+  title: string;
+  description: string;
+  icon: LucideIcon;
+  iconClassName: string;
+  onOpen: () => void;
+};
+
+function ReportCard({ eyebrow, title, description, icon: Icon, iconClassName, onOpen }: ReportCardProps) {
+  return (
+    <Card
+      className="group flex h-full cursor-pointer flex-col transition hover:-translate-y-0.5 hover:shadow-card"
+      onClick={onOpen}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpen();
+        }
+      }}
+      role="button"
+      tabIndex={0}
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div className={`grid h-14 w-14 shrink-0 place-items-center rounded-2xl ${iconClassName}`}>
+          <Icon size={26} />
+        </div>
+        <span className="rounded-full bg-moss/5 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-ink/50">Report</span>
+      </div>
+      <div className="mt-6 flex-1">
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-fern">{eyebrow}</p>
+        <h3 className="mt-2 font-display text-2xl font-extrabold text-ink">{title}</h3>
+        <p className="mt-2 text-sm leading-6 text-ink/60">{description}</p>
+      </div>
+      <Button type="button" className="mt-6 w-full justify-center" onClick={(event) => { event.stopPropagation(); onOpen(); }}>
+        Open report
+      </Button>
+    </Card>
+  );
+}
 
 const defaultTemplate = `<!doctype html>
 <html>
@@ -587,10 +628,35 @@ export function ReportsPage() {
 
   return <div className="space-y-6">
     <Card><div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"><div><p className="text-sm font-bold uppercase tracking-[0.18em] text-fern">Reports</p><h2 className="mt-2 font-display text-3xl font-extrabold text-ink">Reports</h2><p className="mt-2 text-sm text-ink/60">Choose a report to open its filters, preview, and download options.</p></div><div className="grid h-12 w-12 place-items-center rounded-2xl bg-ember text-ink shadow-glow"><FileBarChart size={22} /></div></div></Card>
-    <Card className="cursor-pointer transition hover:-translate-y-0.5 hover:shadow-card" onClick={() => setShiftReportOpen(true)}><div className="flex items-center justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-fern">Attendance Setup</p><h3 className="mt-2 font-display text-2xl font-extrabold text-ink">Shift Assignment</h3><p className="mt-2 text-sm text-ink/60">View role-scoped employee schedules by month and download the formatted report.</p></div><Button type="button" onClick={() => setShiftReportOpen(true)}>Open report</Button></div></Card>
-    <Card className="cursor-pointer transition hover:-translate-y-0.5 hover:shadow-card" onClick={() => setPunchReportOpen(true)}><div className="flex items-center justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-fern">Attendance</p><h3 className="mt-2 font-display text-2xl font-extrabold text-ink">Employee Punches</h3><p className="mt-2 text-sm text-ink/60">Download employee IN/OUT punch details with date, time, branch, and department filters.</p></div><Button type="button" onClick={() => setPunchReportOpen(true)}>Open report</Button></div></Card>
-    <CalendarOffReport />
-    {hasRoleAccess(user, HR_ROLES) && <Card className="cursor-pointer transition hover:-translate-y-0.5 hover:shadow-card" onClick={openSalaryReport}><div className="flex items-center justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-fern">Payroll</p><h3 className="mt-2 font-display text-2xl font-extrabold text-ink">Salary Report</h3><p className="mt-2 text-sm text-ink/60">Review employee CTC, earnings, employer contributions, deductions, and estimated take-home.</p></div><Button type="button" onClick={(event) => { event.stopPropagation(); openSalaryReport(); }}>Open report</Button></div></Card>}
+    <div className="grid gap-4 md:grid-cols-2">
+      <ReportCard
+        eyebrow="Attendance setup"
+        title="Shift Assignment"
+        description="View role-scoped employee schedules by month and download the formatted report."
+        icon={CalendarClock}
+        iconClassName="bg-moss text-white"
+        onOpen={() => setShiftReportOpen(true)}
+      />
+      <ReportCard
+        eyebrow="Attendance"
+        title="Employee Punches"
+        description="Download employee IN/OUT punch details with date, time, branch, and department filters."
+        icon={ClipboardList}
+        iconClassName="bg-lagoon text-white"
+        onOpen={() => setPunchReportOpen(true)}
+      />
+      <CalendarOffReport />
+      {hasRoleAccess(user, HR_ROLES) && (
+        <ReportCard
+          eyebrow="Payroll"
+          title="Salary Report"
+          description="Review employee CTC, earnings, employer contributions, deductions, and estimated take-home."
+          icon={WalletCards}
+          iconClassName="bg-ember text-ink"
+          onOpen={openSalaryReport}
+        />
+      )}
+    </div>
     <Modal title="Shift Assignment Report" description="Filters, full HTML template, live preview, and A4 PDF download" open={shiftReportOpen} onClose={() => setShiftReportOpen(false)}>
       <div className="flex flex-col gap-6">
         <Card><div className="mb-5 flex items-center justify-between"><div><h3 className="font-display text-xl font-extrabold">Shift Assignment</h3><p className="mt-1 text-sm text-ink/60">Filters apply only to the employees and assignments allowed for your role.</p></div>{loadingAssignments && <RefreshCw className="animate-spin text-fern" size={18} />}</div><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3"><Input label="Report month" type="month" value={month} onChange={(event) => setMonth(event.target.value)} /><Select label="Branch" value={branchFilter} onChange={(event) => setBranchFilter(event.target.value)}><option value="">All branches</option>{branchOptions.map((branch) => <option key={branch} value={branch}>{branch}</option>)}</Select><Select label="Department" value={departmentFilter} onChange={(event) => setDepartmentFilter(event.target.value)}><option value="">All departments</option>{departments.filter((department) => employees.some((employee) => employee.departmentId === department.id)).map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</Select><Select label="Designation" value={designationFilter} onChange={(event) => setDesignationFilter(event.target.value)}><option value="">All designations</option>{designationOptions.map((designation) => <option key={designation} value={designation}>{designation}</option>)}</Select><Select label="Shift" value={shiftFilter} onChange={(event) => setShiftFilter(event.target.value)}><option value="">All shifts</option>{shiftOptions.map((shift) => <option key={shift} value={shift}>{shift}</option>)}</Select><EmployeeAutocomplete label="Employee code / name" value={selectedEmployeeCode} employees={employees} onChange={setSelectedEmployeeCode} placeholder="Search code or name" /></div><p className="mt-4 text-xs font-semibold text-ink/50">Showing {filteredEmployees.length} of {employees.length} role-scoped employee(s).</p></Card>
