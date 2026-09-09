@@ -246,7 +246,7 @@ export function AttendancePage() {
       const { default: ExcelJS } = await import("exceljs");
       const workbook = new ExcelJS.Workbook();
       await workbook.xlsx.load(await uploadFile.arrayBuffer());
-      const sheet = workbook.getWorksheet("Attendance Upload") || workbook.worksheets[0];
+      const sheet = workbook.worksheets[0];
       const rows: string[][] = [];
       sheet?.eachRow((row) => {
         const values = [1, 2, 3, 4].map((column) => excelCellText(row.getCell(column).value, column));

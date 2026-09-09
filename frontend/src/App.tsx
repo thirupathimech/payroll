@@ -23,6 +23,7 @@ import { AttendanceReportPage } from "./pages/AttendanceReportPage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { SalaryPage } from "./pages/SalaryPage";
 import { MyCalendarOffPage } from "./pages/MyCalendarOffPage";
+import { MissingPunchPage } from "./pages/MissingPunchPage";
 import { ADMIN_ROLES, HR_ROLES, MANAGER_ROLES } from "./lib/access";
 
 function HomeRoute() {
@@ -44,6 +45,7 @@ export default function App() {
           <Route path="/shift-assignments" element={<ShiftAssignmentPage />} />
           <Route path="/my-calendar-off" element={<MyCalendarOffPage />} />
           <Route path="/leaves" element={<LeavePage />} />
+          <Route path="/missing-punch-requests" element={<MissingPunchPage />} />
           <Route path="/attendance" element={<AttendancePage />} />
           <Route path="/attendance/report" element={<AttendanceReportPage />} />
           <Route element={<ProtectedRoute allowedRoles={MANAGER_ROLES} />}>

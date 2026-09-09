@@ -1,6 +1,8 @@
 export type RoleName = "ADMIN" | "HR" | "MANAGER" | "LEAD" | "EMPLOYEE";
 export type EmploymentStatus = "ACTIVE" | "ON_LEAVE" | "PROBATION" | "TERMINATED";
 export type LeaveStatus = "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
+export type MissingPunchStatus = "PENDING" | "APPROVED" | "REJECTED";
+export type MissingPunchType = "IN" | "OUT";
 export type LeaveType = "ANNUAL" | "SICK" | "CASUAL" | "MATERNITY" | "PATERNITY" | "UNPAID";
 export type WeekOffAssignmentType = "GROUP_WEEKLY" | "EMPLOYEE_DATE" | "EMPLOYEE_WEEKLY";
 export type CalendarOffType = "HOLIDAY" | "WEEK_OFF";
@@ -438,6 +440,29 @@ export interface CompanySettings {
 }
 export interface AttendanceSettings { id?: number; attendanceMode: AttendanceMode; biometricEnabled: boolean; biometricName?: string; biometricUrl?: string; biometricApiKey?: string; updatedAt?: string; }
 export interface AttendanceRecord { id: number; employeeId: number; employeeCode: string; employeeName: string; date: string; clockInDate?: string; clockIn?: string; clockOutDate?: string; clockOut?: string; source: string; }
+export interface MissingPunchRequest {
+  id: number;
+  employeeId: number;
+  employeeCode: string;
+  employeeName: string;
+  punchDate: string;
+  punchTime: string;
+  punchType: MissingPunchType;
+  remark: string;
+  status: MissingPunchStatus;
+  reviewerEmail?: string;
+  reviewerComment?: string;
+  reviewedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MissingPunchPayload {
+  punchDate: string;
+  punchTime: string;
+  punchType: MissingPunchType;
+  remark: string;
+}
 
 export interface DashboardSummary {
   totalEmployees: number;

@@ -16,7 +16,7 @@ export function Modal({ title, description, open, onClose, children }: ModalProp
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/50 backdrop-blur-sm sm:items-center sm:p-4">
+    <div className="fixed inset-0 z-[500] flex items-end justify-center bg-ink/50 backdrop-blur-sm sm:items-center sm:p-4">
       <div
         data-modal-scroll="true"
         className="max-h-[94vh] w-full max-w-6xl animate-rise overflow-y-auto rounded-t-2xl bg-shell p-4 shadow-pop sm:rounded-2xl sm:p-6"

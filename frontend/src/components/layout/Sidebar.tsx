@@ -39,6 +39,7 @@ const navItems: Array<{ label: string; path: string; icon: typeof LayoutDashboar
   { label: "Week Off Assignment", path: "/week-off-assignments", icon: CalendarOff, allowedRoles: MANAGER_ROLES },
   { label: "Holiday Configuration", path: "/holidays", icon: CalendarHeart, allowedRoles: MANAGER_ROLES },
   { label: "Leaves", path: "/leaves", icon: CalendarDays, allowedRoles: MANAGER_ROLES },
+  { label: "Missing Punch Requests", path: "/missing-punch-requests", icon: Fingerprint, allowedRoles: MANAGER_ROLES },
   { label: "Attendance", path: "/attendance", icon: Fingerprint, allowedRoles: MANAGER_ROLES },
   { label: "Employee Attendance", path: "/attendance/report", icon: ClipboardList, allowedRoles: MANAGER_ROLES },
   { label: "Reports", path: "/reports", icon: FileText, allowedRoles: MANAGER_ROLES },
@@ -50,6 +51,7 @@ const navItems: Array<{ label: string; path: string; icon: typeof LayoutDashboar
 const personnelItems: Array<{ label: string; path: string; icon: typeof LayoutDashboard }> = [
   { label: "My Profile", path: "/employees", icon: UserRound },
   { label: "Apply Leave", path: "/leaves", icon: CalendarDays },
+  { label: "Missing Punch", path: "/missing-punch-requests", icon: Fingerprint },
   { label: "My Shift", path: "/shift-assignments", icon: Clock3 },
   { label: "My Holidays & Week Off", path: "/my-calendar-off", icon: CalendarOff },
 ];

@@ -39,6 +39,9 @@ import type {
   WeekOffExclusion,
   AttendanceSettings,
   AttendanceRecord,
+  MissingPunchPayload,
+  MissingPunchRequest,
+  MissingPunchStatus,
   CalendarOffReportRow,
   CalendarOffType,
   EmployeeSalaryPayload,
@@ -303,6 +306,18 @@ export const attendanceApi = {
   updateSettings: async (payload: Omit<AttendanceSettings, "id" | "updatedAt">) => (await api.put<AttendanceSettings>("/attendance/settings", payload)).data,
   list: async (from: string, to: string) => (await api.get<AttendanceRecord[]>("/attendance", { params: { from, to } })).data,
   save: async (payload: { employeeId: number; date: string; clockInDate?: string; clockOutDate?: string; clockIn?: string; clockOut?: string; source: string }) => (await api.post<AttendanceRecord>("/attendance", payload)).data,
+  missingPunchRequests: async (params: { search?: string; status?: MissingPunchStatus | ""; mine?: boolean; page?: number; size?: number }) => {
+    const { data } = await api.get<PageResponse<MissingPunchRequest>>("/attendance/missing-punch-requests", { params });
+    return data;
+  },
+  createMissingPunchRequest: async (payload: MissingPunchPayload) => {
+    const { data } = await api.post<MissingPunchRequest>("/attendance/missing-punch-requests", payload);
+    return data;
+  },
+  decideMissingPunchRequest: async (id: number, status: Exclude<MissingPunchStatus, "PENDING">, reviewerComment?: string) => {
+    const { data } = await api.patch<MissingPunchRequest>(`/attendance/missing-punch-requests/${id}/decision`, { status, reviewerComment });
+    return data;
+  },
 };
 
 export const shiftApi = {

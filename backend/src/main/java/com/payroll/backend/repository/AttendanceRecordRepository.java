@@ -23,6 +23,13 @@ public interface AttendanceRecordRepository extends JpaRepository<AttendanceReco
             LocalDate to
     );
 
+    Optional<AttendanceRecord> findFirstByOrgCodeAndEmployeeIdAndClockInIsNotNullAndClockOutIsNullAndAttendanceDateBetweenOrderByAttendanceDateDesc(
+            String orgCode,
+            Long employeeId,
+            LocalDate fromDate,
+            LocalDate toDate
+    );
+
     @Query("""
             select count(a)
             from AttendanceRecord a
