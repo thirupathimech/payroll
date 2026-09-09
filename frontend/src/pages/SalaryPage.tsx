@@ -10,6 +10,7 @@ import { Card } from "../components/ui/Card";
 import { Input } from "../components/ui/Input";
 import { Modal } from "../components/ui/Modal";
 import { Select } from "../components/ui/Select";
+import { downloadPdf as exportPdf } from "../lib/reporting";
 import type {
   Employee,
   CompanySettings,
@@ -651,34 +652,14 @@ export function SalaryPage() {
     setError("");
     try {
       setPrintedAt(new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short" }).format(new Date()));
-      await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
-      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import("html2canvas"), import("jspdf")]);
-      const canvas = await html2canvas(salaryPdfReportRef.current, {
-        scale: 2,
-        backgroundColor: "#ffffff",
-        useCORS: true,
-        windowWidth: salaryPdfReportRef.current.clientWidth,
-        width: salaryPdfReportRef.current.clientWidth,
-      });
-      const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
-      const margin = 24;
-      const pageWidth = pdf.internal.pageSize.getWidth() - margin * 2;
-      const pageHeight = pdf.internal.pageSize.getHeight() - margin * 2;
-      const sourcePageHeight = Math.max(1, Math.floor(canvas.width * (pageHeight / pageWidth)));
-      const pageCanvas = document.createElement("canvas");
-      const context = pageCanvas.getContext("2d");
-      if (!context) throw new Error("Unable to prepare the salary breakup PDF preview.");
-      for (let sourceY = 0; sourceY < canvas.height; sourceY += sourcePageHeight) {
-        const sliceHeight = Math.min(sourcePageHeight, canvas.height - sourceY);
-        pageCanvas.width = canvas.width;
-        pageCanvas.height = sliceHeight;
-        context.clearRect(0, 0, pageCanvas.width, pageCanvas.height);
-        context.drawImage(canvas, 0, sourceY, canvas.width, sliceHeight, 0, 0, canvas.width, sliceHeight);
-        if (sourceY > 0) pdf.addPage();
-        pdf.addImage(pageCanvas.toDataURL("image/png"), "PNG", margin, margin, pageWidth, (sliceHeight / canvas.width) * pageWidth);
-      }
       const safeEmployeeCode = profile.employeeCode.replace(/[^a-z0-9_-]+/gi, "-");
-      pdf.save(`salary-breakup-${safeEmployeeCode || "employee"}.pdf`);
+      await exportPdf({
+        element: salaryPdfReportRef.current,
+        filename: `salary-breakup-${safeEmployeeCode || "employee"}.pdf`,
+        orientation: "portrait",
+        contextErrorMessage: "Unable to prepare the salary breakup PDF preview.",
+        waitForRender: true,
+      });
     } catch (apiError) {
       setError(apiError instanceof Error ? apiError.message : getErrorMessage(apiError));
     } finally {

@@ -9,9 +9,14 @@ import { Input } from "../ui/Input";
 import { Modal } from "../ui/Modal";
 import { Select } from "../ui/Select";
 import { formatDate } from "../../lib/format";
+import {
+  csvCell,
+  downloadPdf as exportPdf,
+  downloadTextFile,
+  downloadXlsx as exportXlsx,
+  type DownloadFormat,
+} from "../../lib/reporting";
 import type { CalendarOffReportRow, CalendarOffType, Employee } from "../../types";
-
-type DownloadFormat = "pdf" | "xlsx" | "csv";
 
 function currentMonthRange() {
   const now = new Date();
@@ -19,19 +24,6 @@ function currentMonthRange() {
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const lastDay = new Date(year, now.getMonth() + 1, 0).getDate();
   return { from: `${year}-${month}-01`, to: `${year}-${month}-${String(lastDay).padStart(2, "0")}` };
-}
-
-function csvCell(value: string) {
-  return /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
-}
-
-function downloadTextFile(content: string, filename: string) {
-  const url = URL.createObjectURL(new Blob([content], { type: "text/csv;charset=utf-8" }));
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.click();
-  URL.revokeObjectURL(url);
 }
 
 function reportTitle(type: CalendarOffType) {
@@ -136,62 +128,28 @@ export function CalendarOffReport() {
   ]);
 
   async function downloadXlsx() {
-    const { default: ExcelJS } = await import("exceljs");
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet("Calendar Off");
-    worksheet.addRow([companyName || "Company"]);
-    worksheet.mergeCells(1, 1, 1, headers.length);
-    worksheet.addRow([companyAddress || ""]);
-    worksheet.mergeCells(2, 1, 2, headers.length);
-    worksheet.addRow([reportTitle(type)]);
-    worksheet.mergeCells(3, 1, 3, headers.length);
-    worksheet.addRow([`${from} to ${to}`]);
-    worksheet.mergeCells(4, 1, 4, headers.length);
-    worksheet.addRow(headers);
-    exportRows.forEach((row) => worksheet.addRow(row));
-    worksheet.getRow(1).font = { bold: true, size: 14, color: { argb: "FF214E45" } };
-    worksheet.getRow(3).font = { bold: true, size: 12, color: { argb: "FF214E45" } };
-    worksheet.getRow(5).font = { bold: true, color: { argb: "FFFFFFFF" } };
-    worksheet.getRow(5).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF214E45" } };
-    worksheet.views = [{ state: "frozen", ySplit: 5 }];
-    worksheet.columns.forEach((column) => { column.width = 18; });
-    const buffer = await workbook.xlsx.writeBuffer();
-    const url = URL.createObjectURL(new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `calendar-off-report-${type.toLowerCase()}-${from}-${to}.xlsx`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    await exportXlsx({
+      headers,
+      rows: exportRows,
+      filename: `calendar-off-report-${type.toLowerCase()}-${from}-${to}.xlsx`,
+      worksheetName: "Calendar Off",
+      companyName,
+      companyAddress,
+      title: reportTitle(type),
+      subtitle: `${from} to ${to}`,
+      columnWidth: 18,
+      styleCompanyAddress: false,
+    });
   }
 
   async function downloadPdf() {
     if (!pdfRef.current) return;
-    const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import("html2canvas"), import("jspdf")]);
-    const canvas = await html2canvas(pdfRef.current, {
-      scale: 2,
-      backgroundColor: "#ffffff",
-      useCORS: true,
-      windowWidth: pdfRef.current.clientWidth,
-      width: pdfRef.current.clientWidth,
+    await exportPdf({
+      element: pdfRef.current,
+      filename: `calendar-off-report-${type.toLowerCase()}-${from}-${to}.pdf`,
+      orientation: "landscape",
+      contextErrorMessage: "Unable to prepare the calendar off report PDF.",
     });
-    const pdf = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
-    const margin = 24;
-    const pageWidth = pdf.internal.pageSize.getWidth() - margin * 2;
-    const pageHeight = pdf.internal.pageSize.getHeight() - margin * 2;
-    const sourcePageHeight = Math.max(1, Math.floor(canvas.width * (pageHeight / pageWidth)));
-    const pageCanvas = document.createElement("canvas");
-    const context = pageCanvas.getContext("2d");
-    if (!context) throw new Error("Unable to prepare the calendar off report PDF.");
-    for (let sourceY = 0; sourceY < canvas.height; sourceY += sourcePageHeight) {
-      const sliceHeight = Math.min(sourcePageHeight, canvas.height - sourceY);
-      pageCanvas.width = canvas.width;
-      pageCanvas.height = sliceHeight;
-      context.clearRect(0, 0, pageCanvas.width, pageCanvas.height);
-      context.drawImage(canvas, 0, sourceY, canvas.width, sliceHeight, 0, 0, canvas.width, sliceHeight);
-      if (sourceY > 0) pdf.addPage();
-      pdf.addImage(pageCanvas.toDataURL("image/png"), "PNG", margin, margin, pageWidth, (sliceHeight / canvas.width) * pageWidth);
-    }
-    pdf.save(`calendar-off-report-${type.toLowerCase()}-${from}-${to}.pdf`);
   }
 
   async function downloadReport() {

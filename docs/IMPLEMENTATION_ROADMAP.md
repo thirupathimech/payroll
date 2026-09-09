@@ -21,22 +21,23 @@ Status: Complete
 
 Status: Complete
 
-## Phase 3 - Payroll Processing
+## Phase 3 - Compensation Setup
 
 - Salary components: earnings, deductions, reimbursements
+- Employer contribution components
+- Employee CTC structures
+- Salary structure reports with CSV/XLSX/PDF export
+
+Status: Complete
+
+## Phase 4 - Payroll Processing And Compliance
+
 - Monthly payroll runs
 - Payslip generation
-- Payroll approval workflow
-- Employee payroll history
-
-Status: Planned
-
-## Phase 4 - Compliance And Reporting
-
+- Payroll approval and payroll-lock workflow
+- Employee payroll history with effective-dated salary structures
 - Tax rules by country/region
 - Statutory deductions
-- Export reports as CSV/PDF
-- Department-wise payroll reports
 - Leave balance reports
 
 Status: Planned
@@ -57,8 +58,8 @@ Status: Planned
 
 ## Suggested Next Work
 
-1. Add payroll run entities and APIs.
-2. Add payslip PDF generation.
-3. Add leave balance calculations.
-4. Add user management for HR, manager, and employee users.
+1. Add payroll run entities, calculation APIs, approval, and locking.
+2. Add payslip generation and payroll-history snapshots.
+3. Add leave balance calculations, accruals, and carry-forward rules.
+4. Add secure user invitation, password reset, and session management.
 5. Add automated backend integration tests and frontend component tests.

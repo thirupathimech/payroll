@@ -60,11 +60,16 @@ payroll/
 - Organization registration with three-letter org code login
 - Org-scoped data isolation across application tables
 - Employee management
-- Department management
-- Designation management
-- Leave management with approval flow
-- Company settings
-- Dashboard cards
+- Employee documents, profile photos, experience, education, and reporting hierarchy
+- Branch, department, designation, and user management
+- Shift definitions and employee shift assignments
+- Attendance punches, including overnight shifts
+- Holiday, week-off, and week-off exclusion management
+- Shift-aware leave management with approval flow
+- Salary components and employee CTC structures
+- Calendar-off, shift-assignment, attendance-punch, and salary reports with CSV/XLSX/PDF export
+- Company and employee-code settings
+- Dashboard summaries
 - Data tables with search, filters, and pagination
 - Form validation
 - DTO-based REST APIs
