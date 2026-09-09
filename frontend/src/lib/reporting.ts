@@ -20,6 +20,7 @@ interface PdfReportOptions {
   orientation: PdfOrientation;
   contextErrorMessage: string;
   waitForRender?: boolean;
+  logoUrl?: string;
 }
 
 export function currentMonth() {
@@ -122,37 +123,85 @@ export async function downloadPdf({
   orientation,
   contextErrorMessage,
   waitForRender = false,
+  logoUrl,
 }: PdfReportOptions) {
   if (waitForRender) {
     await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
   }
 
   const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import("html2canvas"), import("jspdf")]);
-  const canvas = await html2canvas(element, {
-    scale: 2,
-    backgroundColor: "#ffffff",
-    useCORS: true,
-    windowWidth: element.clientWidth,
-    width: element.clientWidth,
-  });
-  const pdf = new jsPDF({ orientation, unit: "pt", format: "a4" });
-  const margin = 24;
-  const pageWidth = pdf.internal.pageSize.getWidth() - margin * 2;
-  const pageHeight = pdf.internal.pageSize.getHeight() - margin * 2;
-  const sourcePageHeight = Math.max(1, Math.floor(canvas.width * (pageHeight / pageWidth)));
-  const pageCanvas = document.createElement("canvas");
-  const context = pageCanvas.getContext("2d");
-  if (!context) throw new Error(contextErrorMessage);
+  let renderElement = element;
+  let temporaryElement: HTMLElement | null = null;
+  if (logoUrl && !element.querySelector("[data-org-logo='true']")) {
+    temporaryElement = element.cloneNode(true) as HTMLElement;
+    temporaryElement.style.position = "fixed";
+    temporaryElement.style.left = "-100000px";
+    temporaryElement.style.top = "0";
+    temporaryElement.style.width = `${element.clientWidth}px`;
+    temporaryElement.style.height = "auto";
+    temporaryElement.style.pointerEvents = "none";
+    temporaryElement.style.zIndex = "-1";
 
-  for (let sourceY = 0; sourceY < canvas.height; sourceY += sourcePageHeight) {
-    const sliceHeight = Math.min(sourcePageHeight, canvas.height - sourceY);
-    pageCanvas.width = canvas.width;
-    pageCanvas.height = sliceHeight;
-    context.clearRect(0, 0, pageCanvas.width, pageCanvas.height);
-    context.drawImage(canvas, 0, sourceY, canvas.width, sliceHeight, 0, 0, canvas.width, sliceHeight);
-    if (sourceY > 0) pdf.addPage();
-    pdf.addImage(pageCanvas.toDataURL("image/png"), "PNG", margin, margin, pageWidth, (sliceHeight / canvas.width) * pageWidth);
+    const logo = document.createElement("img");
+    logo.dataset.orgLogo = "true";
+    logo.src = logoUrl;
+    logo.alt = "Organization logo";
+    logo.style.cssText = "display:block;width:72px;height:54px;flex-shrink:0;object-fit:contain;";
+    const companyHeader = temporaryElement.querySelector<HTMLElement>(".company-header");
+    if (companyHeader) {
+      companyHeader.style.display = "flex";
+      companyHeader.style.alignItems = "center";
+      companyHeader.style.justifyContent = "center";
+      companyHeader.style.gap = "14px";
+      companyHeader.style.textAlign = "left";
+      companyHeader.prepend(logo);
+    } else {
+      const logoHeader = document.createElement("div");
+      logoHeader.style.cssText = "display:flex;align-items:center;justify-content:flex-start;min-height:64px;margin:0 0 14px;padding:0 0 10px;border-bottom:2px solid #214e45;box-sizing:border-box;";
+      logoHeader.appendChild(logo);
+      temporaryElement.prepend(logoHeader);
+    }
+    document.body.appendChild(temporaryElement);
+    await new Promise<void>((resolve) => {
+      if (logo.complete) {
+        resolve();
+      } else {
+        logo.addEventListener("load", () => resolve(), { once: true });
+        logo.addEventListener("error", () => resolve(), { once: true });
+      }
+    });
+    renderElement = temporaryElement;
   }
 
-  pdf.save(filename);
+  try {
+    const canvas = await html2canvas(renderElement, {
+      scale: 2,
+      backgroundColor: "#ffffff",
+      useCORS: true,
+      windowWidth: renderElement.clientWidth,
+      width: renderElement.clientWidth,
+    });
+    const pdf = new jsPDF({ orientation, unit: "pt", format: "a4" });
+    const margin = 24;
+    const pageWidth = pdf.internal.pageSize.getWidth() - margin * 2;
+    const pageHeight = pdf.internal.pageSize.getHeight() - margin * 2;
+    const sourcePageHeight = Math.max(1, Math.floor(canvas.width * (pageHeight / pageWidth)));
+    const pageCanvas = document.createElement("canvas");
+    const context = pageCanvas.getContext("2d");
+    if (!context) throw new Error(contextErrorMessage);
+
+    for (let sourceY = 0; sourceY < canvas.height; sourceY += sourcePageHeight) {
+      const sliceHeight = Math.min(sourcePageHeight, canvas.height - sourceY);
+      pageCanvas.width = canvas.width;
+      pageCanvas.height = sliceHeight;
+      context.clearRect(0, 0, pageCanvas.width, pageCanvas.height);
+      context.drawImage(canvas, 0, sourceY, canvas.width, sliceHeight, 0, 0, canvas.width, sliceHeight);
+      if (sourceY > 0) pdf.addPage();
+      pdf.addImage(pageCanvas.toDataURL("image/png"), "PNG", margin, margin, pageWidth, (sliceHeight / canvas.width) * pageWidth);
+    }
+
+    pdf.save(filename);
+  } finally {
+    temporaryElement?.remove();
+  }
 }

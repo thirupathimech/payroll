@@ -50,6 +50,7 @@ export function PayslipDetails({ entry, currency }: PayslipDetailsProps) {
         filename: `payslip-${safeEmployeeCode || "employee"}-${entry.periodYear}-${String(entry.periodMonth).padStart(2, "0")}.pdf`,
         orientation: "portrait",
         contextErrorMessage: "Unable to prepare the payslip PDF.",
+        logoUrl: companySettings?.logoDataUrl,
         waitForRender: true,
       });
     } catch (apiError) {

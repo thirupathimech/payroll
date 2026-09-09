@@ -7,16 +7,22 @@ import com.payroll.backend.repository.CompanySettingRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.DayOfWeek;
+import java.io.IOException;
+import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
 public class CompanySettingsService {
 
     private static final List<String> PAYROLL_FREQUENCIES = List.of("WEEKLY", "BIWEEKLY", "MONTHLY");
+    private static final long MAX_LOGO_SIZE = 2L * 1024L * 1024L;
+    private static final Set<String> ALLOWED_LOGO_TYPES = Set.of("image/png", "image/jpeg", "image/jpg", "image/webp", "image/svg+xml");
 
     private final CompanySettingRepository companySettingRepository;
     private final AuditService auditService;
@@ -55,6 +61,40 @@ public class CompanySettingsService {
 
         CompanySetting saved = companySettingRepository.save(setting);
         auditService.log("COMPANY_SETTINGS_UPDATED", "CompanySetting", saved.getId(), saved.getCompanyName());
+        return toResponse(saved);
+    }
+
+    @Transactional
+    public CompanySettingsResponse updateLogo(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new com.payroll.backend.exception.BadRequestException("Organization logo file is required");
+        }
+        if (file.getSize() > MAX_LOGO_SIZE) {
+            throw new com.payroll.backend.exception.BadRequestException("Organization logo must be 2 MB or smaller");
+        }
+        String contentType = file.getContentType();
+        if (contentType == null || !ALLOWED_LOGO_TYPES.contains(contentType.toLowerCase(Locale.ROOT))) {
+            throw new com.payroll.backend.exception.BadRequestException("Logo must be a PNG, JPG, WEBP, or SVG image");
+        }
+        try {
+            CompanySetting setting = firstOrDefault();
+            setting.setLogoData(file.getBytes());
+            setting.setLogoContentType(contentType.toLowerCase(Locale.ROOT));
+            CompanySetting saved = companySettingRepository.save(setting);
+            auditService.log("COMPANY_LOGO_UPDATED", "CompanySetting", saved.getId(), file.getOriginalFilename());
+            return toResponse(saved);
+        } catch (IOException exception) {
+            throw new com.payroll.backend.exception.BadRequestException("Unable to read organization logo");
+        }
+    }
+
+    @Transactional
+    public CompanySettingsResponse deleteLogo() {
+        CompanySetting setting = firstOrDefault();
+        setting.setLogoData(null);
+        setting.setLogoContentType(null);
+        CompanySetting saved = companySettingRepository.save(setting);
+        auditService.log("COMPANY_LOGO_DELETED", "CompanySetting", saved.getId(), saved.getCompanyName());
         return toResponse(saved);
     }
 
@@ -100,8 +140,16 @@ public class CompanySettingsService {
                 setting.getPayrollFrequency(),
                 setting.getPayrollDisbursementDay(),
                 setting.getWeekStartDay(),
+                logoDataUrl(setting),
                 setting.getUpdatedAt()
         );
+    }
+
+    private String logoDataUrl(CompanySetting setting) {
+        if (setting.getLogoData() == null || setting.getLogoData().length == 0 || setting.getLogoContentType() == null) {
+            return null;
+        }
+        return "data:" + setting.getLogoContentType() + ";base64," + Base64.getEncoder().encodeToString(setting.getLogoData());
     }
 
     private String formattedAddress(CompanySetting setting, String legacyAddress) {

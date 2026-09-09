@@ -40,6 +40,7 @@ export function CalendarOffReport() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [companyName, setCompanyName] = useState("");
   const [companyAddress, setCompanyAddress] = useState("");
+  const [companyLogo, setCompanyLogo] = useState("");
   const [type, setType] = useState<CalendarOffType>("HOLIDAY");
   const [from, setFrom] = useState(initialRange.from);
   const [to, setTo] = useState(initialRange.to);
@@ -66,6 +67,7 @@ export function CalendarOffReport() {
         setEmployees(employeePage.content);
         setCompanyName(settings.companyName || "");
         setCompanyAddress(settings.address || "");
+        setCompanyLogo(settings.logoDataUrl || "");
       })
       .catch((apiError) => setError(getErrorMessage(apiError)))
       .finally(() => setLoadingEmployees(false));
@@ -149,6 +151,7 @@ export function CalendarOffReport() {
       filename: `calendar-off-report-${type.toLowerCase()}-${from}-${to}.pdf`,
       orientation: "landscape",
       contextErrorMessage: "Unable to prepare the calendar off report PDF.",
+      logoUrl: companyLogo || undefined,
     });
   }
 
@@ -287,7 +290,10 @@ export function CalendarOffReport() {
         </Card>
 
         <div ref={pdfRef} aria-hidden="true" className="pointer-events-none absolute -left-[10000px] top-0 w-[1123px] bg-white p-8 text-ink">
-          <div className="mb-6 text-center"><h2 className="text-xl font-bold">{companyName || "Company"}</h2>{companyAddress && <p className="mt-1 whitespace-pre-line text-xs text-ink/70">{companyAddress}</p>}</div>
+          <div className="company-header mb-6 flex items-center justify-center gap-4 text-left">
+            {companyLogo && <img data-org-logo="true" src={companyLogo} alt="Organization logo" className="h-[54px] w-[72px] shrink-0 object-contain" />}
+            <div><h2 className="text-xl font-bold">{companyName || "Company"}</h2>{companyAddress && <p className="mt-1 whitespace-pre-line text-xs text-ink/70">{companyAddress}</p>}</div>
+          </div>
           <h1 className="mb-1 text-2xl font-bold">{reportTitle(type)}</h1><p className="mb-5 text-sm text-ink/70">Period: {from} to {to}</p>
           <div className="overflow-hidden border border-moss/10">{reportTable}</div>
         </div>

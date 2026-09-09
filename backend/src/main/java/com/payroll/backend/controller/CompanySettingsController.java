@@ -11,6 +11,11 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.http.MediaType;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequiredArgsConstructor
@@ -28,5 +33,17 @@ public class CompanySettingsController {
     @PreAuthorize("hasRole('ADMIN')")
     public CompanySettingsResponse update(@Valid @RequestBody CompanySettingsRequest request) {
         return companySettingsService.update(request);
+    }
+
+    @PostMapping(value = "/logo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('ADMIN')")
+    public CompanySettingsResponse uploadLogo(@RequestParam("file") MultipartFile file) {
+        return companySettingsService.updateLogo(file);
+    }
+
+    @DeleteMapping("/logo")
+    @PreAuthorize("hasRole('ADMIN')")
+    public CompanySettingsResponse deleteLogo() {
+        return companySettingsService.deleteLogo();
     }
 }

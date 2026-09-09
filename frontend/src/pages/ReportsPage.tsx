@@ -83,9 +83,10 @@ const defaultTemplate = `<!doctype html>
     * { box-sizing: border-box; }
     body { margin: 0; color: #18332d; background: #ffffff; font-family: Arial, sans-serif; }
     .report { padding: 20px; }
-    .company-header { margin-bottom: 14px; text-align: center; }
-    .company-header h2 { margin: 0; font-size: 20px; }
-    .company-header p { margin: 4px 0 0; color: #53665f; font-size: 11px; white-space: pre-line; }
+    .company-header { display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 14px; text-align: left; }
+    .company-header img { display: block; width: 72px; height: 54px; object-fit: contain; flex-shrink: 0; }
+    .company-copy h2 { margin: 0; font-size: 20px; }
+    .company-copy p { margin: 4px 0 0; color: #53665f; font-size: 11px; white-space: pre-line; }
     .report-title { margin: 0 0 6px; font-size: 24px; }
     .report-meta { margin: 0 0 18px; color: #53665f; font-size: 13px; }
     table { width: 100%; border-collapse: collapse; table-layout: fixed; }
@@ -97,8 +98,11 @@ const defaultTemplate = `<!doctype html>
 <body>
   <main class="report">
     <header class="company-header">
-      <h2>{{COMPANY_NAME}}</h2>
-      <p>{{COMPANY_ADDRESS}}</p>
+      {{COMPANY_LOGO}}
+      <div class="company-copy">
+        <h2>{{COMPANY_NAME}}</h2>
+        <p>{{COMPANY_ADDRESS}}</p>
+      </div>
     </header>
     <h1 class="report-title">{{REPORT_TITLE}}</h1>
     <p class="report-meta">Month: {{MONTH}} | Printed Time: {{PRINTED_AT}}</p>
@@ -117,9 +121,26 @@ function shiftLabel(assignment: ShiftAssignment | undefined) {
   return assignment.shiftCode || assignment.shiftName || "-";
 }
 
-function companyHeaderFallback(html: string, template: string, name: string, address: string) {
-  if (template.includes("{{COMPANY_NAME}}") && template.includes("{{COMPANY_ADDRESS}}")) return html;
-  const header = `<div style="margin-bottom:14px;text-align:center"><h2 style="margin:0;font-size:20px">${escapeHtml(name || "Company")}</h2><p style="margin:4px 0 0;color:#53665f;font-size:11px;white-space:pre-line">${escapeHtml(address || "").replace(/\r?\n/g, "<br />")}</p></div>`;
+function companyLogoMarkup(logoUrl: string) {
+  return logoUrl ? `<img data-org-logo="true" src="${escapeHtml(logoUrl)}" alt="Organization logo" style="display:block;width:72px;height:54px;object-fit:contain;flex-shrink:0" />` : "";
+}
+
+function companyHeaderFallback(html: string, template: string, name: string, address: string, logoUrl: string) {
+  const logo = companyLogoMarkup(logoUrl);
+  if (template.includes("{{COMPANY_NAME}}") && template.includes("{{COMPANY_ADDRESS}}")) {
+    if (!logo || html.includes("data-org-logo")) return html;
+    const headerMatch = html.match(/<header\b([^>]*class=["'][^"']*company-header[^"']*["'][^>]*)>([\s\S]*?)<\/header>/i);
+    if (!headerMatch) return html;
+    const groupedStyles = "display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:14px;text-align:left;";
+    const styledAttributes = /\sstyle\s*=\s*["'][^"']*["']/i.test(headerMatch[1])
+      ? headerMatch[1].replace(/\sstyle\s*=\s*["'][^"']*["']/i, ` style="${groupedStyles}"`)
+      : `${headerMatch[1]} style="${groupedStyles}"`;
+    const companyContent = headerMatch[2].trim();
+    const groupedContent = companyContent.includes("company-copy") ? companyContent : `<div class="company-copy">${companyContent}</div>`;
+    return html.replace(headerMatch[0], `<header${styledAttributes}>${logo}${groupedContent}</header>`);
+  }
+  const logoGroup = logo ? `<div>${logo}</div>` : "";
+  const header = `<div style="display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:14px;text-align:left">${logoGroup}<div><h2 style="margin:0;font-size:20px">${escapeHtml(name || "Company")}</h2><p style="margin:4px 0 0;color:#53665f;font-size:11px;white-space:pre-line">${escapeHtml(address || "").replace(/\r?\n/g, "<br />")}</p></div></div>`;
   const bodyTag = html.match(/<body[^>]*>/i)?.[0];
   return bodyTag ? html.replace(bodyTag, `${bodyTag}${header}`) : `${header}${html}`;
 }
@@ -188,6 +209,7 @@ export function ReportsPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [companyName, setCompanyName] = useState("");
   const [companyAddress, setCompanyAddress] = useState("");
+  const [companyLogo, setCompanyLogo] = useState("");
   const [assignments, setAssignments] = useState<ShiftAssignment[]>([]);
   const [departments, setDepartments] = useState<{ id: number; name: string }[]>([]);
   const [branchFilter, setBranchFilter] = useState("");
@@ -256,6 +278,7 @@ export function ReportsPage() {
     settingsApi.get().then((settings) => {
       setCompanyName(settings.companyName || "");
       setCompanyAddress(settings.address || "");
+      setCompanyLogo(settings.logoDataUrl || "");
     }).catch(() => undefined);
   }, []);
 
@@ -395,10 +418,11 @@ export function ReportsPage() {
     .split("{{REPORT_TITLE}}").join("Shift Assignment Report")
     .split("{{COMPANY_NAME}}").join(escapeHtml(companyName || "Company"))
     .split("{{COMPANY_ADDRESS}}").join(escapeHtml(companyAddress || "").replace(/\r?\n/g, "<br />"))
+    .split("{{COMPANY_LOGO}}").join(companyLogoMarkup(companyLogo))
     .split("{{MONTH}}").join(new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(new Date(`${month}-01T00:00:00`)))
     .split("{{PRINTED_AT}}").join(printedAt)
     .split("{{TABLE}}").join(tableHtml)
-    .split("{{APPROVED_BY}}").join("____________________________"), template, companyName, companyAddress), [companyAddress, companyName, month, printedAt, tableHtml, template]);
+    .split("{{APPROVED_BY}}").join("____________________________"), template, companyName, companyAddress, companyLogo), [companyAddress, companyLogo, companyName, month, printedAt, tableHtml, template]);
 
   const punchTableHtml = useMemo(() => {
     const headers = ["Employee Code", "Name", "Branch", "Department", "Designation", "Punch Date", "IN Date", "IN Time", "OUT Date", "OUT Time", "Source"];
@@ -427,10 +451,11 @@ export function ReportsPage() {
     .split("{{REPORT_TITLE}}").join("Employee Punches Report")
     .split("{{COMPANY_NAME}}").join(escapeHtml(companyName || "Company"))
     .split("{{COMPANY_ADDRESS}}").join(escapeHtml(companyAddress || "").replace(/\r?\n/g, "<br />"))
+    .split("{{COMPANY_LOGO}}").join(companyLogoMarkup(companyLogo))
     .split("{{MONTH}}").join(`${punchFrom || "-"} to ${punchTo || "-"}`)
     .split("{{PRINTED_AT}}").join(punchPrintedAt)
     .split("{{TABLE}}").join(punchTableHtml)
-    .split("{{APPROVED_BY}}").join("____________________________"), punchTemplate, companyName, companyAddress), [companyAddress, companyName, punchFrom, punchPrintedAt, punchTableHtml, punchTemplate, punchTo]);
+    .split("{{APPROVED_BY}}").join("____________________________"), punchTemplate, companyName, companyAddress, companyLogo), [companyAddress, companyLogo, companyName, punchFrom, punchPrintedAt, punchTableHtml, punchTemplate, punchTo]);
 
   const salaryTableHtml = useMemo(() => {
     const headerCells = salaryReportData.headers
@@ -456,10 +481,11 @@ export function ReportsPage() {
     .split("{{REPORT_TITLE}}").join("Salary Report")
     .split("{{COMPANY_NAME}}").join(escapeHtml(companyName || "Company"))
     .split("{{COMPANY_ADDRESS}}").join(escapeHtml(companyAddress || "").replace(/\r?\n/g, "<br />"))
+    .split("{{COMPANY_LOGO}}").join(companyLogoMarkup(companyLogo))
     .split("{{MONTH}}").join(new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(new Date(`${salaryMonth}-01T00:00:00`)))
     .split("{{PRINTED_AT}}").join(salaryPrintedAt)
     .split("{{TABLE}}").join(salaryTableHtml)
-    .split("{{APPROVED_BY}}").join("____________________________"), salaryTemplate, companyName, companyAddress), [companyAddress, companyName, salaryMonth, salaryPrintedAt, salaryTableHtml, salaryTemplate]);
+    .split("{{APPROVED_BY}}").join("____________________________"), salaryTemplate, companyName, companyAddress, companyLogo), [companyAddress, companyLogo, companyName, salaryMonth, salaryPrintedAt, salaryTableHtml, salaryTemplate]);
 
   function saveTemplate(storageKey: string, value: string, label: string) {
     try {
@@ -509,6 +535,7 @@ export function ReportsPage() {
         filename: `shift-assignment-report-${month}-${pdfOrientation}.pdf`,
         orientation: pdfOrientation,
         contextErrorMessage: "Unable to prepare the PDF preview.",
+        logoUrl: companyLogo || undefined,
         waitForRender: true,
       });
     } catch (apiError) {
@@ -556,6 +583,7 @@ export function ReportsPage() {
         filename: `employee-punches-report-${punchFrom || "from"}-${punchTo || "to"}-${punchPdfOrientation}.pdf`,
         orientation: punchPdfOrientation,
         contextErrorMessage: "Unable to prepare the PDF preview.",
+        logoUrl: companyLogo || undefined,
         waitForRender: true,
       });
     } catch (apiError) {
@@ -596,6 +624,7 @@ export function ReportsPage() {
         filename: `salary-report-${salaryMonth}-${salaryPdfOrientation}.pdf`,
         orientation: salaryPdfOrientation,
         contextErrorMessage: "Unable to prepare the salary report PDF preview.",
+        logoUrl: companyLogo || undefined,
         waitForRender: true,
       });
     } catch (apiError) {
@@ -669,7 +698,7 @@ export function ReportsPage() {
             <ChevronDown className="shrink-0 text-fern transition-transform group-open:rotate-180" size={20} />
           </summary>
           <div className="border-t border-moss/10 p-4 sm:p-6">
-            <Card><div className="flex flex-col gap-3 border-b border-moss/10 pb-4 lg:flex-row lg:items-center lg:justify-between"><div><h3 className="font-display text-xl font-extrabold">Full HTML template</h3><p className="mt-1 text-sm text-ink/60">Edit the complete HTML/CSS. Placeholders: &#123;&#123;COMPANY_NAME&#125;&#125;, &#123;&#123;COMPANY_ADDRESS&#125;&#125;, &#123;&#123;REPORT_TITLE&#125;&#125;, &#123;&#123;MONTH&#125;&#125;, &#123;&#123;PRINTED_AT&#125;&#125;, &#123;&#123;TABLE&#125;&#125;, &#123;&#123;APPROVED_BY&#125;&#125;.</p></div><div className="flex flex-wrap items-center gap-3"><Button type="button" variant="secondary" onClick={() => saveTemplate(SHIFT_TEMPLATE_STORAGE_KEY, template, "Shift assignment")}><Save size={17} />Save template</Button><Button type="button" variant="ghost" onClick={() => resetTemplate(SHIFT_TEMPLATE_STORAGE_KEY, setTemplate, "Shift assignment")}><RotateCcw size={17} />Reset template</Button></div></div><textarea className="mt-5 min-h-80 w-full rounded-2xl border border-moss/15 bg-ink/[0.03] p-4 font-mono text-xs leading-5 text-ink outline-none focus:border-fern focus:ring-4 focus:ring-fern/10" value={template} onChange={(event) => setTemplate(event.target.value)} aria-label="Full report HTML template" />{templateMessage && <p className="mt-3 text-sm font-semibold text-fern">{templateMessage}</p>}</Card>
+            <Card><div className="flex flex-col gap-3 border-b border-moss/10 pb-4 lg:flex-row lg:items-center lg:justify-between"><div><h3 className="font-display text-xl font-extrabold">Full HTML template</h3><p className="mt-1 text-sm text-ink/60">Edit the complete HTML/CSS. Placeholders: &#123;&#123;COMPANY_LOGO&#125;&#125;, &#123;&#123;COMPANY_NAME&#125;&#125;, &#123;&#123;COMPANY_ADDRESS&#125;&#125;, &#123;&#123;REPORT_TITLE&#125;&#125;, &#123;&#123;MONTH&#125;&#125;, &#123;&#123;PRINTED_AT&#125;&#125;, &#123;&#123;TABLE&#125;&#125;, &#123;&#123;APPROVED_BY&#125;&#125;.</p></div><div className="flex flex-wrap items-center gap-3"><Button type="button" variant="secondary" onClick={() => saveTemplate(SHIFT_TEMPLATE_STORAGE_KEY, template, "Shift assignment")}><Save size={17} />Save template</Button><Button type="button" variant="ghost" onClick={() => resetTemplate(SHIFT_TEMPLATE_STORAGE_KEY, setTemplate, "Shift assignment")}><RotateCcw size={17} />Reset template</Button></div></div><textarea className="mt-5 min-h-80 w-full rounded-2xl border border-moss/15 bg-ink/[0.03] p-4 font-mono text-xs leading-5 text-ink outline-none focus:border-fern focus:ring-4 focus:ring-fern/10" value={template} onChange={(event) => setTemplate(event.target.value)} aria-label="Full report HTML template" />{templateMessage && <p className="mt-3 text-sm font-semibold text-fern">{templateMessage}</p>}</Card>
           </div>
         </details>
         {error && <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
@@ -689,7 +718,7 @@ export function ReportsPage() {
             <ChevronDown className="shrink-0 text-fern transition-transform group-open:rotate-180" size={20} />
           </summary>
           <div className="border-t border-moss/10 p-4 sm:p-6">
-            <Card><div className="flex flex-col gap-3 border-b border-moss/10 pb-4 lg:flex-row lg:items-center lg:justify-between"><div><h3 className="font-display text-xl font-extrabold">Full HTML template</h3><p className="mt-1 text-sm text-ink/60">Edit all HTML/CSS styles. Use &#123;&#123;COMPANY_NAME&#125;&#125;, &#123;&#123;COMPANY_ADDRESS&#125;&#125;, &#123;&#123;REPORT_TITLE&#125;&#125;, &#123;&#123;MONTH&#125;&#125;, &#123;&#123;PRINTED_AT&#125;&#125;, &#123;&#123;TABLE&#125;&#125;, and &#123;&#123;APPROVED_BY&#125;&#125;.</p></div><div className="flex flex-wrap items-center gap-3"><Button type="button" variant="secondary" onClick={() => saveTemplate(PUNCH_TEMPLATE_STORAGE_KEY, punchTemplate, "Employee punches")}><Save size={17} />Save template</Button><Button type="button" variant="ghost" onClick={() => resetTemplate(PUNCH_TEMPLATE_STORAGE_KEY, setPunchTemplate, "Employee punches")}><RotateCcw size={17} />Reset template</Button></div></div><textarea className="mt-5 min-h-80 w-full rounded-2xl border border-moss/15 bg-ink/[0.03] p-4 font-mono text-xs leading-5 text-ink outline-none focus:border-fern focus:ring-4 focus:ring-fern/10" value={punchTemplate} onChange={(event) => setPunchTemplate(event.target.value)} aria-label="Full employee punches HTML template" />{templateMessage && <p className="mt-3 text-sm font-semibold text-fern">{templateMessage}</p>}</Card>
+            <Card><div className="flex flex-col gap-3 border-b border-moss/10 pb-4 lg:flex-row lg:items-center lg:justify-between"><div><h3 className="font-display text-xl font-extrabold">Full HTML template</h3><p className="mt-1 text-sm text-ink/60">Edit all HTML/CSS styles. Use &#123;&#123;COMPANY_LOGO&#125;&#125;, &#123;&#123;COMPANY_NAME&#125;&#125;, &#123;&#123;COMPANY_ADDRESS&#125;&#125;, &#123;&#123;REPORT_TITLE&#125;&#125;, &#123;&#123;MONTH&#125;&#125;, &#123;&#123;PRINTED_AT&#125;&#125;, &#123;&#123;TABLE&#125;&#125;, and &#123;&#123;APPROVED_BY&#125;&#125;.</p></div><div className="flex flex-wrap items-center gap-3"><Button type="button" variant="secondary" onClick={() => saveTemplate(PUNCH_TEMPLATE_STORAGE_KEY, punchTemplate, "Employee punches")}><Save size={17} />Save template</Button><Button type="button" variant="ghost" onClick={() => resetTemplate(PUNCH_TEMPLATE_STORAGE_KEY, setPunchTemplate, "Employee punches")}><RotateCcw size={17} />Reset template</Button></div></div><textarea className="mt-5 min-h-80 w-full rounded-2xl border border-moss/15 bg-ink/[0.03] p-4 font-mono text-xs leading-5 text-ink outline-none focus:border-fern focus:ring-4 focus:ring-fern/10" value={punchTemplate} onChange={(event) => setPunchTemplate(event.target.value)} aria-label="Full employee punches HTML template" />{templateMessage && <p className="mt-3 text-sm font-semibold text-fern">{templateMessage}</p>}</Card>
           </div>
         </details>
         {error && <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
@@ -709,7 +738,7 @@ export function ReportsPage() {
             <ChevronDown className="shrink-0 text-fern transition-transform group-open:rotate-180" size={20} />
           </summary>
           <div className="border-t border-moss/10 p-4 sm:p-6">
-            <Card><div className="flex flex-col gap-3 border-b border-moss/10 pb-4 lg:flex-row lg:items-center lg:justify-between"><div><h3 className="font-display text-xl font-extrabold">Full HTML template</h3><p className="mt-1 text-sm text-ink/60">Edit the complete HTML/CSS. Placeholders: &#123;&#123;COMPANY_NAME&#125;&#125;, &#123;&#123;COMPANY_ADDRESS&#125;&#125;, &#123;&#123;REPORT_TITLE&#125;&#125;, &#123;&#123;MONTH&#125;&#125;, &#123;&#123;PRINTED_AT&#125;&#125;, &#123;&#123;TABLE&#125;&#125;, &#123;&#123;APPROVED_BY&#125;&#125;.</p></div><div className="flex flex-wrap items-center gap-3"><Button type="button" variant="secondary" onClick={() => saveTemplate(SALARY_TEMPLATE_STORAGE_KEY, salaryTemplate, "Salary")}><Save size={17} />Save template</Button><Button type="button" variant="ghost" onClick={() => resetTemplate(SALARY_TEMPLATE_STORAGE_KEY, setSalaryTemplate, "Salary")}><RotateCcw size={17} />Reset template</Button></div></div><textarea className="mt-5 min-h-80 w-full rounded-2xl border border-moss/15 bg-ink/[0.03] p-4 font-mono text-xs leading-5 text-ink outline-none focus:border-fern focus:ring-4 focus:ring-fern/10" value={salaryTemplate} onChange={(event) => setSalaryTemplate(event.target.value)} aria-label="Full salary report HTML template" />{templateMessage && <p className="mt-3 text-sm font-semibold text-fern">{templateMessage}</p>}</Card>
+            <Card><div className="flex flex-col gap-3 border-b border-moss/10 pb-4 lg:flex-row lg:items-center lg:justify-between"><div><h3 className="font-display text-xl font-extrabold">Full HTML template</h3><p className="mt-1 text-sm text-ink/60">Edit the complete HTML/CSS. Placeholders: &#123;&#123;COMPANY_LOGO&#125;&#125;, &#123;&#123;COMPANY_NAME&#125;&#125;, &#123;&#123;COMPANY_ADDRESS&#125;&#125;, &#123;&#123;REPORT_TITLE&#125;&#125;, &#123;&#123;MONTH&#125;&#125;, &#123;&#123;PRINTED_AT&#125;&#125;, &#123;&#123;TABLE&#125;&#125;, &#123;&#123;APPROVED_BY&#125;&#125;.</p></div><div className="flex flex-wrap items-center gap-3"><Button type="button" variant="secondary" onClick={() => saveTemplate(SALARY_TEMPLATE_STORAGE_KEY, salaryTemplate, "Salary")}><Save size={17} />Save template</Button><Button type="button" variant="ghost" onClick={() => resetTemplate(SALARY_TEMPLATE_STORAGE_KEY, setSalaryTemplate, "Salary")}><RotateCcw size={17} />Reset template</Button></div></div><textarea className="mt-5 min-h-80 w-full rounded-2xl border border-moss/15 bg-ink/[0.03] p-4 font-mono text-xs leading-5 text-ink outline-none focus:border-fern focus:ring-4 focus:ring-fern/10" value={salaryTemplate} onChange={(event) => setSalaryTemplate(event.target.value)} aria-label="Full salary report HTML template" />{templateMessage && <p className="mt-3 text-sm font-semibold text-fern">{templateMessage}</p>}</Card>
           </div>
         </details>
         {error && <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}

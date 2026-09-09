@@ -5,6 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
@@ -94,4 +95,11 @@ public class CompanySetting extends AuditableEntity {
 
     @Column(nullable = false, length = 20)
     private String weekStartDay = "MONDAY";
+
+    @Lob
+    @Column(name = "logo_data", columnDefinition = "MEDIUMBLOB")
+    private byte[] logoData;
+
+    @Column(name = "logo_content_type", length = 40)
+    private String logoContentType;
 }

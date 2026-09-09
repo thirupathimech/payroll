@@ -26,6 +26,7 @@ public record CompanySettingsResponse(
         String payrollFrequency,
         Integer payrollDisbursementDay,
         String weekStartDay,
+        String logoDataUrl,
         Instant updatedAt
 ) {
 }

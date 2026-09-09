@@ -493,6 +493,7 @@ export interface CompanySettings {
   payrollFrequency: "WEEKLY" | "BIWEEKLY" | "MONTHLY";
   payrollDisbursementDay: number;
   weekStartDay: WeekDayName;
+  logoDataUrl?: string;
   updatedAt: string;
 }
 export interface AttendanceSettings { id?: number; attendanceMode: AttendanceMode; biometricEnabled: boolean; biometricName?: string; biometricUrl?: string; biometricApiKey?: string; updatedAt?: string; }

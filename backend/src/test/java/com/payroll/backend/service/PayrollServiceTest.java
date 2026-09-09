@@ -167,7 +167,7 @@ class PayrollServiceTest {
         return new CompanySettingsResponse(
                 1L, "Example Org", null, null, null, null, null, null, null, null,
                 null, null, null, null, null, null, null, "INR", "Asia/Kolkata",
-                31, "MONTHLY", 1, "MONDAY", Instant.now()
+                31, "MONTHLY", 1, "MONDAY", null, Instant.now()
         );
     }
 

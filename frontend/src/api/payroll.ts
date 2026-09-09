@@ -266,10 +266,19 @@ export const settingsApi = {
     const { data } = await api.get<CompanySettings>("/settings/company");
     return data;
   },
-  update: async (payload: Omit<CompanySettings, "id" | "updatedAt">) => {
+  update: async (payload: Omit<CompanySettings, "id" | "updatedAt" | "logoDataUrl">) => {
     const { data } = await api.put<CompanySettings>("/settings/company", payload);
     return data;
   },
+  uploadLogo: async (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const { data } = await api.post<CompanySettings>("/settings/company/logo", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return data;
+  },
+  deleteLogo: async () => (await api.delete<CompanySettings>("/settings/company/logo")).data,
 };
 
 export const auditApi = {

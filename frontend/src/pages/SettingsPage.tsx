@@ -1,5 +1,5 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Building2, Landmark, MapPin, Save, WalletCards } from "lucide-react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
+import { Building2, ImagePlus, Landmark, MapPin, Save, Trash2, Upload, WalletCards } from "lucide-react";
 import { getErrorMessage } from "../api/client";
 import { settingsApi } from "../api/payroll";
 import { useAuth } from "../auth/AuthContext";
@@ -9,7 +9,7 @@ import { Input } from "../components/ui/Input";
 import { Select } from "../components/ui/Select";
 import type { CompanySettings, WeekDayName } from "../types";
 
-type SettingsForm = Omit<CompanySettings, "id" | "updatedAt">;
+type SettingsForm = Omit<CompanySettings, "id" | "updatedAt" | "logoDataUrl">;
 
 const initialForm: SettingsForm = {
   companyName: "",
@@ -80,6 +80,8 @@ export function SettingsPage() {
   const [updatedAt, setUpdatedAt] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [logoDataUrl, setLogoDataUrl] = useState("");
+  const [logoWorking, setLogoWorking] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -111,6 +113,7 @@ export function SettingsPage() {
           payrollDisbursementDay: settings.payrollDisbursementDay ?? 1,
           weekStartDay: settings.weekStartDay ?? "MONDAY",
         });
+        setLogoDataUrl(settings.logoDataUrl ?? "");
         setUpdatedAt(settings.updatedAt);
       })
       .catch((apiError) => setError(getErrorMessage(apiError)))
@@ -122,6 +125,41 @@ export function SettingsPage() {
 
   function updateField<K extends keyof SettingsForm>(field: K, value: SettingsForm[K]) {
     setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  async function uploadLogo(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setError("");
+    setMessage("");
+    setLogoWorking(true);
+    try {
+      const saved = await settingsApi.uploadLogo(file);
+      setLogoDataUrl(saved.logoDataUrl ?? "");
+      setUpdatedAt(saved.updatedAt);
+      setMessage("Organization logo uploaded successfully.");
+    } catch (apiError) {
+      setError(getErrorMessage(apiError));
+    } finally {
+      setLogoWorking(false);
+    }
+  }
+
+  async function removeLogo() {
+    setError("");
+    setMessage("");
+    setLogoWorking(true);
+    try {
+      const saved = await settingsApi.deleteLogo();
+      setLogoDataUrl(saved.logoDataUrl ?? "");
+      setUpdatedAt(saved.updatedAt);
+      setMessage("Organization logo removed.");
+    } catch (apiError) {
+      setError(getErrorMessage(apiError));
+    } finally {
+      setLogoWorking(false);
+    }
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -173,6 +211,23 @@ export function SettingsPage() {
           <Input label="Company phone" type="tel" maxLength={40} value={form.phone} onChange={(event) => updateField("phone", event.target.value)} />
           <Input label="Website" type="url" placeholder="https://example.com" maxLength={160} value={form.website} onChange={(event) => updateField("website", event.target.value)} />
           <Input label="Tax ID / TIN" maxLength={80} value={form.taxId} onChange={(event) => updateField("taxId", event.target.value)} />
+        </div>
+        <div className="mt-6 rounded-3xl border border-moss/10 bg-moss/[0.025] p-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-2xl border border-moss/10 bg-white">
+                {logoDataUrl ? <img src={logoDataUrl} alt="Organization logo preview" className="h-full w-full object-contain p-1" /> : <ImagePlus size={24} className="text-ink/35" />}
+              </div>
+              <div><p className="text-sm font-extrabold text-ink">Organization logo</p><p className="mt-1 text-xs leading-5 text-ink/55">PNG, JPG, WEBP, or SVG · maximum 2 MB. It appears on downloaded PDF reports.</p></div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-ink px-3.5 py-2.5 text-sm font-bold text-white transition hover:bg-moss has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
+                <Upload size={15} />{logoWorking ? "Uploading..." : logoDataUrl ? "Replace logo" : "Upload logo"}
+                <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="sr-only" onChange={uploadLogo} disabled={logoWorking} />
+              </label>
+              {logoDataUrl && <Button type="button" variant="ghost" size="sm" onClick={() => void removeLogo()} disabled={logoWorking}><Trash2 size={15} />Remove</Button>}
+            </div>
+          </div>
         </div>
       </Card>
 

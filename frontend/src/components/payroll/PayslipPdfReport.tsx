@@ -53,14 +53,17 @@ export function PayslipPdfReport({ entry, companySettings, currency, printedAt }
 
   return <article style={{ width: "794px", boxSizing: "border-box", padding: "34px 40px 30px", background: "#ffffff", color: colors.ink, fontFamily: "Arial, Helvetica, sans-serif" }}>
     <header style={{ borderBottom: `3px solid ${colors.moss}`, paddingBottom: "18px", marginBottom: "22px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "28px" }}>
-        <div style={{ minWidth: 0 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "28px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "14px", minWidth: 0, flex: 1 }}>
+          {companySettings?.logoDataUrl && <img data-org-logo="true" src={companySettings.logoDataUrl} alt="Organization logo" style={{ display: "block", width: "72px", height: "54px", objectFit: "contain", flexShrink: 0 }} />}
+          <div style={{ minWidth: 0 }}>
           <div style={{ color: colors.moss, fontSize: "22px", fontWeight: 800, letterSpacing: "0.01em" }}>{companyName}</div>
           {legalName && <div style={{ color: colors.muted, fontSize: "11px", marginTop: "4px" }}>{legalName}</div>}
           {companyAddress && <div style={{ color: colors.muted, fontSize: "10px", lineHeight: 1.45, marginTop: "8px", whiteSpace: "pre-line" }}>{companyAddress}</div>}
           {contactDetails && <div style={{ color: colors.muted, fontSize: "10px", lineHeight: 1.4, marginTop: "4px" }}>{contactDetails}</div>}
+          </div>
         </div>
-        <div style={{ textAlign: "right", minWidth: "180px" }}>
+        <div style={{ textAlign: "right", minWidth: "180px", flexShrink: 0 }}>
           <div style={{ color: colors.moss, fontSize: "10px", fontWeight: 800, letterSpacing: "0.16em", textTransform: "uppercase" }}>Confidential</div>
           <div style={{ color: colors.ink, fontSize: "20px", fontWeight: 800, marginTop: "8px" }}>Payslip</div>
           <div style={{ color: colors.muted, fontSize: "11px", marginTop: "5px" }}>{periodLabel(entry)}</div>

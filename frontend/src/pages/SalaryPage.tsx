@@ -233,14 +233,17 @@ function SalaryPdfReport({
   return (
     <article style={{ width: "794px", boxSizing: "border-box", padding: "34px 40px 30px", background: "#ffffff", color: reportColors.ink, fontFamily: "Arial, Helvetica, sans-serif" }}>
       <header style={{ borderBottom: `3px solid ${reportColors.moss}`, paddingBottom: "18px", marginBottom: "22px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "28px" }}>
-          <div style={{ minWidth: 0 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "28px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "14px", minWidth: 0, flex: 1 }}>
+            {companySettings?.logoDataUrl && <img data-org-logo="true" src={companySettings.logoDataUrl} alt="Organization logo" style={{ display: "block", width: "72px", height: "54px", objectFit: "contain", flexShrink: 0 }} />}
+            <div style={{ minWidth: 0 }}>
             <div style={{ color: reportColors.moss, fontSize: "22px", fontWeight: 800, letterSpacing: "0.01em" }}>{companyName}</div>
             {legalName && <div style={{ color: reportColors.muted, fontSize: "11px", marginTop: "4px" }}>{legalName}</div>}
             {companySettings?.address && <div style={{ color: reportColors.muted, fontSize: "10px", lineHeight: 1.45, marginTop: "8px", whiteSpace: "pre-line" }}>{companySettings.address}</div>}
             {contactDetails && <div style={{ color: reportColors.muted, fontSize: "10px", lineHeight: 1.4, marginTop: "4px" }}>{contactDetails}</div>}
+            </div>
           </div>
-          <div style={{ textAlign: "right", minWidth: "180px" }}>
+          <div style={{ textAlign: "right", minWidth: "180px", flexShrink: 0 }}>
             <div style={{ color: reportColors.moss, fontSize: "10px", fontWeight: 800, letterSpacing: "0.16em", textTransform: "uppercase" }}>Confidential</div>
             <div style={{ color: reportColors.ink, fontSize: "18px", fontWeight: 800, marginTop: "8px" }}>Salary Breakup</div>
             <div style={{ color: reportColors.muted, fontSize: "10px", marginTop: "5px" }}>Compensation statement</div>
@@ -658,6 +661,7 @@ export function SalaryPage() {
         filename: `salary-breakup-${safeEmployeeCode || "employee"}.pdf`,
         orientation: "portrait",
         contextErrorMessage: "Unable to prepare the salary breakup PDF preview.",
+        logoUrl: companySettings?.logoDataUrl,
         waitForRender: true,
       });
     } catch (apiError) {
