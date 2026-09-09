@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, BriefcaseBusiness, Download, Edit3, Eye, GitBranch, GraduationCap, Plus, Search, Trash2, UploadCloud, UserRound, type LucideIcon } from "lucide-react";
+import { AlertCircle, BriefcaseBusiness, Download, Edit3, Eye, FileSpreadsheet, GitBranch, GraduationCap, Plus, Save, Search, Trash2, UploadCloud, UserRound, type LucideIcon } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { getErrorMessage } from "../api/client";
 import { branchApi, departmentApi, designationApi, employeeApi, employeeSettingsApi } from "../api/payroll";
@@ -238,6 +238,163 @@ const documentTypes = [
   "Other Documents",
 ];
 
+type EmployeeUploadColumnKey =
+  | "employeeCode"
+  | "firstName"
+  | "lastName"
+  | "gender"
+  | "dateOfBirth"
+  | "maritalStatus"
+  | "bloodGroup"
+  | "nationality"
+  | "aadhaarNumber"
+  | "taxIdentificationNumber"
+  | "phone"
+  | "alternateMobileNumber"
+  | "personalEmail"
+  | "email"
+  | "joiningDate"
+  | "employmentType"
+  | "confirmationDate"
+  | "biometricId"
+  | "department"
+  | "designation"
+  | "reportingManager"
+  | "status";
+
+interface EmployeeUploadColumn {
+  key: EmployeeUploadColumnKey;
+  header: string;
+  width: number;
+}
+
+interface EmployeeUploadRow {
+  id: number;
+  line: number;
+  employeeCode: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  joiningDate: string;
+  department: string;
+  designation: string;
+  reportingManager: string;
+  status: string;
+  errors: string[];
+  payload?: EmployeePayload;
+}
+
+const employeeUploadBaseColumns: EmployeeUploadColumn[] = [
+  { key: "firstName", header: "First Name *", width: 22 },
+  { key: "lastName", header: "Last Name *", width: 22 },
+  { key: "gender", header: "Gender", width: 18 },
+  { key: "dateOfBirth", header: "Date of Birth", width: 18 },
+  { key: "maritalStatus", header: "Marital Status", width: 20 },
+  { key: "bloodGroup", header: "Blood Group", width: 16 },
+  { key: "nationality", header: "Nationality", width: 20 },
+  { key: "aadhaarNumber", header: "Aadhaar Number", width: 22 },
+  { key: "taxIdentificationNumber", header: "PAN Number", width: 18 },
+  { key: "phone", header: "Mobile Number", width: 20 },
+  { key: "alternateMobileNumber", header: "Alternate Mobile Number", width: 25 },
+  { key: "personalEmail", header: "Personal Email", width: 32 },
+  { key: "email", header: "Official Email *", width: 32 },
+  { key: "joiningDate", header: "Joining Date *", width: 18 },
+  { key: "employmentType", header: "Employment Type", width: 20 },
+  { key: "confirmationDate", header: "Confirmation Date", width: 20 },
+  { key: "biometricId", header: "Biometric ID", width: 20 },
+  { key: "department", header: "Department *", width: 26 },
+  { key: "designation", header: "Designation *", width: 34 },
+  { key: "reportingManager", header: "Reporting Manager", width: 36 },
+  { key: "status", header: "Status *", width: 18 },
+];
+
+function employeeUploadColumns(requiresEmployeeCode: boolean): EmployeeUploadColumn[] {
+  return requiresEmployeeCode
+    ? [{ key: "employeeCode", header: "Employee Code *", width: 20 }, ...employeeUploadBaseColumns]
+    : employeeUploadBaseColumns;
+}
+
+function normalizedUploadHeader(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function employeeUploadHeaderKey(value: string): EmployeeUploadColumnKey | undefined {
+  const normalized = normalizedUploadHeader(value);
+  return ({
+    employeecode: "employeeCode",
+    firstname: "firstName",
+    lastname: "lastName",
+    gender: "gender",
+    dateofbirth: "dateOfBirth",
+    dob: "dateOfBirth",
+    maritalstatus: "maritalStatus",
+    bloodgroup: "bloodGroup",
+    nationality: "nationality",
+    aadhaarnumber: "aadhaarNumber",
+    aadhaar: "aadhaarNumber",
+    pannumber: "taxIdentificationNumber",
+    pan: "taxIdentificationNumber",
+    mobilenumber: "phone",
+    mobile: "phone",
+    phone: "phone",
+    alternatemobilenumber: "alternateMobileNumber",
+    alternativemobilenumber: "alternateMobileNumber",
+    personalemail: "personalEmail",
+    officialemail: "email",
+    joiningdate: "joiningDate",
+    employmenttype: "employmentType",
+    confirmationdate: "confirmationDate",
+    biometricid: "biometricId",
+    department: "department",
+    designation: "designation",
+    reportingmanager: "reportingManager",
+    status: "status",
+  } as Record<string, EmployeeUploadColumnKey | undefined>)[normalized];
+}
+
+function excelUploadCellText(value: unknown, dateOnly = false) {
+  if (value === null || value === undefined) return "";
+  if (value instanceof Date) {
+    return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+  }
+  if (typeof value === "object" && value && "result" in value) {
+    return excelUploadCellText((value as { result: unknown }).result, dateOnly);
+  }
+  if (typeof value === "object" && value && "text" in value) {
+    return String((value as { text: unknown }).text ?? "").trim();
+  }
+  if (typeof value === "object" && value && "hyperlink" in value) {
+    return String((value as { hyperlink: unknown }).hyperlink ?? "").replace(/^mailto:/i, "").trim();
+  }
+  if (typeof value === "object" && value && "richText" in value) {
+    return (value as { richText: Array<{ text?: string }> }).richText.map((part) => part.text ?? "").join("").trim();
+  }
+  if (dateOnly && typeof value === "number") {
+    const date = new Date(Math.round((value - 25569) * 86400 * 1000));
+    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+  }
+  return String(value).trim();
+}
+
+function isValidUploadDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00`);
+  const localValue = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  return !Number.isNaN(date.getTime()) && localValue === value;
+}
+
+function designationUploadLabel(designation: Designation) {
+  return `${designation.title} — ${designation.departmentName}`;
+}
+
+function reportingManagerUploadLabel(employee: Employee) {
+  return `${employee.employeeCode} — ${employee.fullName}`;
+}
+
+function normalizeUploadValue(value: string) {
+  return value.replace(/[\u200B-\u200D\uFEFF]/g, "").trim();
+}
+
 function calculateExperience(startDate: string, endDate: string) {
   if (!startDate || !endDate || endDate < startDate) {
     return "";
@@ -448,7 +605,14 @@ export function EmployeesPage() {
   const [profilePanel, setProfilePanel] = useState<ProfilePanel>("profile");
   const [viewingEmployee, setViewingEmployee] = useState<Employee | null>(null);
   const [viewProfilePhotoUrl, setViewProfilePhotoUrl] = useState("");
+  const [employeeUploadFile, setEmployeeUploadFile] = useState<File>();
+  const [employeeUploadRows, setEmployeeUploadRows] = useState<EmployeeUploadRow[]>([]);
+  const [validatingEmployeeUpload, setValidatingEmployeeUpload] = useState(false);
+  const [savingEmployeeUpload, setSavingEmployeeUpload] = useState(false);
+  const [employeeUploadError, setEmployeeUploadError] = useState("");
+  const [employeeUploadMessage, setEmployeeUploadMessage] = useState("");
   const errorAlertRef = useRef<HTMLDivElement>(null);
+  const employeeUploadInputRef = useRef<HTMLInputElement>(null);
   const debouncedSearch = useDebounce(search);
 
   const isPersonnelMode = viewMode === "personnel";
@@ -1031,6 +1195,415 @@ export function EmployeesPage() {
     };
   }
 
+  async function downloadEmployeeUploadTemplate() {
+    setEmployeeUploadError("");
+    setEmployeeUploadMessage("");
+    try {
+      const [latestSettings, activeDepartments, activeDesignationPage, employeePage] = await Promise.all([
+        employeeSettingsApi.get(),
+        departmentApi.active(),
+        designationApi.search({ active: true, page: 0, size: 500 }),
+        employeeApi.search({ page: 0, size: 1000 }),
+      ]);
+      if (!activeDepartments.length || !activeDesignationPage.content.length) {
+        setEmployeeUploadError("Add at least one active department and designation before downloading the employee template.");
+        return;
+      }
+      setSettings(latestSettings);
+      setDepartments(activeDepartments);
+      setDesignations(activeDesignationPage.content);
+      setAllEmployees(employeePage.content);
+
+      const { default: ExcelJS } = await import("exceljs");
+      const workbook = new ExcelJS.Workbook();
+      const requiresEmployeeCode = latestSettings.codeMode === "MANUAL";
+      const templateColumns = employeeUploadColumns(requiresEmployeeCode);
+      const sheet = workbook.addWorksheet("Employee Upload");
+      const dropdownValues = workbook.addWorksheet("Dropdown Values");
+      const templateRows = 250;
+
+      sheet.columns = templateColumns.map((column) => ({ header: column.header, key: column.key, width: column.width }));
+      for (let index = 0; index < templateRows; index += 1) {
+        sheet.addRow(Object.fromEntries(templateColumns.map((column) => [column.key, ""])));
+      }
+
+      const orderedDepartments = [...activeDepartments].sort((left, right) => left.name.localeCompare(right.name));
+      const orderedDesignations = [...activeDesignationPage.content].sort((left, right) => designationUploadLabel(left).localeCompare(designationUploadLabel(right)));
+      const reportingManagers = employeePage.content
+        .filter((employee) => employee.status !== "TERMINATED")
+        .sort((left, right) => reportingManagerUploadLabel(left).localeCompare(reportingManagerUploadLabel(right)));
+      dropdownValues.columns = [
+        { header: "Department", key: "department", width: 30 },
+        { header: "Designation", key: "designation", width: 38 },
+        { header: "Reporting Manager", key: "reportingManager", width: 38 },
+        { header: "Status", key: "status", width: 18 },
+        { header: "Gender", key: "gender", width: 22 },
+        { header: "Marital Status", key: "maritalStatus", width: 22 },
+        { header: "Blood Group", key: "bloodGroup", width: 18 },
+        { header: "Employment Type", key: "employmentType", width: 22 },
+      ];
+      const dropdownRowCount = Math.max(
+        orderedDepartments.length,
+        orderedDesignations.length,
+        reportingManagers.length,
+        statuses.length,
+        genders.length,
+        maritalStatuses.length,
+        bloodGroups.length,
+        employmentTypes.length,
+        1,
+      );
+      for (let index = 0; index < dropdownRowCount; index += 1) {
+        dropdownValues.addRow({
+          department: orderedDepartments[index]?.name ?? "",
+          designation: orderedDesignations[index] ? designationUploadLabel(orderedDesignations[index]) : "",
+          reportingManager: reportingManagers[index] ? reportingManagerUploadLabel(reportingManagers[index]) : "",
+          status: statuses[index] ?? "",
+          gender: genders[index] ?? "",
+          maritalStatus: maritalStatuses[index] ?? "",
+          bloodGroup: bloodGroups[index] ?? "",
+          employmentType: employmentTypes[index] ?? "",
+        });
+      }
+      workbook.definedNames.add(`'Dropdown Values'!$A$2:$A$${orderedDepartments.length + 1}`, "EmployeeUploadDepartments");
+      workbook.definedNames.add(`'Dropdown Values'!$B$2:$B$${orderedDesignations.length + 1}`, "EmployeeUploadDesignations");
+      workbook.definedNames.add(`'Dropdown Values'!$C$2:$C$${Math.max(reportingManagers.length, 1) + 1}`, "EmployeeUploadReportingManagers");
+      workbook.definedNames.add(`'Dropdown Values'!$D$2:$D$${statuses.length + 1}`, "EmployeeUploadStatuses");
+      workbook.definedNames.add(`'Dropdown Values'!$E$2:$E$${genders.length + 1}`, "EmployeeUploadGenders");
+      workbook.definedNames.add(`'Dropdown Values'!$F$2:$F$${maritalStatuses.length + 1}`, "EmployeeUploadMaritalStatuses");
+      workbook.definedNames.add(`'Dropdown Values'!$G$2:$G$${bloodGroups.length + 1}`, "EmployeeUploadBloodGroups");
+      workbook.definedNames.add(`'Dropdown Values'!$H$2:$H$${employmentTypes.length + 1}`, "EmployeeUploadEmploymentTypes");
+
+      sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+      sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF214E45" } };
+      sheet.views = [{ state: "frozen", ySplit: 1 }];
+      sheet.autoFilter = { from: "A1", to: `${String.fromCharCode(64 + templateColumns.length)}1` };
+
+      const columnNumber = new Map(templateColumns.map((column, index) => [column.key, index + 1]));
+      for (let row = 2; row <= templateRows + 1; row += 1) {
+        sheet.getCell(row, columnNumber.get("dateOfBirth") as number).numFmt = "yyyy-mm-dd";
+        sheet.getCell(row, columnNumber.get("joiningDate") as number).numFmt = "yyyy-mm-dd";
+        sheet.getCell(row, columnNumber.get("confirmationDate") as number).numFmt = "yyyy-mm-dd";
+        sheet.getCell(row, columnNumber.get("gender") as number).dataValidation = {
+          type: "list",
+          allowBlank: true,
+          formulae: ["=EmployeeUploadGenders"],
+          showErrorMessage: true,
+          errorStyle: "stop",
+          errorTitle: "Invalid gender",
+          error: "Choose a gender from the dropdown, or leave it blank.",
+        };
+        sheet.getCell(row, columnNumber.get("maritalStatus") as number).dataValidation = {
+          type: "list",
+          allowBlank: true,
+          formulae: ["=EmployeeUploadMaritalStatuses"],
+          showErrorMessage: true,
+          errorStyle: "stop",
+          errorTitle: "Invalid marital status",
+          error: "Choose a marital status from the dropdown, or leave it blank.",
+        };
+        sheet.getCell(row, columnNumber.get("bloodGroup") as number).dataValidation = {
+          type: "list",
+          allowBlank: true,
+          formulae: ["=EmployeeUploadBloodGroups"],
+          showErrorMessage: true,
+          errorStyle: "stop",
+          errorTitle: "Invalid blood group",
+          error: "Choose a blood group from the dropdown, or leave it blank.",
+        };
+        sheet.getCell(row, columnNumber.get("department") as number).dataValidation = {
+          type: "list",
+          allowBlank: false,
+          formulae: ["=EmployeeUploadDepartments"],
+          showErrorMessage: true,
+          errorStyle: "stop",
+          errorTitle: "Invalid department",
+          error: "Choose a department from the dropdown.",
+        };
+        sheet.getCell(row, columnNumber.get("designation") as number).dataValidation = {
+          type: "list",
+          allowBlank: false,
+          formulae: ["=EmployeeUploadDesignations"],
+          showErrorMessage: true,
+          errorStyle: "stop",
+          errorTitle: "Invalid designation",
+          error: "Choose a designation from the dropdown.",
+        };
+        sheet.getCell(row, columnNumber.get("reportingManager") as number).dataValidation = {
+          type: "list",
+          allowBlank: true,
+          formulae: ["=EmployeeUploadReportingManagers"],
+          showErrorMessage: true,
+          errorStyle: "stop",
+          errorTitle: "Invalid reporting manager",
+          error: "Choose a reporting manager from the dropdown, or leave it blank.",
+        };
+        sheet.getCell(row, columnNumber.get("status") as number).dataValidation = {
+          type: "list",
+          allowBlank: false,
+          formulae: ["=EmployeeUploadStatuses"],
+          showErrorMessage: true,
+          errorStyle: "stop",
+          errorTitle: "Invalid status",
+          error: "Choose a status from the dropdown.",
+        };
+        sheet.getCell(row, columnNumber.get("employmentType") as number).dataValidation = {
+          type: "list",
+          allowBlank: true,
+          formulae: ["=EmployeeUploadEmploymentTypes"],
+          showErrorMessage: true,
+          errorStyle: "stop",
+          errorTitle: "Invalid employment type",
+          error: "Choose an employment type from the dropdown, or leave it blank.",
+        };
+      }
+      dropdownValues.state = "hidden";
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const url = URL.createObjectURL(new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+      const anchor = window.document.createElement("a");
+      anchor.href = url;
+      anchor.download = "employee-upload-template.xlsx";
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (apiError) {
+      setEmployeeUploadError(getErrorMessage(apiError));
+    }
+  }
+
+  async function readEmployeeUploadRows(file: File, requiresEmployeeCode: boolean) {
+    if (!file.name.toLowerCase().endsWith(".xlsx")) {
+      throw new Error("Use the downloaded XLSX employee template so the dropdown values are retained.");
+    }
+
+    const { default: ExcelJS } = await import("exceljs");
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(await file.arrayBuffer());
+    const sheet = workbook.getWorksheet("Employee Upload");
+    if (!sheet) {
+      throw new Error("This is not an employee upload template. Download a new template and try again.");
+    }
+
+    const requiredColumns = employeeUploadColumns(requiresEmployeeCode);
+    const columnPositions = new Map<EmployeeUploadColumnKey, number>();
+    for (let column = 1; column <= sheet.columnCount; column += 1) {
+      const key = employeeUploadHeaderKey(excelUploadCellText(sheet.getRow(1).getCell(column).value));
+      if (key) columnPositions.set(key, column);
+    }
+    const missingColumns = requiredColumns.filter((column) => !columnPositions.has(column.key));
+    if (missingColumns.length) {
+      throw new Error(`The upload is missing: ${missingColumns.map((column) => column.header.replace(" *", "")).join(", ")}.`);
+    }
+
+    const sourceRows: Array<{ line: number; values: Record<EmployeeUploadColumnKey, string> }> = [];
+    sheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return;
+      const values = Object.fromEntries(
+        requiredColumns.map((column) => [
+          column.key,
+          excelUploadCellText(
+            row.getCell(columnPositions.get(column.key) as number).value,
+            ["dateOfBirth", "joiningDate", "confirmationDate"].includes(column.key),
+          ),
+        ]),
+      ) as Record<EmployeeUploadColumnKey, string>;
+      if (Object.values(values).some(Boolean)) sourceRows.push({ line: rowNumber, values });
+    });
+    if (!sourceRows.length) throw new Error("The upload file has no employee rows.");
+    if (sourceRows.length > 500) throw new Error("Upload up to 500 employees at a time.");
+    return sourceRows;
+  }
+
+  async function validateEmployeeUpload() {
+    if (!employeeUploadFile) {
+      setEmployeeUploadError("Choose the completed employee template first.");
+      return;
+    }
+
+    setValidatingEmployeeUpload(true);
+    setEmployeeUploadRows([]);
+    setEmployeeUploadError("");
+    setEmployeeUploadMessage("");
+    try {
+      const [latestSettings, activeDepartments, activeDesignationPage, employeePage] = await Promise.all([
+        employeeSettingsApi.get(),
+        departmentApi.active(),
+        designationApi.search({ active: true, page: 0, size: 500 }),
+        employeeApi.search({ page: 0, size: 1000 }),
+      ]);
+      const requiresEmployeeCode = latestSettings.codeMode === "MANUAL";
+      const sourceRows = await readEmployeeUploadRows(employeeUploadFile, requiresEmployeeCode);
+      setSettings(latestSettings);
+      setDepartments(activeDepartments);
+      setDesignations(activeDesignationPage.content);
+      setAllEmployees(employeePage.content);
+      const departmentByName = new Map(activeDepartments.map((department) => [department.name.trim().toLowerCase(), department]));
+      const designationByLabel = new Map(activeDesignationPage.content.map((designation) => [designationUploadLabel(designation).trim().toLowerCase(), designation]));
+      const managerByLabel = new Map(
+        employeePage.content
+          .filter((employee) => employee.status !== "TERMINATED")
+          .map((employee) => [reportingManagerUploadLabel(employee).trim().toLowerCase(), employee]),
+      );
+      const existingCodes = new Set(employeePage.content.map((employee) => employee.employeeCode.trim().toUpperCase()));
+      const existingEmails = new Set(employeePage.content.map((employee) => employee.email.trim().toLowerCase()));
+      const uploadedCodes = new Set<string>();
+      const uploadedEmails = new Set<string>();
+
+      const preview = sourceRows.map(({ line, values }, index): EmployeeUploadRow => {
+        const employeeCode = normalizeUploadValue(values.employeeCode ?? "").toUpperCase();
+        const firstName = normalizeUploadValue(values.firstName);
+        const lastName = normalizeUploadValue(values.lastName);
+        const gender = normalizeUploadValue(values.gender);
+        const dateOfBirth = normalizeUploadValue(values.dateOfBirth);
+        const maritalStatus = normalizeUploadValue(values.maritalStatus);
+        const bloodGroup = normalizeUploadValue(values.bloodGroup);
+        const nationality = normalizeUploadValue(values.nationality);
+        const aadhaarNumber = normalizeUploadValue(values.aadhaarNumber);
+        const taxIdentificationNumber = normalizeUploadValue(values.taxIdentificationNumber).toUpperCase();
+        const phone = normalizeUploadValue(values.phone);
+        const alternateMobileNumber = normalizeUploadValue(values.alternateMobileNumber);
+        const personalEmail = normalizeUploadValue(values.personalEmail).replace(/^mailto:/i, "").toLowerCase();
+        const email = normalizeUploadValue(values.email).replace(/^mailto:/i, "").toLowerCase();
+        const joiningDate = normalizeUploadValue(values.joiningDate);
+        const employmentType = normalizeUploadValue(values.employmentType);
+        const confirmationDate = normalizeUploadValue(values.confirmationDate);
+        const biometricId = normalizeUploadValue(values.biometricId);
+        const department = normalizeUploadValue(values.department);
+        const designation = normalizeUploadValue(values.designation);
+        const reportingManager = normalizeUploadValue(values.reportingManager);
+        const status = normalizeUploadValue(values.status).toUpperCase().replace(/\s+/g, "_");
+        const errors: string[] = [];
+        const selectedDepartment = departmentByName.get(department.toLowerCase());
+        const selectedDesignation = designationByLabel.get(designation.toLowerCase());
+        const selectedReportingManager = reportingManager ? managerByLabel.get(reportingManager.toLowerCase()) : undefined;
+
+        if (requiresEmployeeCode) {
+          if (!employeeCode) errors.push("Employee Code is required.");
+          else if (existingCodes.has(employeeCode)) errors.push("Employee Code already exists.");
+          else if (uploadedCodes.has(employeeCode)) errors.push("Employee Code is repeated in this upload.");
+          uploadedCodes.add(employeeCode);
+        }
+        if (!firstName) errors.push("First Name is required.");
+        if (!lastName) errors.push("Last Name is required.");
+        if (gender && !genders.includes(gender)) errors.push("Choose a valid Gender from the dropdown.");
+        if (dateOfBirth && !isValidUploadDate(dateOfBirth)) errors.push("Date of Birth must be a valid YYYY-MM-DD date.");
+        if (maritalStatus && !maritalStatuses.includes(maritalStatus)) errors.push("Choose a valid Marital Status from the dropdown.");
+        if (bloodGroup && !bloodGroups.includes(bloodGroup)) errors.push("Choose a valid Blood Group from the dropdown.");
+        if (nationality.length > 80) errors.push("Nationality must be 80 characters or fewer.");
+        if (aadhaarNumber && !validateAadhaar(aadhaarNumber)) errors.push("Aadhaar Number must contain exactly 12 digits.");
+        if (taxIdentificationNumber && !validatePan(taxIdentificationNumber)) errors.push("PAN Number must follow the format ABCDE1234F.");
+        if (phone && !validateMobile(phone)) errors.push("Mobile Number must be a valid 10-digit Indian mobile number.");
+        if (alternateMobileNumber && !validateMobile(alternateMobileNumber)) errors.push("Alternate Mobile Number must be a valid 10-digit Indian mobile number.");
+        if (personalEmail && !validateEmail(personalEmail)) errors.push("Enter a valid Personal Email.");
+        if (!email || !validateEmail(email)) errors.push("Enter a valid Official Email.");
+        else if (existingEmails.has(email)) errors.push("Official Email already exists.");
+        else if (uploadedEmails.has(email)) errors.push("Official Email is repeated in this upload.");
+        uploadedEmails.add(email);
+        if (!joiningDate || !isValidUploadDate(joiningDate)) errors.push("Joining Date must be a valid YYYY-MM-DD date.");
+        if (employmentType && !employmentTypes.includes(employmentType)) errors.push("Choose a valid Employment Type from the dropdown.");
+        if (confirmationDate && !isValidUploadDate(confirmationDate)) errors.push("Confirmation Date must be a valid YYYY-MM-DD date.");
+        if (biometricId.length > 80) errors.push("Biometric ID must be 80 characters or fewer.");
+        if (!selectedDepartment) errors.push("Choose a valid Department from the dropdown.");
+        if (!selectedDesignation) errors.push("Choose a valid Designation from the dropdown.");
+        else if (selectedDepartment && selectedDesignation.departmentId !== selectedDepartment.id) {
+          errors.push("The selected designation does not belong to the selected department.");
+        }
+        if (reportingManager && !selectedReportingManager) {
+          errors.push("Choose a valid Reporting Manager from the dropdown, or leave it blank.");
+        }
+        if (!statuses.includes(status as EmploymentStatus)) errors.push("Choose a valid Status from the dropdown.");
+
+        const row: EmployeeUploadRow = {
+          id: index + 1,
+          line,
+          employeeCode,
+          firstName,
+          lastName,
+          email,
+          joiningDate,
+          department,
+          designation,
+          reportingManager,
+          status,
+          errors,
+        };
+        if (!errors.length && selectedDepartment && selectedDesignation) {
+          row.payload = {
+            employeeCode: requiresEmployeeCode ? employeeCode : "",
+            firstName,
+            lastName,
+            email,
+            personalEmail: personalEmail || undefined,
+            phone: phone || undefined,
+            alternateMobileNumber: alternateMobileNumber || undefined,
+            gender: gender || undefined,
+            maritalStatus: maritalStatus || undefined,
+            bloodGroup: bloodGroup || undefined,
+            nationality: nationality || undefined,
+            aadhaarNumber: aadhaarNumber || undefined,
+            dateOfBirth: dateOfBirth || undefined,
+            joiningDate,
+            confirmationDate: confirmationDate || undefined,
+            baseSalary: 0,
+            employmentType: employmentType || undefined,
+            biometricId: biometricId || undefined,
+            taxIdentificationNumber: taxIdentificationNumber || undefined,
+            status: status as EmploymentStatus,
+            departmentId: selectedDepartment.id,
+            designationId: selectedDesignation.id,
+            managerId: selectedReportingManager?.id,
+          };
+        }
+        return row;
+      });
+
+      setEmployeeUploadRows(preview);
+      const invalidRows = preview.filter((row) => row.errors.length).length;
+      setEmployeeUploadMessage(
+        invalidRows
+          ? `${preview.length - invalidRows} of ${preview.length} employee row(s) are ready. Fix the highlighted rows before saving.`
+          : `${preview.length} employee row(s) validated. Review the preview, then save the upload.`,
+      );
+    } catch (apiError) {
+      setEmployeeUploadError(apiError instanceof Error ? apiError.message : getErrorMessage(apiError));
+    } finally {
+      setValidatingEmployeeUpload(false);
+    }
+  }
+
+  async function saveEmployeeUpload() {
+    if (!employeeUploadRows.length) {
+      setEmployeeUploadError("Validate an employee upload before saving.");
+      return;
+    }
+    if (employeeUploadRows.some((row) => row.errors.length)) {
+      setEmployeeUploadError("Fix all employee upload errors before saving.");
+      return;
+    }
+    const payloads = employeeUploadRows.map((row) => row.payload).filter((payload): payload is EmployeePayload => Boolean(payload));
+    if (payloads.length !== employeeUploadRows.length) {
+      setEmployeeUploadError("Validate the employee upload again before saving.");
+      return;
+    }
+
+    setSavingEmployeeUpload(true);
+    setEmployeeUploadError("");
+    try {
+      await employeeApi.bulkCreate(payloads);
+      if (settings.codeMode === "AUTO") setSettings(await employeeSettingsApi.get());
+      setEmployeeUploadMessage(`${payloads.length} employee(s) saved successfully.`);
+      setEmployeeUploadRows([]);
+      setEmployeeUploadFile(undefined);
+      if (employeeUploadInputRef.current) employeeUploadInputRef.current.value = "";
+      loadEmployees();
+      loadEmployeeDirectory();
+    } catch (apiError) {
+      setEmployeeUploadError(getErrorMessage(apiError));
+    } finally {
+      setSavingEmployeeUpload(false);
+    }
+  }
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError("");
@@ -1264,6 +1837,7 @@ export function EmployeesPage() {
             />
           </div>
         )}
+
       </Card>
 
       {pageError && (
@@ -1283,6 +1857,135 @@ export function EmployeesPage() {
         onPageChange={setPage}
         getRowKey={(employee) => employee.id}
       />
+
+      {canManageEmployees && (
+        <Card>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <FileSpreadsheet className="text-fern" size={19} />
+                <h3 className="font-display text-xl font-extrabold text-ink">Employee uploader</h3>
+              </div>
+              <p className="mt-2 max-w-3xl text-sm text-ink/60">
+                Download a sheet with the mandatory employee details plus optional personal and employment information. Department, designation, status, and standard profile values use dropdowns; validate the completed sheet here before saving it.
+              </p>
+              <p className="mt-1 text-xs font-semibold text-ink/45">
+                Salary is managed separately and is not part of this upload.
+                {settings.codeMode === "MANUAL"
+                  ? " Employee Code is included because your organization uses manual employee codes."
+                  : " Employee codes will be generated automatically when the upload is saved."}
+              </p>
+            </div>
+            <Button type="button" variant="secondary" onClick={downloadEmployeeUploadTemplate} disabled={validatingEmployeeUpload || savingEmployeeUpload}>
+              <Download size={17} />
+              Download template
+            </Button>
+          </div>
+
+          <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <input
+              ref={employeeUploadInputRef}
+              type="file"
+              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              className="sr-only"
+              onChange={(event) => {
+                setEmployeeUploadFile(event.target.files?.[0]);
+                setEmployeeUploadRows([]);
+                setEmployeeUploadError("");
+                setEmployeeUploadMessage("");
+              }}
+            />
+            <Button type="button" variant="secondary" onClick={() => employeeUploadInputRef.current?.click()} disabled={validatingEmployeeUpload || savingEmployeeUpload}>
+              <UploadCloud size={17} />
+              Choose completed sheet
+            </Button>
+            <span className="min-w-0 truncate text-sm font-semibold text-ink/60">
+              {employeeUploadFile ? employeeUploadFile.name : "No file selected"}
+            </span>
+            <Button type="button" onClick={validateEmployeeUpload} disabled={!employeeUploadFile || validatingEmployeeUpload || savingEmployeeUpload}>
+              <FileSpreadsheet size={17} />
+              {validatingEmployeeUpload ? "Validating..." : "Validate sheet"}
+            </Button>
+          </div>
+          {(employeeUploadError || employeeUploadMessage) && (
+            <p className={`mt-4 rounded-2xl px-4 py-3 text-sm font-semibold ${employeeUploadError ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>
+              {employeeUploadError || employeeUploadMessage}
+            </p>
+          )}
+        </Card>
+      )}
+
+      {canManageEmployees && employeeUploadRows.length > 0 && (
+        <Card className="overflow-hidden border-2 border-fern/20 p-0">
+          <div className="flex flex-col gap-4 border-b border-moss/10 p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="font-display text-xl font-extrabold text-ink">Employee upload preview</h3>
+              <p className="mt-1 text-sm text-ink/60">
+                {employeeUploadRows.some((row) => row.errors.length)
+                  ? "Fix every highlighted row, then validate the sheet again."
+                  : "All rows are valid and ready to save together."}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setEmployeeUploadRows([]);
+                  setEmployeeUploadMessage("");
+                }}
+                disabled={savingEmployeeUpload}
+              >
+                Clear preview
+              </Button>
+              <Button type="button" onClick={saveEmployeeUpload} disabled={employeeUploadRows.some((row) => row.errors.length > 0) || savingEmployeeUpload}>
+                <Save size={17} />
+                {savingEmployeeUpload ? "Saving..." : `Save ${employeeUploadRows.length} employee(s)`}
+              </Button>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1050px] text-left text-sm">
+              <thead className="bg-moss/5 text-xs font-extrabold uppercase tracking-[0.14em] text-ink/55">
+                <tr>
+                  <th className="px-5 py-3">Line</th>
+                  {settings.codeMode === "MANUAL" && <th className="px-5 py-3">Employee code</th>}
+                  <th className="px-5 py-3">Employee</th>
+                  <th className="px-5 py-3">Official email</th>
+                  <th className="px-5 py-3">Joining date</th>
+                  <th className="px-5 py-3">Department / designation</th>
+                  <th className="px-5 py-3">Reporting manager</th>
+                  <th className="px-5 py-3">Status</th>
+                  <th className="px-5 py-3">Validation</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-moss/10">
+                {employeeUploadRows.map((row) => (
+                  <tr key={row.id} className={row.errors.length ? "bg-red-50/40" : undefined}>
+                    <td className="px-5 py-3 font-semibold text-ink/60">{row.line}</td>
+                    {settings.codeMode === "MANUAL" && <td className="px-5 py-3 font-bold text-ink">{row.employeeCode || "-"}</td>}
+                    <td className="px-5 py-3 font-bold text-ink">{[row.firstName, row.lastName].filter(Boolean).join(" ") || "-"}</td>
+                    <td className="px-5 py-3 font-semibold text-ink/70">{row.email || "-"}</td>
+                    <td className="px-5 py-3 font-semibold text-ink/70">{row.joiningDate || "-"}</td>
+                    <td className="px-5 py-3">
+                      <p className="font-semibold text-ink">{row.department || "-"}</p>
+                      <p className="mt-1 text-xs font-semibold text-ink/50">{row.designation || "-"}</p>
+                    </td>
+                    <td className="px-5 py-3 font-semibold text-ink/70">{row.reportingManager || "-"}</td>
+                    <td className="px-5 py-3 font-bold text-ink/70">{row.status || "-"}</td>
+                    <td className="px-5 py-3">
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${row.errors.length ? "bg-red-100 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>
+                        {row.errors.length ? "Needs changes" : "Ready"}
+                      </span>
+                      {row.errors.length > 0 && <p className="mt-2 max-w-sm text-xs font-semibold leading-5 text-red-700">{row.errors.join(" ")}</p>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
 
       {isPersonnelMode && currentEmployee && (
         <section className="grid gap-6 xl:grid-cols-[260px_1fr]">

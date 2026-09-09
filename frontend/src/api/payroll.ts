@@ -148,6 +148,10 @@ export const employeeApi = {
     const { data } = await api.post<Employee>("/employees", payload);
     return data;
   },
+  bulkCreate: async (payloads: EmployeePayload[]) => {
+    const { data } = await api.post<Employee[]>("/employees/bulk", { employees: payloads });
+    return data;
+  },
   update: async (id: number, payload: EmployeePayload) => {
     const { data } = await api.put<Employee>(`/employees/${id}`, payload);
     return data;

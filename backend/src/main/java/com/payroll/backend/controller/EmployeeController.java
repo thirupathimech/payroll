@@ -5,6 +5,7 @@ import com.payroll.backend.dto.common.MessageResponse;
 import com.payroll.backend.dto.common.PageResponse;
 import com.payroll.backend.dto.employee.EmployeeHierarchyNodeResponse;
 import com.payroll.backend.dto.employee.EmployeeHierarchyResponse;
+import com.payroll.backend.dto.employee.EmployeeBulkCreateRequest;
 import com.payroll.backend.dto.employee.EmployeeRequest;
 import com.payroll.backend.dto.employee.EmployeeResponse;
 import com.payroll.backend.security.UserPrincipal;
@@ -69,6 +70,12 @@ public class EmployeeController {
     @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public EmployeeResponse create(@Valid @RequestBody EmployeeRequest request) {
         return employeeService.create(request);
+    }
+
+    @PostMapping("/bulk")
+    @PreAuthorize("hasAnyRole('ADMIN','HR')")
+    public List<EmployeeResponse> bulkCreate(@Valid @RequestBody EmployeeBulkCreateRequest request) {
+        return employeeService.bulkCreate(request.employees());
     }
 
     @PutMapping("/{id}")

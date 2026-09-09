@@ -131,6 +131,21 @@ public class EmployeeService {
         return toResponse(saved);
     }
 
+    /**
+     * Creates one uploaded batch in a single transaction. If any row cannot be
+     * saved, the complete import is rolled back so there are no partial uploads.
+     */
+    @Transactional
+    public List<EmployeeResponse> bulkCreate(List<EmployeeRequest> requests) {
+        if (requests == null || requests.isEmpty()) {
+            throw new BadRequestException("Add at least one employee");
+        }
+        if (requests.size() > 500) {
+            throw new BadRequestException("A maximum of 500 employees can be uploaded at once");
+        }
+        return requests.stream().map(this::create).toList();
+    }
+
     @Transactional
     public EmployeeResponse update(Long id, EmployeeRequest request, UserPrincipal principal) {
         Employee employee = findEmployee(id);

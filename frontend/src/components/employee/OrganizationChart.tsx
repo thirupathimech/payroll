@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, GitBranch, UserRound, Users } from "lucide-react";
+import { ChevronDown, ChevronRight, GitBranch, Minus, Plus, UserRound, Users } from "lucide-react";
 import type { EmployeeHierarchyNode } from "../../types";
 
 function flattenNodes(nodes: EmployeeHierarchyNode[]): EmployeeHierarchyNode[] {
@@ -120,8 +120,12 @@ export function OrganizationChart({
   onEmployeeContextMenu: (node: EmployeeHierarchyNode, position: { x: number; y: number }, triggerElement: HTMLElement) => void;
 }) {
   const [collapsedIds, setCollapsedIds] = useState<Set<number>>(() => new Set());
+  const [zoom, setZoom] = useState(1);
   const allNodes = useMemo(() => flattenNodes(roots), [roots]);
   const parentNodeIds = useMemo(() => allNodes.filter((node) => node.children.length > 0).map((node) => node.id), [allNodes]);
+  const zoomPercent = Math.round(zoom * 100);
+  const canZoomIn = zoom < 1.5;
+  const canZoomOut = zoom > 0.5;
 
   function toggleNode(id: number) {
     setCollapsedIds((current) => {
@@ -143,7 +147,30 @@ export function OrganizationChart({
           <h3 className="mt-2 font-display text-2xl font-extrabold text-ink">Reporting structure</h3>
           <p className="mt-1 text-sm text-ink/55">{allNodes.length} employee{allNodes.length === 1 ? "" : "s"} across {roots.length} top-level branch{roots.length === 1 ? "" : "es"}.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className="flex items-center rounded-xl border border-moss/15 bg-white p-1" aria-label={`Chart zoom: ${zoomPercent}%`}>
+            <button
+              type="button"
+              aria-label="Zoom out"
+              title="Zoom out"
+              disabled={!canZoomOut}
+              className="grid h-7 w-7 place-items-center rounded-lg text-moss transition hover:bg-moss/5 disabled:cursor-not-allowed disabled:opacity-35"
+              onClick={() => setZoom((current) => Math.max(0.5, Number((current - 0.1).toFixed(1))))}
+            >
+              <Minus size={15} />
+            </button>
+            <span className="min-w-11 text-center text-[11px] font-bold tabular-nums text-ink/65" aria-live="polite">{zoomPercent}%</span>
+            <button
+              type="button"
+              aria-label="Zoom in"
+              title="Zoom in"
+              disabled={!canZoomIn}
+              className="grid h-7 w-7 place-items-center rounded-lg text-moss transition hover:bg-moss/5 disabled:cursor-not-allowed disabled:opacity-35"
+              onClick={() => setZoom((current) => Math.min(1.5, Number((current + 0.1).toFixed(1))))}
+            >
+              <Plus size={15} />
+            </button>
+          </div>
           <button type="button" className="rounded-xl border border-moss/15 bg-white px-3 py-2 text-xs font-bold text-moss transition hover:bg-moss/5" onClick={() => setCollapsedIds(new Set())}>
             Expand all
           </button>
@@ -153,8 +180,8 @@ export function OrganizationChart({
         </div>
       </div>
 
-      <div className="mt-8 overflow-x-auto pb-4">
-        <div className="flex min-w-max items-start justify-center gap-12 px-8 py-2">
+      <div className="mt-8 overflow-auto pb-4">
+        <div className="flex min-w-max items-start justify-center gap-12 px-8 py-2" style={{ zoom }}>
           {roots.map((root) => (
             <OrganizationChartNode key={root.id} node={root} depth={0} collapsedIds={collapsedIds} onToggle={toggleNode} onEmployeeContextMenu={onEmployeeContextMenu} />
           ))}
