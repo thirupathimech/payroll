@@ -1,6 +1,7 @@
 package com.payroll.backend.dto.salary;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 public record EmployeeSalaryResponse(
@@ -11,6 +12,8 @@ public record EmployeeSalaryResponse(
         String departmentName,
         String designationTitle,
         BigDecimal ctc,
-        List<EmployeeSalaryComponentResponse> components
+        List<EmployeeSalaryComponentResponse> components,
+        LocalDate activeEffectiveDate,
+        List<EmployeeSalaryRevisionResponse> revisions
 ) {
 }

@@ -10,15 +10,18 @@ import { Card } from "../components/ui/Card";
 import { Input } from "../components/ui/Input";
 import { Modal } from "../components/ui/Modal";
 import { Select } from "../components/ui/Select";
+import { Textarea } from "../components/ui/Textarea";
 import { downloadPdf as exportPdf } from "../lib/reporting";
 import type {
   Employee,
   CompanySettings,
   EmployeeSalaryComponent,
   EmployeeSalaryResponse,
+  EmployeeSalaryRevision,
   SalaryComponent,
   SalaryComponentCategory,
   SalaryComponentPayload,
+  SalaryUpdateMode,
   SalaryValueType,
 } from "../types";
 
@@ -125,6 +128,23 @@ function formatSalaryCurrency(value: number, currency: string) {
 
 function formatAllocationPercentage(value: number, ctcFullyAllocated: boolean) {
   return `${value.toFixed(ctcFullyAllocated ? 2 : 4)}%`;
+}
+
+function todayInputValue() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function tomorrowInputValue() {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const year = tomorrow.getFullYear();
+  const month = String(tomorrow.getMonth() + 1).padStart(2, "0");
+  const day = String(tomorrow.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 interface SalaryBreakdownProps {
@@ -504,6 +524,11 @@ export function SalaryPage() {
   const [profile, setProfile] = useState<EmployeeSalaryResponse | null>(null);
   const [employeeCode, setEmployeeCode] = useState("");
   const [ctc, setCtc] = useState("");
+  const [revisionEffectiveDate, setRevisionEffectiveDate] = useState(tomorrowInputValue);
+  const [revisionReason, setRevisionReason] = useState("");
+  const [salaryUpdateModalOpen, setSalaryUpdateModalOpen] = useState(false);
+  const [salaryUpdateMode, setSalaryUpdateMode] = useState<SalaryUpdateMode>("ADJUST_CURRENT");
+  const [viewingRevision, setViewingRevision] = useState<EmployeeSalaryRevision | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -555,6 +580,8 @@ export function SalaryPage() {
     if (!employee) {
       setProfile(null);
       setCtc("");
+      setRevisionEffectiveDate(tomorrowInputValue());
+      setRevisionReason("");
       setLoadingProfile(false);
       setError("");
       setNotice("");
@@ -562,6 +589,8 @@ export function SalaryPage() {
     }
     setProfile(null);
     setCtc("");
+    setRevisionEffectiveDate(tomorrowInputValue());
+    setRevisionReason("");
     setLoadingProfile(true);
     setError("");
     setNotice("");
@@ -612,7 +641,7 @@ export function SalaryPage() {
   const ctcFullyAllocated = ctcMinorUnits > 0 && allocationBalanceUnits === 0n;
   const estimatedTakeHome = roundMoney(earningsTotal - deductionsTotal);
 
-  async function saveSalary(event: FormEvent) {
+  function openSalaryUpdateModal(event: FormEvent) {
     event.preventDefault();
     if (!profile || !selectedEmployee) {
       setError("Select an employee before saving salary.");
@@ -626,12 +655,28 @@ export function SalaryPage() {
       setError("Enabled earnings and employer contributions must add up to exactly 100% of the annual CTC before saving.");
       return;
     }
+    setError("");
+    setSalaryUpdateMode("ADJUST_CURRENT");
+    setRevisionEffectiveDate(tomorrowInputValue());
+    setSalaryUpdateModalOpen(true);
+  }
+
+  async function saveSalary(event: FormEvent) {
+    event.preventDefault();
+    if (!profile || !selectedEmployee) return;
+    if (salaryUpdateMode === "CREATE_REVISION" && !revisionEffectiveDate) {
+      setError("Choose an effective from date for the salary revision.");
+      return;
+    }
     setSaving(true);
     setError("");
     setNotice("");
     try {
       const saved = await salaryApi.saveEmployee(selectedEmployee.id, {
         ctc: ctcNumber,
+        updateMode: salaryUpdateMode,
+        effectiveDate: salaryUpdateMode === "CREATE_REVISION" ? revisionEffectiveDate : undefined,
+        reason: revisionReason.trim() || undefined,
         components: profile.components.map((item) => ({
           componentId: item.componentId,
           valueType: item.valueType,
@@ -641,7 +686,11 @@ export function SalaryPage() {
       });
       setProfile(saved);
       setCtc(String(saved.ctc));
-      setNotice("Salary structure saved successfully.");
+      setRevisionReason("");
+      setSalaryUpdateModalOpen(false);
+      setNotice(salaryUpdateMode === "ADJUST_CURRENT"
+        ? "Current salary package adjusted successfully."
+        : `Salary revision scheduled from ${new Intl.DateTimeFormat("en-IN", { dateStyle: "medium" }).format(new Date(`${revisionEffectiveDate}T00:00:00`))}.`);
     } catch (apiError) {
       setError(getErrorMessage(apiError));
     } finally {
@@ -861,7 +910,7 @@ export function SalaryPage() {
       {notice && <p className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">{notice}</p>}
 
       {profile ? (
-        <form onSubmit={saveSalary} className="space-y-6">
+        <form onSubmit={openSalaryUpdateModal} className="space-y-6">
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px] xl:items-start">
             <div className="space-y-6">
               <Card>
@@ -926,6 +975,42 @@ export function SalaryPage() {
               </Card>
 
               <Card>
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h3 className="font-display text-2xl font-extrabold text-ink">Salary revision history</h3>
+                    <p className="mt-1 text-sm text-ink/55">A complete CTC and component snapshot is retained for every effective date.</p>
+                  </div>
+                  {profile.activeEffectiveDate && <Badge value={`Current from ${new Intl.DateTimeFormat("en-IN", { dateStyle: "medium" }).format(new Date(`${profile.activeEffectiveDate}T00:00:00`))}`} />}
+                </div>
+                {profile.revisions.length > 0 ? (
+                  <div className="mt-4 divide-y divide-moss/10 rounded-2xl border border-moss/10">
+                    {profile.revisions.map((revision) => {
+                      const isCurrent = revision.effectiveDate === profile.activeEffectiveDate;
+                      const isScheduled = revision.effectiveDate > todayInputValue();
+                      return (
+                        <div key={revision.id} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="min-w-0">
+                            <p className="font-bold text-ink">
+                              Effective {new Intl.DateTimeFormat("en-IN", { dateStyle: "medium" }).format(new Date(`${revision.effectiveDate}T00:00:00`))}
+                              {isCurrent && <span className="ml-2 rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-800">Current</span>}
+                              {isScheduled && <span className="ml-2 rounded-full bg-violet-50 px-2 py-0.5 text-xs text-violet-800">Scheduled</span>}
+                            </p>
+                            <p className="mt-0.5 truncate text-sm text-ink/55">{revision.reason || "No reason recorded"}</p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-3">
+                            <p className="font-display text-lg font-extrabold tabular-nums text-ink">{formatSalaryCurrency(revision.ctc, currency)}</p>
+                            <Button type="button" variant="secondary" className="whitespace-nowrap" onClick={() => setViewingRevision(revision)}>View package</Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="mt-4 rounded-2xl bg-moss/5 px-4 py-3 text-sm font-medium text-ink/60">The first saved revision will create the salary history.</p>
+                )}
+              </Card>
+
+              <Card>
                 <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
                     <h3 className="font-display text-2xl font-extrabold text-ink">Earnings</h3>
@@ -961,7 +1046,7 @@ export function SalaryPage() {
               <div className="flex flex-col items-end gap-2">
                 {!ctcFullyAllocated && <p className="text-sm font-semibold text-amber-800">Allocate the full annual CTC before saving.</p>}
                 <Button type="submit" disabled={saving || loadingProfile || !ctcFullyAllocated}>
-                  <Save size={18} />{saving ? "Saving..." : "Save salary structure"}
+                  <Save size={18} />Review salary update
                 </Button>
               </div>
             </div>
@@ -1059,6 +1144,117 @@ export function SalaryPage() {
           ))}
         </div>
       </Card>
+
+      <Modal
+        open={salaryUpdateModalOpen}
+        onClose={() => setSalaryUpdateModalOpen(false)}
+        title="Choose how to update the package"
+        description="Choose whether this edited package should become current today or be saved as a future salary revision."
+      >
+        <form onSubmit={saveSalary} className="space-y-5">
+          <div className="grid gap-3 md:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setSalaryUpdateMode("ADJUST_CURRENT")}
+              className={`rounded-2xl border p-4 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-moss ${salaryUpdateMode === "ADJUST_CURRENT" ? "border-moss bg-moss/10 ring-1 ring-moss/30" : "border-moss/15 bg-white hover:border-moss/40"}`}
+            >
+              <p className="font-display text-lg font-extrabold text-ink">Adjust current package</p>
+              <p className="mt-1 text-sm leading-5 text-ink/60">Use for a correction or an immediate salary change. The package takes effect today.</p>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSalaryUpdateMode("CREATE_REVISION");
+                if (revisionEffectiveDate <= todayInputValue()) setRevisionEffectiveDate(tomorrowInputValue());
+              }}
+              className={`rounded-2xl border p-4 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-moss ${salaryUpdateMode === "CREATE_REVISION" ? "border-moss bg-moss/10 ring-1 ring-moss/30" : "border-moss/15 bg-white hover:border-moss/40"}`}
+            >
+              <p className="font-display text-lg font-extrabold text-ink">Create salary revision</p>
+              <p className="mt-1 text-sm leading-5 text-ink/60">Use for a planned revision. Choose when the new package must begin.</p>
+            </button>
+          </div>
+
+          {salaryUpdateMode === "CREATE_REVISION" ? (
+            <div className="rounded-2xl border border-violet-200 bg-violet-50/70 p-4">
+              <Input
+                label="Effective from"
+                type="date"
+                min={tomorrowInputValue()}
+                required
+                value={revisionEffectiveDate}
+                onChange={(event) => setRevisionEffectiveDate(event.target.value)}
+              />
+              <p className="mt-2 text-xs font-medium leading-5 text-violet-900">Payroll periods starting on or after this future date will use the revised package. A current-day change belongs under “Adjust current package”.</p>
+            </div>
+          ) : (
+            <p className="rounded-2xl bg-amber-50 px-4 py-3 text-sm font-semibold leading-5 text-amber-900">This will update the employee’s current package today. The previous package stays available in salary revision history.</p>
+          )}
+
+          <Textarea
+            label={salaryUpdateMode === "CREATE_REVISION" ? "Reason for revision (optional)" : "Reason for adjustment (optional)"}
+            value={revisionReason}
+            maxLength={500}
+            onChange={(event) => setRevisionReason(event.target.value)}
+            placeholder={salaryUpdateMode === "CREATE_REVISION" ? "Example: Annual appraisal revision" : "Example: Corrected CTC after payroll review"}
+          />
+          {error && <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
+          <div className="flex flex-wrap justify-end gap-3">
+            <Button type="button" variant="secondary" disabled={saving} onClick={() => setSalaryUpdateModalOpen(false)}>Cancel</Button>
+            <Button type="submit" disabled={saving}>{saving ? "Saving..." : salaryUpdateMode === "ADJUST_CURRENT" ? "Adjust current package" : "Save salary revision"}</Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        open={Boolean(viewingRevision)}
+        onClose={() => setViewingRevision(null)}
+        title={viewingRevision ? `Salary package — ${new Intl.DateTimeFormat("en-IN", { dateStyle: "medium" }).format(new Date(`${viewingRevision.effectiveDate}T00:00:00`))}` : "Salary package"}
+        description={viewingRevision?.reason || "Saved salary package snapshot"}
+      >
+        {viewingRevision && (
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl bg-moss/10 px-4 py-3">
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-moss">Annual CTC</p>
+                <p className="mt-1 font-display text-2xl font-extrabold tabular-nums text-ink">{formatSalaryCurrency(viewingRevision.ctc, currency)}</p>
+              </div>
+              <div className="rounded-2xl bg-ink/5 px-4 py-3">
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-ink/50">Package status</p>
+                <p className="mt-1 font-semibold text-ink">{viewingRevision.effectiveDate === profile?.activeEffectiveDate ? "Current package" : viewingRevision.effectiveDate > todayInputValue() ? "Scheduled package" : "Previous package"}</p>
+              </div>
+            </div>
+            <div className="overflow-x-auto rounded-2xl border border-moss/10">
+              <table className="min-w-full divide-y divide-moss/10 text-left text-sm">
+                <thead className="bg-moss/5 text-xs font-bold uppercase tracking-[0.1em] text-ink/55">
+                  <tr>
+                    <th className="px-4 py-3">Component</th>
+                    <th className="px-4 py-3">Configuration</th>
+                    <th className="px-4 py-3 text-right">Annual amount</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-moss/10">
+                  {viewingRevision.components.map((component) => (
+                    <tr key={component.componentId} className={component.enabled ? "bg-white" : "bg-ink/[0.02] text-ink/45"}>
+                      <td className="px-4 py-3">
+                        <p className="font-bold text-ink">{component.name}</p>
+                        <p className="mt-0.5 text-xs font-semibold uppercase tracking-[0.1em] text-ink/45">{component.code} · {categoryLabel(component.category)}</p>
+                      </td>
+                      <td className="px-4 py-3 font-medium text-ink/70">
+                        {component.enabled ? `${component.value}${component.valueType === "PERCENTAGE" ? "% of CTC" : " fixed"}` : "Not included"}
+                      </td>
+                      <td className="px-4 py-3 text-right font-bold tabular-nums text-ink">
+                        {component.enabled ? formatSalaryCurrency(amountFor(component, viewingRevision.ctc), currency) : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs font-medium text-ink/50">Saved by {viewingRevision.createdBy} on {new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(viewingRevision.createdAt))}.</p>
+            <div className="flex justify-end"><Button type="button" variant="secondary" onClick={() => setViewingRevision(null)}>Close</Button></div>
+          </div>
+        )}
+      </Modal>
 
       <Modal
         open={componentModalOpen}

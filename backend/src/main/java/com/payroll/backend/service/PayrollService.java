@@ -24,6 +24,7 @@ import com.payroll.backend.dto.payroll.PayrollComponentLineResponse;
 import com.payroll.backend.dto.payroll.PayrollEntryResponse;
 import com.payroll.backend.dto.payroll.PayrollRunCreateRequest;
 import com.payroll.backend.dto.payroll.PayrollRunResponse;
+import com.payroll.backend.dto.salary.SalaryRevisionComponentSnapshot;
 import com.payroll.backend.dto.settings.CompanySettingsResponse;
 import com.payroll.backend.exception.BadRequestException;
 import com.payroll.backend.exception.ResourceNotFoundException;
@@ -211,6 +212,8 @@ public class PayrollService {
                         component -> component.getEmployee().getId(),
                         Collectors.toMap(component -> component.getComponent().getId(), component -> component, (left, right) -> left)
                 ));
+        Map<Long, SalaryService.PayrollSalarySnapshot> salaryRevisionsByEmployee = salaryService.payrollSalarySnapshots(
+                employees.stream().map(Employee::getId).toList(), run.getPeriodStart());
         Map<Long, Map<LocalDate, BigDecimal>> attendanceByEmployee = attendanceByEmployee(run);
         Map<Long, List<LeaveRequest>> leavesByEmployee = leavesByEmployee(run);
         PayrollCalendar calendar = new PayrollCalendar(orgCode, run.getPeriodStart(), run.getPeriodEnd());
@@ -238,16 +241,20 @@ public class PayrollService {
             BigDecimal unpaidDays = leave.unpaidLeaveDays().add(unpaidAbsenceDays).min(eligibleDays);
             BigDecimal payableDays = eligibleDays.subtract(unpaidDays).max(BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
             BigDecimal proration = payableDays.divide(BigDecimal.valueOf(periodDays(run)), 8, RoundingMode.HALF_UP);
+            SalaryService.PayrollSalarySnapshot salarySnapshot = salaryRevisionsByEmployee.get(employee.getId());
+            BigDecimal annualCtc = salarySnapshot == null ? employee.getBaseSalary() : salarySnapshot.ctc();
+            List<ResolvedComponent> resolvedSalaryComponents = salarySnapshot == null
+                    ? resolvedComponents(employee, catalog, configuredByEmployee.getOrDefault(employee.getId(), Map.of()))
+                    : resolvedComponents(salarySnapshot.components());
 
             List<PayrollComponentLineResponse> lines = new ArrayList<>();
             BigDecimal gross = ZERO;
             BigDecimal employerContributions = ZERO;
-            for (ResolvedComponent component : resolvedComponents(employee, catalog,
-                    configuredByEmployee.getOrDefault(employee.getId(), Map.of()))) {
+            for (ResolvedComponent component : resolvedSalaryComponents) {
                 if (!component.enabled()) {
                     continue;
                 }
-                BigDecimal amount = annualAmount(component, employee.getBaseSalary())
+                BigDecimal amount = annualAmount(component, annualCtc)
                         .divide(BigDecimal.valueOf(payPeriodsPerYear(run)), 8, RoundingMode.HALF_UP)
                         .multiply(proration).setScale(2, RoundingMode.HALF_UP);
                 if (component.category() == SalaryComponentCategory.EARNING) {
@@ -261,12 +268,11 @@ public class PayrollService {
 
             BigDecimal deductions = ZERO;
             BigDecimal remainingForDeductions = gross;
-            for (ResolvedComponent component : resolvedComponents(employee, catalog,
-                    configuredByEmployee.getOrDefault(employee.getId(), Map.of()))) {
+            for (ResolvedComponent component : resolvedSalaryComponents) {
                 if (!component.enabled() || component.category() != SalaryComponentCategory.DEDUCTION) {
                     continue;
                 }
-                BigDecimal requested = annualAmount(component, employee.getBaseSalary())
+                BigDecimal requested = annualAmount(component, annualCtc)
                         .divide(BigDecimal.valueOf(payPeriodsPerYear(run)), 8, RoundingMode.HALF_UP)
                         .multiply(proration).setScale(2, RoundingMode.HALF_UP);
                 // A payslip must never produce a negative transfer amount. Components are
@@ -286,7 +292,7 @@ public class PayrollService {
             entry.setDepartmentName(employee.getDepartment() == null ? null : employee.getDepartment().getName());
             entry.setDesignationTitle(employee.getDesignation() == null ? null : employee.getDesignation().getTitle());
             entry.setBankAccountNumber(employee.getBankAccountNumber());
-            entry.setAnnualCtc(money(employee.getBaseSalary()));
+            entry.setAnnualCtc(money(annualCtc));
             entry.setPeriodDays(periodDays(run));
             entry.setEligibleDays(eligibleDays);
             entry.setWorkingDays(attendance.workingDays());
@@ -512,6 +518,13 @@ public class PayrollService {
                     component.getValueType(), component.getDefaultValue(),
                     component.isEnabled() && component.getCategory() != SalaryComponentCategory.EMPLOYER_CONTRIBUTION);
         }).toList();
+    }
+
+    private List<ResolvedComponent> resolvedComponents(List<SalaryRevisionComponentSnapshot> components) {
+        return components.stream()
+                .map(component -> new ResolvedComponent(component.name(), component.code(), component.category(),
+                        component.valueType(), component.value(), component.enabled()))
+                .toList();
     }
 
     private BigDecimal annualAmount(ResolvedComponent component, BigDecimal annualCtc) {

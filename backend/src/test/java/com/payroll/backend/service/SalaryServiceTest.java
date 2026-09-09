@@ -1,5 +1,6 @@
 package com.payroll.backend.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.payroll.backend.domain.Department;
 import com.payroll.backend.domain.Designation;
 import com.payroll.backend.domain.Employee;
@@ -9,15 +10,18 @@ import com.payroll.backend.domain.enums.SalaryValueType;
 import com.payroll.backend.domain.enums.EmploymentStatus;
 import com.payroll.backend.dto.salary.EmployeeSalaryComponentRequest;
 import com.payroll.backend.dto.salary.EmployeeSalaryRequest;
+import com.payroll.backend.dto.salary.SalaryUpdateMode;
 import com.payroll.backend.dto.salary.EmployeeSalaryResponse;
 import com.payroll.backend.exception.BadRequestException;
 import com.payroll.backend.repository.EmployeeRepository;
 import com.payroll.backend.repository.EmployeeSalaryComponentRepository;
+import com.payroll.backend.repository.EmployeeSalaryRevisionRepository;
 import com.payroll.backend.repository.SalaryComponentRepository;
 import com.payroll.backend.security.UserPrincipal;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -70,6 +74,28 @@ class SalaryServiceTest {
     }
 
     @Test
+    void requiresAnEffectiveDateForAScheduledSalaryRevision() {
+        Fixture fixture = new Fixture();
+
+        assertThatThrownBy(() -> fixture.service.saveEmployeeSalary(
+                fixture.employee.getId(), fixture.revisionRequest(null), fixture.principal
+        ))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Effective from date is required");
+    }
+
+    @Test
+    void directsTodaysChangeToCurrentPackageAdjustment() {
+        Fixture fixture = new Fixture();
+
+        assertThatThrownBy(() -> fixture.service.saveEmployeeSalary(
+                fixture.employee.getId(), fixture.revisionRequest(LocalDate.now()), fixture.principal
+        ))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Use Adjust current package");
+    }
+
+    @Test
     void defaultsAnAbsentEmployerContributionRowToDisabled() {
         Fixture fixture = new Fixture();
 
@@ -102,6 +128,7 @@ class SalaryServiceTest {
 
         private final SalaryComponentRepository salaryComponentRepository = mock(SalaryComponentRepository.class);
         private final EmployeeSalaryComponentRepository employeeSalaryComponentRepository = mock(EmployeeSalaryComponentRepository.class);
+        private final EmployeeSalaryRevisionRepository employeeSalaryRevisionRepository = mock(EmployeeSalaryRevisionRepository.class);
         private final EmployeeRepository employeeRepository = mock(EmployeeRepository.class);
         private final CurrentOrgService currentOrgService = mock(CurrentOrgService.class);
         private final EmployeeAccessService employeeAccessService = mock(EmployeeAccessService.class);
@@ -109,10 +136,12 @@ class SalaryServiceTest {
         private final SalaryService service = new SalaryService(
                 salaryComponentRepository,
                 employeeSalaryComponentRepository,
+                employeeSalaryRevisionRepository,
                 employeeRepository,
                 currentOrgService,
                 employeeAccessService,
-                auditService
+                auditService,
+                new ObjectMapper()
         );
         private final Employee employee = employee();
         private final UserPrincipal principal = new UserPrincipal(
@@ -142,15 +171,27 @@ class SalaryServiceTest {
             when(salaryComponentRepository.findByOrgCodeAndId(eq(ORG_CODE), anyLong()))
                     .thenAnswer(invocation -> Optional.ofNullable(componentsById.get(invocation.getArgument(1))));
             when(employeeSalaryComponentRepository.findByOrgCodeAndEmployeeId(ORG_CODE, employee.getId())).thenReturn(List.of());
+            when(employeeSalaryRevisionRepository.findByOrgCodeAndEmployeeIdOrderByEffectiveDateDesc(ORG_CODE, employee.getId()))
+                    .thenReturn(List.of());
+            when(employeeSalaryRevisionRepository.findByOrgCodeAndEmployeeIdAndEffectiveDate(eq(ORG_CODE), eq(employee.getId()), any()))
+                    .thenReturn(Optional.empty());
+            when(employeeSalaryRevisionRepository.findEffectiveRevisions(eq(ORG_CODE), any(), any()))
+                    .thenReturn(List.of());
         }
 
         private EmployeeSalaryRequest request(String earningPercentage, String employerPfPercentage, String employerEsiPercentage) {
             return new EmployeeSalaryRequest(CTC, List.of(
-                    new EmployeeSalaryComponentRequest(earning.getId(), SalaryValueType.PERCENTAGE, new BigDecimal(earningPercentage), true),
-                    new EmployeeSalaryComponentRequest(employerPf.getId(), SalaryValueType.PERCENTAGE, new BigDecimal(employerPfPercentage), true),
-                    new EmployeeSalaryComponentRequest(employerEsi.getId(), SalaryValueType.PERCENTAGE, new BigDecimal(employerEsiPercentage), true),
-                    new EmployeeSalaryComponentRequest(deduction.getId(), SalaryValueType.PERCENTAGE, new BigDecimal("5"), true)
-            ));
+                new EmployeeSalaryComponentRequest(earning.getId(), SalaryValueType.PERCENTAGE, new BigDecimal(earningPercentage), true),
+                new EmployeeSalaryComponentRequest(employerPf.getId(), SalaryValueType.PERCENTAGE, new BigDecimal(employerPfPercentage), true),
+                new EmployeeSalaryComponentRequest(employerEsi.getId(), SalaryValueType.PERCENTAGE, new BigDecimal(employerEsiPercentage), true),
+                new EmployeeSalaryComponentRequest(deduction.getId(), SalaryValueType.PERCENTAGE, new BigDecimal("5"), true)
+            ), SalaryUpdateMode.ADJUST_CURRENT, null, null);
+        }
+
+        private EmployeeSalaryRequest revisionRequest(LocalDate effectiveDate) {
+            EmployeeSalaryRequest currentAdjustment = request("84.75", "12", "3.25");
+            return new EmployeeSalaryRequest(currentAdjustment.ctc(), currentAdjustment.components(),
+                    SalaryUpdateMode.CREATE_REVISION, effectiveDate, null);
         }
 
         private static Employee employee() {
@@ -165,6 +206,7 @@ class SalaryServiceTest {
             employee.setFirstName("Ada");
             employee.setLastName("Lovelace");
             employee.setBaseSalary(CTC);
+            employee.setJoiningDate(LocalDate.of(2020, 1, 1));
             employee.setDepartment(department);
             employee.setDesignation(designation);
             return employee;

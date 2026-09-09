@@ -57,6 +57,7 @@ export type WeekDayName = "SUNDAY" | "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURS
 export type AttendanceMode = "MANUAL" | "PUNCHES";
 export type SalaryComponentCategory = "EARNING" | "EMPLOYER_CONTRIBUTION" | "DEDUCTION";
 export type SalaryValueType = "PERCENTAGE" | "FIXED";
+export type SalaryUpdateMode = "ADJUST_CURRENT" | "CREATE_REVISION";
 export type PayrollRunStatus = "DRAFT" | "APPROVED" | "LOCKED";
 
 export interface SalaryComponent {
@@ -100,10 +101,25 @@ export interface EmployeeSalaryResponse {
   designationTitle: string;
   ctc: number;
   components: EmployeeSalaryComponent[];
+  activeEffectiveDate?: string;
+  revisions: EmployeeSalaryRevision[];
+}
+
+export interface EmployeeSalaryRevision {
+  id: number;
+  effectiveDate: string;
+  ctc: number;
+  reason?: string;
+  createdBy: string;
+  createdAt: string;
+  components: EmployeeSalaryComponent[];
 }
 
 export interface EmployeeSalaryPayload {
   ctc: number;
+  updateMode: SalaryUpdateMode;
+  effectiveDate?: string;
+  reason?: string;
   components: Array<{
     componentId: number;
     valueType: SalaryValueType;
