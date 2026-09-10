@@ -126,6 +126,9 @@ CREATE TABLE leave_requests (
     status VARCHAR(40) NOT NULL,
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
+    start_time TIME NOT NULL DEFAULT '00:00:00',
+    end_time TIME NOT NULL DEFAULT '00:00:00',
+    leave_minutes INT NOT NULL DEFAULT 0,
     reason VARCHAR(800) NOT NULL,
     reviewer_comment VARCHAR(800),
     reviewed_at DATETIME(6),
@@ -146,10 +149,25 @@ CREATE TABLE company_settings (
     tax_id VARCHAR(80),
     email VARCHAR(160),
     phone VARCHAR(40),
-    address VARCHAR(700),
+    address VARCHAR(1200),
     currency VARCHAR(10) NOT NULL,
     timezone VARCHAR(80) NOT NULL,
     payroll_cutoff_day INT NOT NULL,
+    website VARCHAR(160),
+    registration_number VARCHAR(80),
+    gstin VARCHAR(20),
+    pan_number VARCHAR(20),
+    address_line1 VARCHAR(250),
+    address_line2 VARCHAR(250),
+    city VARCHAR(100),
+    state VARCHAR(100),
+    postal_code VARCHAR(20),
+    country VARCHAR(80),
+    payroll_frequency VARCHAR(20) NOT NULL DEFAULT 'MONTHLY',
+    payroll_disbursement_day INT NOT NULL DEFAULT 1,
+    week_start_day VARCHAR(20) NOT NULL DEFAULT 'MONDAY',
+    logo_data MEDIUMBLOB,
+    logo_content_type VARCHAR(40),
     PRIMARY KEY (id),
     CONSTRAINT uk_company_settings_org UNIQUE (org_code)
 );
@@ -300,3 +318,386 @@ CREATE INDEX idx_week_off_assignments_org_type ON week_off_assignments (org_code
 CREATE INDEX idx_week_off_assignments_org_employee ON week_off_assignments (org_code, employee_id);
 CREATE INDEX idx_week_off_assignments_org_group ON week_off_assignments (org_code, branch_id, department_id, designation_id);
 CREATE INDEX idx_week_off_assignments_org_date ON week_off_assignments (org_code, week_off_date);
+
+CREATE TABLE attendance_settings (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    org_code VARCHAR(3) NOT NULL,
+    created_at DATETIME(6) NOT NULL,
+    updated_at DATETIME(6) NOT NULL,
+    attendance_mode VARCHAR(20) NOT NULL DEFAULT 'MANUAL',
+    biometric_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    biometric_name VARCHAR(120),
+    biometric_url VARCHAR(300),
+    biometric_api_key VARCHAR(300),
+    PRIMARY KEY (id),
+    CONSTRAINT uk_attendance_settings_org UNIQUE (org_code)
+);
+
+CREATE TABLE attendance_records (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    org_code VARCHAR(3) NOT NULL,
+    created_at DATETIME(6) NOT NULL,
+    updated_at DATETIME(6) NOT NULL,
+    employee_id BIGINT NOT NULL,
+    attendance_date DATE NOT NULL,
+    clock_in_date DATE,
+    clock_out_date DATE,
+    clock_in TIME,
+    clock_out TIME,
+    source VARCHAR(20) NOT NULL,
+    PRIMARY KEY (id),
+    CONSTRAINT uk_attendance_employee_date UNIQUE (org_code, employee_id, attendance_date),
+    CONSTRAINT fk_attendance_employee FOREIGN KEY (employee_id) REFERENCES employees (id)
+);
+
+CREATE INDEX idx_attendance_org_date ON attendance_records (org_code, attendance_date);
+
+CREATE TABLE holidays (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    org_code VARCHAR(3) NOT NULL,
+    created_at DATETIME(6) NOT NULL,
+    updated_at DATETIME(6) NOT NULL,
+    branch_id BIGINT NOT NULL,
+    department_id BIGINT NOT NULL,
+    designation_id BIGINT NOT NULL,
+    holiday_date DATE NOT NULL,
+    title VARCHAR(160) NOT NULL,
+    PRIMARY KEY (id),
+    CONSTRAINT uk_holiday_scope_date UNIQUE (org_code, branch_id, department_id, designation_id, holiday_date),
+    CONSTRAINT fk_holiday_branch FOREIGN KEY (branch_id) REFERENCES branches (id),
+    CONSTRAINT fk_holiday_department FOREIGN KEY (department_id) REFERENCES departments (id),
+    CONSTRAINT fk_holiday_designation FOREIGN KEY (designation_id) REFERENCES designations (id)
+);
+
+CREATE INDEX idx_holidays_org_date ON holidays (org_code, holiday_date);
+
+CREATE TABLE week_off_exclusions (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    org_code VARCHAR(3) NOT NULL,
+    created_at DATETIME(6) NOT NULL,
+    updated_at DATETIME(6) NOT NULL,
+    branch_id BIGINT NOT NULL,
+    department_id BIGINT NOT NULL,
+    designation_id BIGINT NOT NULL,
+    excluded_date DATE NOT NULL,
+    PRIMARY KEY (id),
+    CONSTRAINT uk_week_off_exclusion_scope_date UNIQUE (org_code, branch_id, department_id, designation_id, excluded_date),
+    CONSTRAINT fk_week_off_exclusion_branch FOREIGN KEY (branch_id) REFERENCES branches (id),
+    CONSTRAINT fk_week_off_exclusion_department FOREIGN KEY (department_id) REFERENCES departments (id),
+    CONSTRAINT fk_week_off_exclusion_designation FOREIGN KEY (designation_id) REFERENCES designations (id)
+);
+
+CREATE INDEX idx_week_off_exclusions_org_date ON week_off_exclusions (org_code, excluded_date);
+
+CREATE TABLE salary_components (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    org_code VARCHAR(3) NOT NULL,
+    created_at DATETIME(6) NOT NULL,
+    updated_at DATETIME(6) NOT NULL,
+    name VARCHAR(120) NOT NULL,
+    code VARCHAR(40) NOT NULL,
+    category VARCHAR(32) NOT NULL,
+    value_type VARCHAR(20) NOT NULL,
+    default_value DECIMAL(14, 2) NOT NULL DEFAULT 0,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    PRIMARY KEY (id),
+    CONSTRAINT uk_salary_components_org_code UNIQUE (org_code, code)
+);
+
+CREATE TABLE employee_salary_components (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    org_code VARCHAR(3) NOT NULL,
+    created_at DATETIME(6) NOT NULL,
+    updated_at DATETIME(6) NOT NULL,
+    employee_id BIGINT NOT NULL,
+    component_id BIGINT NOT NULL,
+    value_type VARCHAR(20) NOT NULL,
+    component_value DECIMAL(14, 2) NOT NULL DEFAULT 0,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    PRIMARY KEY (id),
+    CONSTRAINT uk_employee_salary_component UNIQUE (org_code, employee_id, component_id),
+    CONSTRAINT fk_employee_salary_components_employee FOREIGN KEY (employee_id) REFERENCES employees (id),
+    CONSTRAINT fk_employee_salary_components_component FOREIGN KEY (component_id) REFERENCES salary_components (id)
+);
+
+CREATE INDEX idx_employee_salary_components_org_employee ON employee_salary_components (org_code, employee_id);
+
+CREATE TABLE employee_leave_entitlements (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    org_code VARCHAR(3) NOT NULL,
+    created_at DATETIME(6) NOT NULL,
+    updated_at DATETIME(6) NOT NULL,
+    employee_id BIGINT NOT NULL,
+    leave_type VARCHAR(40) NOT NULL,
+    leave_year INT NOT NULL,
+    allocated_minutes INT NOT NULL DEFAULT 0,
+    carried_forward_minutes INT NOT NULL DEFAULT 0,
+    PRIMARY KEY (id),
+    CONSTRAINT uk_leave_entitlement_employee_type_year UNIQUE (org_code, employee_id, leave_type, leave_year),
+    CONSTRAINT fk_leave_entitlement_employee FOREIGN KEY (employee_id) REFERENCES employees (id)
+);
+
+CREATE INDEX idx_leave_entitlements_org_employee_year
+    ON employee_leave_entitlements (org_code, employee_id, leave_year);
+
+CREATE TABLE missing_punch_requests (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    org_code VARCHAR(3) NOT NULL,
+    created_at DATETIME(6) NOT NULL,
+    updated_at DATETIME(6) NOT NULL,
+    employee_id BIGINT NOT NULL,
+    punch_date DATE NOT NULL,
+    punch_time TIME NOT NULL,
+    punch_type VARCHAR(10) NOT NULL,
+    remark VARCHAR(800) NOT NULL,
+    status VARCHAR(40) NOT NULL DEFAULT 'PENDING',
+    reviewer_comment VARCHAR(800),
+    reviewed_at DATETIME(6),
+    reviewed_by_id BIGINT,
+    PRIMARY KEY (id),
+    CONSTRAINT fk_missing_punch_requests_employee FOREIGN KEY (employee_id) REFERENCES employees (id),
+    CONSTRAINT fk_missing_punch_requests_reviewer FOREIGN KEY (reviewed_by_id) REFERENCES app_users (id)
+);
+
+CREATE INDEX idx_missing_punch_org_status ON missing_punch_requests (org_code, status);
+CREATE INDEX idx_missing_punch_employee_date ON missing_punch_requests (org_code, employee_id, punch_date);
+
+CREATE TABLE payroll_runs (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    org_code VARCHAR(3) NOT NULL,
+    created_at DATETIME(6) NOT NULL,
+    updated_at DATETIME(6) NOT NULL,
+    period_year INT NOT NULL,
+    period_month INT NOT NULL,
+    period_start DATE NOT NULL,
+    period_end DATE NOT NULL,
+    payroll_frequency VARCHAR(20) NOT NULL DEFAULT 'MONTHLY',
+    disbursement_date DATE,
+    status VARCHAR(20) NOT NULL,
+    employee_count INT NOT NULL DEFAULT 0,
+    gross_earnings DECIMAL(14, 2) NOT NULL DEFAULT 0,
+    total_deductions DECIMAL(14, 2) NOT NULL DEFAULT 0,
+    employer_contributions DECIMAL(14, 2) NOT NULL DEFAULT 0,
+    net_pay DECIMAL(14, 2) NOT NULL DEFAULT 0,
+    approved_by VARCHAR(160),
+    approved_at DATETIME(6),
+    locked_by VARCHAR(160),
+    locked_at DATETIME(6),
+    PRIMARY KEY (id),
+    CONSTRAINT uk_payroll_run_org_dates UNIQUE (org_code, period_start, period_end)
+);
+
+CREATE TABLE payroll_entries (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    org_code VARCHAR(3) NOT NULL,
+    created_at DATETIME(6) NOT NULL,
+    updated_at DATETIME(6) NOT NULL,
+    payroll_run_id BIGINT NOT NULL,
+    employee_id BIGINT NOT NULL,
+    employee_code VARCHAR(40) NOT NULL,
+    employee_name VARCHAR(220) NOT NULL,
+    department_name VARCHAR(120),
+    designation_title VARCHAR(120),
+    bank_account_number VARCHAR(80),
+    annual_ctc DECIMAL(14, 2) NOT NULL DEFAULT 0,
+    period_days INT NOT NULL,
+    eligible_days DECIMAL(8, 2) NOT NULL DEFAULT 0,
+    working_days DECIMAL(8, 2) NOT NULL DEFAULT 0,
+    attendance_days DECIMAL(8, 2) NOT NULL DEFAULT 0,
+    paid_leave_days DECIMAL(8, 2) NOT NULL DEFAULT 0,
+    unpaid_leave_days DECIMAL(8, 2) NOT NULL DEFAULT 0,
+    payable_days DECIMAL(8, 2) NOT NULL DEFAULT 0,
+    gross_earnings DECIMAL(14, 2) NOT NULL DEFAULT 0,
+    total_deductions DECIMAL(14, 2) NOT NULL DEFAULT 0,
+    employer_contributions DECIMAL(14, 2) NOT NULL DEFAULT 0,
+    reimbursement_amount DECIMAL(14, 2) NOT NULL DEFAULT 0,
+    net_pay DECIMAL(14, 2) NOT NULL DEFAULT 0,
+    component_lines_json JSON NOT NULL,
+    PRIMARY KEY (id),
+    CONSTRAINT uk_payroll_entry_run_employee UNIQUE (payroll_run_id, employee_id),
+    CONSTRAINT fk_payroll_entries_run FOREIGN KEY (payroll_run_id) REFERENCES payroll_runs (id),
+    CONSTRAINT fk_payroll_entries_employee FOREIGN KEY (employee_id) REFERENCES employees (id)
+);
+
+CREATE INDEX idx_payroll_runs_org_period ON payroll_runs (org_code, period_start);
+CREATE INDEX idx_payroll_entries_org_employee ON payroll_entries (org_code, employee_id);
+CREATE INDEX idx_payroll_entries_run ON payroll_entries (payroll_run_id);
+
+CREATE TABLE employee_salary_revisions (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    org_code VARCHAR(3) NOT NULL,
+    created_at DATETIME(6) NOT NULL,
+    updated_at DATETIME(6) NOT NULL,
+    employee_id BIGINT NOT NULL,
+    effective_date DATE NOT NULL,
+    annual_ctc DECIMAL(14, 2) NOT NULL,
+    reason VARCHAR(600),
+    created_by VARCHAR(160) NOT NULL,
+    components_json JSON NOT NULL,
+    PRIMARY KEY (id),
+    CONSTRAINT uk_salary_revision_employee_effective UNIQUE (org_code, employee_id, effective_date),
+    CONSTRAINT fk_salary_revision_employee FOREIGN KEY (employee_id) REFERENCES employees (id)
+);
+
+CREATE INDEX idx_salary_revisions_org_employee_date
+    ON employee_salary_revisions (org_code, employee_id, effective_date);
+
+CREATE TABLE employee_transfer_requests (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    org_code VARCHAR(3) NOT NULL,
+    created_at DATETIME(6) NOT NULL,
+    updated_at DATETIME(6) NOT NULL,
+    employee_id BIGINT NOT NULL,
+    from_branch_id BIGINT NOT NULL,
+    to_branch_id BIGINT NOT NULL,
+    effective_date DATE NOT NULL,
+    reason VARCHAR(800) NOT NULL,
+    status VARCHAR(40) NOT NULL,
+    requested_by_id BIGINT NOT NULL,
+    reviewed_by_id BIGINT,
+    reviewed_at DATETIME(6),
+    reviewer_comment VARCHAR(800),
+    applied_at DATETIME(6),
+    PRIMARY KEY (id),
+    CONSTRAINT fk_transfer_employee FOREIGN KEY (employee_id) REFERENCES employees (id),
+    CONSTRAINT fk_transfer_from_branch FOREIGN KEY (from_branch_id) REFERENCES branches (id),
+    CONSTRAINT fk_transfer_to_branch FOREIGN KEY (to_branch_id) REFERENCES branches (id),
+    CONSTRAINT fk_transfer_requested_by FOREIGN KEY (requested_by_id) REFERENCES app_users (id),
+    CONSTRAINT fk_transfer_reviewed_by FOREIGN KEY (reviewed_by_id) REFERENCES app_users (id)
+);
+
+CREATE TABLE resignation_requests (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    org_code VARCHAR(3) NOT NULL,
+    created_at DATETIME(6) NOT NULL,
+    updated_at DATETIME(6) NOT NULL,
+    employee_id BIGINT NOT NULL,
+    resignation_date DATE NOT NULL,
+    proposed_last_working_date DATE NOT NULL,
+    approved_last_working_date DATE,
+    relieving_date DATE,
+    reason VARCHAR(800) NOT NULL,
+    status VARCHAR(40) NOT NULL,
+    requested_by_id BIGINT NOT NULL,
+    reviewed_by_id BIGINT,
+    reviewed_at DATETIME(6),
+    reviewer_comment VARCHAR(800),
+    separated_at DATETIME(6),
+    asset_clearance_completed_at DATETIME(6),
+    asset_clearance_completed_by VARCHAR(160),
+    PRIMARY KEY (id),
+    CONSTRAINT fk_resignation_employee FOREIGN KEY (employee_id) REFERENCES employees (id),
+    CONSTRAINT fk_resignation_requested_by FOREIGN KEY (requested_by_id) REFERENCES app_users (id),
+    CONSTRAINT fk_resignation_reviewed_by FOREIGN KEY (reviewed_by_id) REFERENCES app_users (id)
+);
+
+CREATE TABLE reimbursement_requests (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    org_code VARCHAR(3) NOT NULL,
+    created_at DATETIME(6) NOT NULL,
+    updated_at DATETIME(6) NOT NULL,
+    employee_id BIGINT NOT NULL,
+    expense_date DATE NOT NULL,
+    category VARCHAR(80) NOT NULL,
+    amount DECIMAL(14, 2) NOT NULL,
+    description VARCHAR(1200) NOT NULL,
+    status VARCHAR(40) NOT NULL,
+    requested_by_id BIGINT NOT NULL,
+    reviewed_by_id BIGINT,
+    reviewed_at DATETIME(6),
+    reviewer_comment VARCHAR(800),
+    payroll_run_id BIGINT,
+    paid_at DATETIME(6),
+    PRIMARY KEY (id),
+    CONSTRAINT fk_reimbursement_employee FOREIGN KEY (employee_id) REFERENCES employees (id),
+    CONSTRAINT fk_reimbursement_requested_by FOREIGN KEY (requested_by_id) REFERENCES app_users (id),
+    CONSTRAINT fk_reimbursement_reviewed_by FOREIGN KEY (reviewed_by_id) REFERENCES app_users (id),
+    CONSTRAINT fk_reimbursement_payroll_run FOREIGN KEY (payroll_run_id) REFERENCES payroll_runs (id)
+);
+
+CREATE TABLE reimbursement_attachments (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    org_code VARCHAR(3) NOT NULL,
+    created_at DATETIME(6) NOT NULL,
+    updated_at DATETIME(6) NOT NULL,
+    reimbursement_request_id BIGINT NOT NULL,
+    file_name VARCHAR(255) NOT NULL,
+    original_file_name VARCHAR(255) NOT NULL,
+    file_type VARCHAR(120) NOT NULL,
+    file_extension VARCHAR(20) NOT NULL,
+    file_size BIGINT NOT NULL,
+    uploaded_at DATETIME(6) NOT NULL,
+    uploaded_by VARCHAR(160) NOT NULL,
+    file_data LONGBLOB NOT NULL,
+    PRIMARY KEY (id),
+    CONSTRAINT fk_reimbursement_attachment_request FOREIGN KEY (reimbursement_request_id) REFERENCES reimbursement_requests (id)
+);
+
+CREATE INDEX idx_transfer_org_employee_date ON employee_transfer_requests (org_code, employee_id, effective_date);
+CREATE INDEX idx_transfer_org_status_date ON employee_transfer_requests (org_code, status, effective_date);
+CREATE INDEX idx_resignation_org_employee ON resignation_requests (org_code, employee_id, status);
+CREATE INDEX idx_resignation_org_status_lwd ON resignation_requests (org_code, status, approved_last_working_date);
+CREATE INDEX idx_reimbursement_org_status_date ON reimbursement_requests (org_code, status, expense_date);
+CREATE INDEX idx_reimbursement_org_employee ON reimbursement_requests (org_code, employee_id);
+CREATE INDEX idx_reimbursement_org_payroll ON reimbursement_requests (org_code, payroll_run_id);
+CREATE INDEX idx_reimbursement_attachment_org_request ON reimbursement_attachments (org_code, reimbursement_request_id);
+
+CREATE TABLE asset_catalog_items (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    org_code VARCHAR(3) NOT NULL,
+    created_at DATETIME(6) NOT NULL,
+    updated_at DATETIME(6) NOT NULL,
+    name VARCHAR(120) NOT NULL,
+    category VARCHAR(80),
+    returnable TINYINT(1) NOT NULL,
+    default_recovery_amount DECIMAL(14, 2) NOT NULL DEFAULT 0,
+    active TINYINT(1) NOT NULL DEFAULT 1,
+    PRIMARY KEY (id)
+);
+
+CREATE TABLE employee_asset_releases (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    org_code VARCHAR(3) NOT NULL,
+    created_at DATETIME(6) NOT NULL,
+    updated_at DATETIME(6) NOT NULL,
+    resignation_request_id BIGINT NOT NULL,
+    asset_catalog_item_id BIGINT NOT NULL,
+    asset_name VARCHAR(120) NOT NULL,
+    asset_category VARCHAR(80),
+    returnable TINYINT(1) NOT NULL,
+    released_on DATE NOT NULL,
+    return_status VARCHAR(32) NOT NULL,
+    returned_on DATE,
+    recovery_amount DECIMAL(14, 2) NOT NULL DEFAULT 0,
+    condition_note VARCHAR(800),
+    verified_by VARCHAR(160),
+    verified_at DATETIME(6),
+    PRIMARY KEY (id),
+    CONSTRAINT fk_asset_release_resignation FOREIGN KEY (resignation_request_id) REFERENCES resignation_requests (id),
+    CONSTRAINT fk_asset_release_catalog FOREIGN KEY (asset_catalog_item_id) REFERENCES asset_catalog_items (id)
+);
+
+CREATE TABLE final_settlements (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    org_code VARCHAR(3) NOT NULL,
+    created_at DATETIME(6) NOT NULL,
+    updated_at DATETIME(6) NOT NULL,
+    resignation_request_id BIGINT NOT NULL,
+    leave_encashment_days DECIMAL(8, 2) NOT NULL DEFAULT 0,
+    leave_encashment_amount DECIMAL(14, 2) NOT NULL DEFAULT 0,
+    notice_pay_recovery DECIMAL(14, 2) NOT NULL DEFAULT 0,
+    other_earnings DECIMAL(14, 2) NOT NULL DEFAULT 0,
+    other_deductions DECIMAL(14, 2) NOT NULL DEFAULT 0,
+    remarks VARCHAR(1200),
+    settled TINYINT(1) NOT NULL DEFAULT 0,
+    settled_on DATE,
+    settled_by VARCHAR(160),
+    settled_at DATETIME(6),
+    PRIMARY KEY (id),
+    CONSTRAINT uk_final_settlement_resignation UNIQUE (resignation_request_id),
+    CONSTRAINT fk_final_settlement_resignation FOREIGN KEY (resignation_request_id) REFERENCES resignation_requests (id)
+);
+
+CREATE INDEX idx_asset_catalog_org_active ON asset_catalog_items (org_code, active, name);
+CREATE INDEX idx_asset_release_org_resignation ON employee_asset_releases (org_code, resignation_request_id);
+CREATE INDEX idx_final_settlement_org_resignation ON final_settlements (org_code, resignation_request_id);

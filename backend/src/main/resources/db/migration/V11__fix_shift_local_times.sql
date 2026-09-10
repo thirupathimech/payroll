@@ -1,2 +1,0 @@
-UPDATE shifts
-SET start_time = TIME(DATE_ADD(DATE_ADD(start_time, INTERVAL 5 HOUR), INTERVAL 30 MINUTE));
