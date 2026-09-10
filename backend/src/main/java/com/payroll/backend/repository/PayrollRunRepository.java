@@ -12,6 +12,11 @@ public interface PayrollRunRepository extends JpaRepository<PayrollRun, Long> {
     List<PayrollRun> findByOrgCodeOrderByPeriodStartDesc(String orgCode);
     Optional<PayrollRun> findByOrgCodeAndId(String orgCode, Long id);
     boolean existsByOrgCodeAndPeriodStartAndPeriodEnd(String orgCode, LocalDate periodStart, LocalDate periodEnd);
+    boolean existsByOrgCodeAndPeriodStartLessThanEqualAndPeriodEndGreaterThanEqual(
+            String orgCode,
+            LocalDate periodEnd,
+            LocalDate periodStart
+    );
     boolean existsByOrgCodeAndStatusAndPeriodStartLessThanEqualAndPeriodEndGreaterThanEqual(
             String orgCode,
             PayrollRunStatus status,

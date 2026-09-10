@@ -9,6 +9,7 @@ import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class PayrollLockServiceTest {
@@ -27,5 +28,23 @@ class PayrollLockServiceTest {
         assertThatThrownBy(() -> service.assertUnlocked(LocalDate.of(2026, 9, 12), LocalDate.of(2026, 9, 15)))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("Payroll is locked");
+    }
+
+    @Test
+    void rejectsSalaryChangesForAnyExistingPayrollRun() {
+        PayrollRunRepository repository = mock(PayrollRunRepository.class);
+        CurrentOrgService currentOrgService = mock(CurrentOrgService.class);
+        LocalDate date = LocalDate.of(2026, 9, 12);
+        when(currentOrgService.orgCode()).thenReturn("ORG");
+        when(repository.existsByOrgCodeAndPeriodStartLessThanEqualAndPeriodEndGreaterThanEqual(
+                "ORG", date, date
+        )).thenReturn(true);
+
+        PayrollLockService service = new PayrollLockService(repository, currentOrgService);
+
+        assertThatThrownBy(() -> service.assertNoPayrollRun(date))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Payroll has already been run");
+        verify(repository).existsByOrgCodeAndPeriodStartLessThanEqualAndPeriodEndGreaterThanEqual("ORG", date, date);
     }
 }

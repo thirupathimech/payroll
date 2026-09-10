@@ -37,4 +37,22 @@ public class PayrollLockService {
             );
         }
     }
+
+    /**
+     * Salary structures are input to a payroll calculation. Once a payroll
+     * run exists for a date, salary changes for that same period must use a
+     * later effective date instead of altering the package in that run.
+     */
+    public void assertNoPayrollRun(LocalDate date) {
+        if (date == null) {
+            return;
+        }
+        if (payrollRunRepository.existsByOrgCodeAndPeriodStartLessThanEqualAndPeriodEndGreaterThanEqual(
+                currentOrgService.orgCode(), date, date
+        )) {
+            throw new BadRequestException(
+                    "Payroll has already been run for this date. Update the salary after that payroll period."
+            );
+        }
+    }
 }

@@ -446,6 +446,8 @@ export const salaryApi = {
   report: async () => (await api.get<EmployeeSalaryResponse[]>("/salary/report")).data,
   employee: async (employeeId: number) => (await api.get<EmployeeSalaryResponse>(`/salary/employees/${employeeId}`)).data,
   saveEmployee: async (employeeId: number, payload: EmployeeSalaryPayload) => (await api.put<EmployeeSalaryResponse>(`/salary/employees/${employeeId}`, payload)).data,
+  updateRevision: async (employeeId: number, revisionId: number, payload: EmployeeSalaryPayload) => (await api.put<EmployeeSalaryResponse>(`/salary/employees/${employeeId}/revisions/${revisionId}`, payload)).data,
+  deleteRevision: async (employeeId: number, revisionId: number) => (await api.delete<EmployeeSalaryResponse>(`/salary/employees/${employeeId}/revisions/${revisionId}`)).data,
 };
 
 export const payrollRunApi = {

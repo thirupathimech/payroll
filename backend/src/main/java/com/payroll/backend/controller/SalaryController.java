@@ -10,6 +10,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -60,5 +61,24 @@ public class SalaryController {
             @AuthenticationPrincipal UserPrincipal principal
     ) {
         return salaryService.saveEmployeeSalary(employeeId, request, principal);
+    }
+
+    @PutMapping("/employees/{employeeId}/revisions/{revisionId}")
+    public EmployeeSalaryResponse updateScheduledRevision(
+            @PathVariable Long employeeId,
+            @PathVariable Long revisionId,
+            @Valid @RequestBody EmployeeSalaryRequest request,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return salaryService.updateScheduledRevision(employeeId, revisionId, request, principal);
+    }
+
+    @DeleteMapping("/employees/{employeeId}/revisions/{revisionId}")
+    public EmployeeSalaryResponse deleteScheduledRevision(
+            @PathVariable Long employeeId,
+            @PathVariable Long revisionId,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return salaryService.deleteScheduledRevision(employeeId, revisionId, principal);
     }
 }

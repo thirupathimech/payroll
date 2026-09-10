@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.payroll.backend.domain.Department;
 import com.payroll.backend.domain.Designation;
 import com.payroll.backend.domain.Employee;
+import com.payroll.backend.domain.EmployeeSalaryRevision;
 import com.payroll.backend.domain.SalaryComponent;
 import com.payroll.backend.domain.enums.SalaryComponentCategory;
 import com.payroll.backend.domain.enums.SalaryValueType;
@@ -36,6 +37,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doThrow;
 
 class SalaryServiceTest {
 
@@ -96,6 +98,116 @@ class SalaryServiceTest {
     }
 
     @Test
+    void adjustsTheActiveOpeningStructureWithoutCreatingAnotherRevision() {
+        Fixture fixture = new Fixture();
+        EmployeeSalaryRevision opening = new EmployeeSalaryRevision();
+        opening.setId(99L);
+        opening.setEffectiveDate(fixture.employee.getJoiningDate());
+        opening.setAnnualCtc(new BigDecimal("100000.00"));
+        when(fixture.employeeSalaryRevisionRepository
+                .findByOrgCodeAndEmployeeIdOrderByEffectiveDateDesc(ORG_CODE, fixture.employee.getId()))
+                .thenReturn(List.of(opening));
+
+        fixture.service.saveEmployeeSalary(fixture.employee.getId(), fixture.request("84.75", "12", "3.25"), fixture.principal);
+
+        assertThat(opening.getAnnualCtc()).isEqualByComparingTo(CTC);
+        verify(fixture.employeeSalaryRevisionRepository).save(opening);
+        verify(fixture.employeeSalaryRevisionRepository, never())
+                .existsByOrgCodeAndEmployeeId(ORG_CODE, fixture.employee.getId());
+    }
+
+    @Test
+    void doesNotCreateASalaryRevisionForAnInitialCurrentAdjustment() {
+        Fixture fixture = new Fixture();
+
+        fixture.service.saveEmployeeSalary(fixture.employee.getId(), fixture.request("84.75", "12", "3.25"), fixture.principal);
+
+        verify(fixture.employeeSalaryRevisionRepository, never()).save(any());
+        verify(fixture.employeeRepository).save(fixture.employee);
+    }
+
+    @Test
+    void rejectsSalaryChangesForAPeriodWhosePayrollHasRun() {
+        Fixture fixture = new Fixture();
+        doThrow(new BadRequestException("Payroll has already been run for this date."))
+                .when(fixture.payrollLockService).assertNoPayrollRun(LocalDate.now());
+
+        assertThatThrownBy(() -> fixture.service.saveEmployeeSalary(
+                fixture.employee.getId(), fixture.request("84.75", "12", "3.25"), fixture.principal
+        ))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Payroll has already been run");
+
+        verify(fixture.employeeSalaryRevisionRepository, never()).save(any());
+        verify(fixture.employeeRepository, never()).save(any());
+    }
+
+    @Test
+    void rejectsNewRevisionsForAPeriodWhosePayrollHasRun() {
+        Fixture fixture = new Fixture();
+        LocalDate effectiveDate = LocalDate.now().plusDays(1);
+        doThrow(new BadRequestException("Payroll has already been run for this date."))
+                .when(fixture.payrollLockService).assertNoPayrollRun(effectiveDate);
+
+        assertThatThrownBy(() -> fixture.service.saveEmployeeSalary(
+                fixture.employee.getId(), fixture.revisionRequest(effectiveDate), fixture.principal
+        ))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Payroll has already been run");
+
+        verify(fixture.employeeSalaryRevisionRepository, never()).save(any());
+    }
+
+    @Test
+    void updatesAScheduledRevisionWithoutChangingTheCurrentPackage() {
+        Fixture fixture = new Fixture();
+        LocalDate effectiveDate = LocalDate.now().plusDays(1);
+        EmployeeSalaryRevision scheduled = Fixture.scheduledRevision(42L, effectiveDate);
+        when(fixture.employeeSalaryRevisionRepository.findByOrgCodeAndEmployeeIdAndId(
+                ORG_CODE, fixture.employee.getId(), scheduled.getId()
+        )).thenReturn(Optional.of(scheduled));
+
+        fixture.service.updateScheduledRevision(
+                fixture.employee.getId(), scheduled.getId(), fixture.revisionRequest(effectiveDate), fixture.principal
+        );
+
+        assertThat(scheduled.getAnnualCtc()).isEqualByComparingTo(CTC);
+        verify(fixture.employeeSalaryRevisionRepository).save(scheduled);
+        verify(fixture.employeeRepository, never()).save(any());
+        verify(fixture.employeeSalaryComponentRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void deletesAScheduledRevision() {
+        Fixture fixture = new Fixture();
+        EmployeeSalaryRevision scheduled = Fixture.scheduledRevision(43L, LocalDate.now().plusDays(1));
+        when(fixture.employeeSalaryRevisionRepository.findByOrgCodeAndEmployeeIdAndId(
+                ORG_CODE, fixture.employee.getId(), scheduled.getId()
+        )).thenReturn(Optional.of(scheduled));
+
+        fixture.service.deleteScheduledRevision(fixture.employee.getId(), scheduled.getId(), fixture.principal);
+
+        verify(fixture.employeeSalaryRevisionRepository).delete(scheduled);
+    }
+
+    @Test
+    void rejectsEditingOrDeletingARevisionThatIsNoLongerScheduled() {
+        Fixture fixture = new Fixture();
+        EmployeeSalaryRevision current = Fixture.scheduledRevision(44L, LocalDate.now());
+        when(fixture.employeeSalaryRevisionRepository.findByOrgCodeAndEmployeeIdAndId(
+                ORG_CODE, fixture.employee.getId(), current.getId()
+        )).thenReturn(Optional.of(current));
+
+        assertThatThrownBy(() -> fixture.service.deleteScheduledRevision(
+                fixture.employee.getId(), current.getId(), fixture.principal
+        ))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Only scheduled salary revisions");
+
+        verify(fixture.employeeSalaryRevisionRepository, never()).delete(any());
+    }
+
+    @Test
     void defaultsAnAbsentEmployerContributionRowToDisabled() {
         Fixture fixture = new Fixture();
 
@@ -132,6 +244,7 @@ class SalaryServiceTest {
         private final EmployeeRepository employeeRepository = mock(EmployeeRepository.class);
         private final CurrentOrgService currentOrgService = mock(CurrentOrgService.class);
         private final EmployeeAccessService employeeAccessService = mock(EmployeeAccessService.class);
+        private final PayrollLockService payrollLockService = mock(PayrollLockService.class);
         private final AuditService auditService = mock(AuditService.class);
         private final SalaryService service = new SalaryService(
                 salaryComponentRepository,
@@ -140,6 +253,7 @@ class SalaryServiceTest {
                 employeeRepository,
                 currentOrgService,
                 employeeAccessService,
+                payrollLockService,
                 auditService,
                 new ObjectMapper()
         );
@@ -192,6 +306,15 @@ class SalaryServiceTest {
             EmployeeSalaryRequest currentAdjustment = request("84.75", "12", "3.25");
             return new EmployeeSalaryRequest(currentAdjustment.ctc(), currentAdjustment.components(),
                     SalaryUpdateMode.CREATE_REVISION, effectiveDate, null);
+        }
+
+        private static EmployeeSalaryRevision scheduledRevision(Long id, LocalDate effectiveDate) {
+            EmployeeSalaryRevision revision = new EmployeeSalaryRevision();
+            revision.setId(id);
+            revision.setEffectiveDate(effectiveDate);
+            revision.setAnnualCtc(new BigDecimal("100000.00"));
+            revision.setComponentsJson("[]");
+            return revision;
         }
 
         private static Employee employee() {

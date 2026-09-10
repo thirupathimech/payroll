@@ -20,6 +20,8 @@ public interface EmployeeSalaryRevisionRepository extends JpaRepository<Employee
 
     Optional<EmployeeSalaryRevision> findByOrgCodeAndEmployeeIdAndEffectiveDate(String orgCode, Long employeeId, LocalDate effectiveDate);
 
+    Optional<EmployeeSalaryRevision> findByOrgCodeAndEmployeeIdAndId(String orgCode, Long employeeId, Long id);
+
     @Query("""
         select revision from EmployeeSalaryRevision revision
         where revision.orgCode = :orgCode

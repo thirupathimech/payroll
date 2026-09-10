@@ -54,6 +54,7 @@ public class SalaryService {
     private final EmployeeRepository employeeRepository;
     private final CurrentOrgService currentOrgService;
     private final EmployeeAccessService employeeAccessService;
+    private final PayrollLockService payrollLockService;
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
 
@@ -134,9 +135,8 @@ public class SalaryService {
     }
 
     /**
-     * Creates a date-effective, immutable salary revision. Existing installations
-     * receive a baseline snapshot on their first revision so historic periods still
-     * resolve to the salary that was in place before the change.
+     * Adjustments edit the active salary structure. A new immutable history row
+     * is created only when the caller explicitly chooses CREATE_REVISION.
      */
     @Transactional
     public EmployeeSalaryResponse saveEmployeeSalary(Long employeeId, EmployeeSalaryRequest request, UserPrincipal principal) {
@@ -165,8 +165,14 @@ public class SalaryService {
         if (updateMode == SalaryUpdateMode.CREATE_REVISION && !effectiveDate.isAfter(today)) {
             throw new BadRequestException("A salary revision must start on a future date. Use Adjust current package for a change effective today");
         }
+        payrollLockService.assertNoPayrollRun(effectiveDate);
+
         EmployeeSalaryRevision currentRevision = updateMode == SalaryUpdateMode.ADJUST_CURRENT
-                ? employeeSalaryRevisionRepository.findByOrgCodeAndEmployeeIdAndEffectiveDate(orgCode, employeeId, today).orElse(null)
+                ? employeeSalaryRevisionRepository.findByOrgCodeAndEmployeeIdOrderByEffectiveDateDesc(orgCode, employeeId)
+                        .stream()
+                        .filter(revision -> !revision.getEffectiveDate().isAfter(today))
+                        .findFirst()
+                        .orElse(null)
                 : null;
         if (updateMode == SalaryUpdateMode.CREATE_REVISION
                 && employeeSalaryRevisionRepository.existsByOrgCodeAndEmployeeIdAndEffectiveDate(orgCode, employeeId, effectiveDate)) {
@@ -175,44 +181,33 @@ public class SalaryService {
 
         List<SalaryComponent> catalog = salaryComponentRepository.findByOrgCodeOrderByCategoryAscNameAsc(orgCode);
         Map<Long, EmployeeSalaryComponent> configured = configuredForEmployee(orgCode, employeeId);
-        List<EmployeeSalaryComponentRequest> requests = request.components() == null ? List.of() : request.components();
-        Set<Long> ids = new HashSet<>();
-        List<EmployeeSalaryComponent> rows = requests.stream().map(item -> {
-            if (!ids.add(item.componentId())) throw new BadRequestException("Duplicate salary component selected");
-            SalaryComponent component = salaryComponentRepository.findByOrgCodeAndId(orgCode, item.componentId())
-                    .orElseThrow(() -> new BadRequestException("Salary component not found"));
-            validateValue(item.valueType(), item.value());
-            EmployeeSalaryComponent salary = new EmployeeSalaryComponent();
-            salary.setOrgCode(orgCode);
-            salary.setEmployee(employee);
-            salary.setComponent(component);
-            salary.setValueType(item.valueType());
-            salary.setValue(item.value());
-            salary.setEnabled(item.enabled() && component.isEnabled());
-            return salary;
-        }).toList();
-        validateCompleteComponentSet(ids, orgCode);
-        validateCtcAllocation(rows, request.ctc());
+        List<EmployeeSalaryComponent> rows = salaryRows(employee, orgCode, request);
 
-        if (currentRevision == null) {
+        EmployeeSalaryRevision affectedRevision = currentRevision;
+        if (updateMode == SalaryUpdateMode.CREATE_REVISION) {
             createBaselineIfNeeded(employee, catalog, configured, effectiveDate, principal);
-        }
-        EmployeeSalaryRevision revision = currentRevision == null ? new EmployeeSalaryRevision() : currentRevision;
-        if (currentRevision == null) {
+            EmployeeSalaryRevision revision = new EmployeeSalaryRevision();
             revision.setOrgCode(orgCode);
             revision.setEmployee(employee);
             revision.setEffectiveDate(effectiveDate);
             revision.setCreatedBy(principal.email());
+            revision.setAnnualCtc(request.ctc());
+            revision.setReason(normalizeReason(request.reason()));
+            revision.setComponentsJson(writeRevisionComponents(snapshotRows(rows)));
+            employeeSalaryRevisionRepository.save(revision);
+            affectedRevision = revision;
+        } else if (currentRevision != null) {
+            // This can be the migrated/opening structure. Editing it keeps an
+            // immediate correction out of the revision history.
+            currentRevision.setAnnualCtc(request.ctc());
+            currentRevision.setReason(normalizeReason(request.reason()));
+            currentRevision.setComponentsJson(writeRevisionComponents(snapshotRows(rows)));
+            employeeSalaryRevisionRepository.save(currentRevision);
         }
-        revision.setAnnualCtc(request.ctc());
-        revision.setReason(normalizeReason(request.reason()));
-        revision.setComponentsJson(writeRevisionComponents(snapshotRows(rows)));
-        employeeSalaryRevisionRepository.save(revision);
 
-        // Keep legacy current-state fields synchronized for a revision effective
-        // today. Scheduled revisions are isolated until they become effective;
-        // reports and payroll always resolve their value from this history.
-        if (!effectiveDate.isAfter(today)) {
+        // Current-state fields remain the source of truth until an explicitly
+        // created future revision becomes effective.
+        if (updateMode == SalaryUpdateMode.ADJUST_CURRENT) {
             employee.setBaseSalary(request.ctc());
             employeeRepository.save(employee);
             employeeSalaryComponentRepository.deleteByOrgCodeAndEmployeeId(orgCode, employeeId);
@@ -222,8 +217,48 @@ public class SalaryService {
 
         String auditAction = updateMode == SalaryUpdateMode.ADJUST_CURRENT
                 ? "EMPLOYEE_SALARY_CURRENT_ADJUSTED" : "EMPLOYEE_SALARY_REVISION_CREATED";
-        auditService.log(auditAction, "EmployeeSalaryRevision", revision.getId(),
+        String auditEntity = affectedRevision == null ? "Employee" : "EmployeeSalaryRevision";
+        Long auditId = affectedRevision == null ? employee.getId() : affectedRevision.getId();
+        auditService.log(auditAction, auditEntity, auditId,
                 employee.getEmployeeCode() + " effective " + effectiveDate + "; CTC " + request.ctc().toPlainString());
+        return employeeSalary(employeeId, principal);
+    }
+
+    @Transactional
+    public EmployeeSalaryResponse updateScheduledRevision(Long employeeId, Long revisionId,
+                                                           EmployeeSalaryRequest request, UserPrincipal principal) {
+        Employee employee = findEmployee(employeeId, principal);
+        String orgCode = currentOrgService.orgCode();
+        ensureDefaultComponents();
+        LocalDate today = LocalDate.now();
+        EmployeeSalaryRevision revision = findScheduledRevision(orgCode, employeeId, revisionId, today);
+        LocalDate effectiveDate = requiredFutureRevisionDate(request, employee, today);
+        if (!revision.getEffectiveDate().equals(effectiveDate)
+                && employeeSalaryRevisionRepository.existsByOrgCodeAndEmployeeIdAndEffectiveDate(orgCode, employeeId, effectiveDate)) {
+            throw new BadRequestException("A salary revision is already scheduled for this effective date");
+        }
+        payrollLockService.assertNoPayrollRun(effectiveDate);
+        List<EmployeeSalaryComponent> rows = salaryRows(employee, orgCode, request);
+
+        revision.setEffectiveDate(effectiveDate);
+        revision.setAnnualCtc(request.ctc());
+        revision.setReason(normalizeReason(request.reason()));
+        revision.setComponentsJson(writeRevisionComponents(snapshotRows(rows)));
+        employeeSalaryRevisionRepository.save(revision);
+        auditService.log("EMPLOYEE_SALARY_REVISION_UPDATED", "EmployeeSalaryRevision", revision.getId(),
+                employee.getEmployeeCode() + " effective " + effectiveDate + "; CTC " + request.ctc().toPlainString());
+        return employeeSalary(employeeId, principal);
+    }
+
+    @Transactional
+    public EmployeeSalaryResponse deleteScheduledRevision(Long employeeId, Long revisionId, UserPrincipal principal) {
+        Employee employee = findEmployee(employeeId, principal);
+        String orgCode = currentOrgService.orgCode();
+        EmployeeSalaryRevision revision = findScheduledRevision(orgCode, employeeId, revisionId, LocalDate.now());
+        payrollLockService.assertNoPayrollRun(revision.getEffectiveDate());
+        employeeSalaryRevisionRepository.delete(revision);
+        auditService.log("EMPLOYEE_SALARY_REVISION_DELETED", "EmployeeSalaryRevision", revision.getId(),
+                employee.getEmployeeCode() + " effective " + revision.getEffectiveDate());
         return employeeSalary(employeeId, principal);
     }
 
@@ -271,6 +306,51 @@ public class SalaryService {
         employeeSalaryComponentRepository.findByOrgCodeAndEmployeeId(orgCode, employeeId)
                 .forEach(item -> configured.put(item.getComponent().getId(), item));
         return configured;
+    }
+
+    private EmployeeSalaryRevision findScheduledRevision(String orgCode, Long employeeId, Long revisionId, LocalDate today) {
+        EmployeeSalaryRevision revision = employeeSalaryRevisionRepository.findByOrgCodeAndEmployeeIdAndId(orgCode, employeeId, revisionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Salary revision not found"));
+        if (!revision.getEffectiveDate().isAfter(today)) {
+            throw new BadRequestException("Only scheduled salary revisions can be changed or deleted");
+        }
+        return revision;
+    }
+
+    private LocalDate requiredFutureRevisionDate(EmployeeSalaryRequest request, Employee employee, LocalDate today) {
+        if (request.effectiveDate() == null) {
+            throw new BadRequestException("Effective from date is required when editing a salary revision");
+        }
+        LocalDate effectiveDate = request.effectiveDate();
+        if (effectiveDate.isBefore(employee.getJoiningDate())) {
+            throw new BadRequestException("Salary revision cannot be effective before the employee joining date");
+        }
+        if (!effectiveDate.isAfter(today)) {
+            throw new BadRequestException("A salary revision must start on a future date");
+        }
+        return effectiveDate;
+    }
+
+    private List<EmployeeSalaryComponent> salaryRows(Employee employee, String orgCode, EmployeeSalaryRequest request) {
+        List<EmployeeSalaryComponentRequest> requests = request.components() == null ? List.of() : request.components();
+        Set<Long> ids = new HashSet<>();
+        List<EmployeeSalaryComponent> rows = requests.stream().map(item -> {
+            if (!ids.add(item.componentId())) throw new BadRequestException("Duplicate salary component selected");
+            SalaryComponent component = salaryComponentRepository.findByOrgCodeAndId(orgCode, item.componentId())
+                    .orElseThrow(() -> new BadRequestException("Salary component not found"));
+            validateValue(item.valueType(), item.value());
+            EmployeeSalaryComponent salary = new EmployeeSalaryComponent();
+            salary.setOrgCode(orgCode);
+            salary.setEmployee(employee);
+            salary.setComponent(component);
+            salary.setValueType(item.valueType());
+            salary.setValue(item.value());
+            salary.setEnabled(item.enabled() && component.isEnabled());
+            return salary;
+        }).toList();
+        validateCompleteComponentSet(ids, orgCode);
+        validateCtcAllocation(rows, request.ctc());
+        return rows;
     }
 
     private Employee findEmployee(Long employeeId, UserPrincipal principal) {
