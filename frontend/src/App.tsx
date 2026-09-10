@@ -26,6 +26,9 @@ import { MyCalendarOffPage } from "./pages/MyCalendarOffPage";
 import { MissingPunchPage } from "./pages/MissingPunchPage";
 import { PayrollPage } from "./pages/PayrollPage";
 import { MyPayslipsPage } from "./pages/MyPayslipsPage";
+import { EmployeeTransferPage } from "./pages/EmployeeTransferPage";
+import { ResignationPage } from "./pages/ResignationPage";
+import { ReimbursementPage } from "./pages/ReimbursementPage";
 import { ADMIN_ROLES, HR_ROLES, MANAGER_ROLES } from "./lib/access";
 
 function HomeRoute() {
@@ -50,6 +53,9 @@ export default function App() {
           <Route path="/my-payslips" element={<MyPayslipsPage />} />
           <Route path="/leaves" element={<LeavePage />} />
           <Route path="/missing-punch-requests" element={<MissingPunchPage />} />
+          <Route path="/employee-transfers" element={<EmployeeTransferPage />} />
+          <Route path="/resignations" element={<ResignationPage />} />
+          <Route path="/reimbursements" element={<ReimbursementPage />} />
           <Route path="/attendance" element={<AttendancePage />} />
           <Route path="/attendance/report" element={<AttendanceReportPage />} />
           <Route element={<ProtectedRoute allowedRoles={MANAGER_ROLES} />}>

@@ -18,6 +18,7 @@ const colors = {
   earning: "#e9f7ef",
   employer: "#f2edff",
   deduction: "#fff0f1",
+  reimbursement: "#e8f6f7",
 };
 
 function periodLabel(entry: PayrollEntry) {
@@ -98,6 +99,7 @@ export function PayslipPdfReport({ entry, companySettings, currency, printedAt }
         <thead><tr style={{ background: colors.moss, color: "#ffffff" }}><th style={{ ...cell, borderBottom: 0, textAlign: "left", width: "68%" }}>Component</th><th style={{ ...amountCell, borderBottom: 0, width: "32%" }}>Amount</th></tr></thead>
         <tbody>
           {renderLines("Earnings", "EARNING", colors.earning, "Gross earnings", entry.grossEarnings)}
+          {renderLines("Business reimbursements", "REIMBURSEMENT", colors.reimbursement, "Business reimbursements", entry.reimbursementAmount, "Tax-neutral approved expenses paid with this payroll")}
           {renderLines("Employer contributions", "EMPLOYER_CONTRIBUTION", colors.employer, "Employer contributions", entry.employerContributions, "Part of company cost; not deducted from net pay")}
           {renderLines("Deductions", "DEDUCTION", colors.deduction, "Total deductions", entry.totalDeductions)}
           <tr style={{ background: colors.moss, color: "#ffffff" }}><td style={{ ...cell, borderBottom: 0, fontWeight: 800, fontSize: "13px" }}>Net pay</td><td style={{ ...amountCell, borderBottom: 0, fontWeight: 800, fontSize: "13px" }}>{formatCurrency(entry.netPay, currency)}</td></tr>

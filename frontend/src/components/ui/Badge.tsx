@@ -13,18 +13,20 @@ export function Badge({ value }: BadgeProps) {
     <span
       className={clsx(
         "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold whitespace-nowrap",
-        ["ACTIVE", "APPROVED", "true"].includes(key) && "bg-emerald-50 text-emerald-700",
+        ["ACTIVE", "APPROVED", "PAID", "true"].includes(key) && "bg-emerald-50 text-emerald-700",
         ["PENDING", "PROBATION", "ON_LEAVE"].includes(key) && "bg-amber-50 text-amber-700",
-        ["REJECTED", "TERMINATED", "false", "CANCELLED"].includes(key) && "bg-red-50 text-red-700",
+        ["REJECTED", "TERMINATED", "RESIGNED", "false", "CANCELLED"].includes(key) && "bg-red-50 text-red-700",
         ![
           "ACTIVE",
           "APPROVED",
+          "PAID",
           "true",
           "PENDING",
           "PROBATION",
           "ON_LEAVE",
           "REJECTED",
           "TERMINATED",
+          "RESIGNED",
           "false",
           "CANCELLED",
         ].includes(key) && "bg-slate-100 text-slate-700",

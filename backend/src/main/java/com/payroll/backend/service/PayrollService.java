@@ -5,15 +5,18 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.payroll.backend.domain.AttendanceRecord;
 import com.payroll.backend.domain.Employee;
+import com.payroll.backend.domain.EmployeeTransferRequest;
 import com.payroll.backend.domain.EmployeeSalaryComponent;
 import com.payroll.backend.domain.Holiday;
 import com.payroll.backend.domain.LeaveRequest;
 import com.payroll.backend.domain.PayrollEntry;
 import com.payroll.backend.domain.PayrollRun;
+import com.payroll.backend.domain.ReimbursementRequest;
 import com.payroll.backend.domain.SalaryComponent;
 import com.payroll.backend.domain.WeekOffAssignment;
 import com.payroll.backend.domain.WeekOffExclusion;
 import com.payroll.backend.domain.enums.EmploymentStatus;
+import com.payroll.backend.domain.enums.EmployeeTransferStatus;
 import com.payroll.backend.domain.enums.LeaveStatus;
 import com.payroll.backend.domain.enums.LeaveType;
 import com.payroll.backend.domain.enums.PayrollRunStatus;
@@ -30,6 +33,7 @@ import com.payroll.backend.exception.BadRequestException;
 import com.payroll.backend.exception.ResourceNotFoundException;
 import com.payroll.backend.repository.AttendanceRecordRepository;
 import com.payroll.backend.repository.EmployeeRepository;
+import com.payroll.backend.repository.EmployeeTransferRequestRepository;
 import com.payroll.backend.repository.EmployeeSalaryComponentRepository;
 import com.payroll.backend.repository.HolidayRepository;
 import com.payroll.backend.repository.LeaveRequestRepository;
@@ -79,6 +83,7 @@ public class PayrollService {
     private final PayrollRunRepository payrollRunRepository;
     private final PayrollEntryRepository payrollEntryRepository;
     private final EmployeeRepository employeeRepository;
+    private final EmployeeTransferRequestRepository employeeTransferRequestRepository;
     private final EmployeeSalaryComponentRepository employeeSalaryComponentRepository;
     private final SalaryComponentRepository salaryComponentRepository;
     private final AttendanceRecordRepository attendanceRecordRepository;
@@ -92,6 +97,9 @@ public class PayrollService {
     private final AuditService auditService;
     private final CompanySettingsService companySettingsService;
     private final PayrollLockService payrollLockService;
+    private final ReimbursementService reimbursementService;
+    private final EmployeeTransferService employeeTransferService;
+    private final ResignationService resignationService;
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
@@ -136,6 +144,7 @@ public class PayrollService {
         PayrollRun run = findRun(id);
         requireStatus(run, PayrollRunStatus.DRAFT, "Only draft payroll can be recalculated");
         payrollLockService.assertUnlocked(run.getPeriodStart(), run.getPeriodEnd());
+        reimbursementService.releaseDraftPayrollReservations(run.getId());
         payrollEntryRepository.deleteByOrgCodeAndPayrollRunId(currentOrgService.orgCode(), run.getId());
         payrollEntryRepository.flush();
         calculate(run);
@@ -166,6 +175,7 @@ public class PayrollService {
         run.setLockedBy(principal.email());
         run.setLockedAt(Instant.now());
         payrollRunRepository.save(run);
+        reimbursementService.markPayrollReimbursementsPaid(run);
         auditService.log("PAYROLL_RUN_LOCKED", "PayrollRun", run.getId(), run.getPeriodStart().toString());
         return toRunResponse(run, entriesForRun(run));
     }
@@ -174,6 +184,7 @@ public class PayrollService {
     public void deleteDraft(Long id) {
         PayrollRun run = findRun(id);
         requireStatus(run, PayrollRunStatus.DRAFT, "Only a draft payroll can be deleted");
+        reimbursementService.releaseDraftPayrollReservations(run.getId());
         payrollEntryRepository.deleteByOrgCodeAndPayrollRunId(currentOrgService.orgCode(), run.getId());
         payrollRunRepository.delete(run);
         auditService.log("PAYROLL_RUN_DELETED", "PayrollRun", id, run.getPeriodStart().toString());
@@ -198,6 +209,8 @@ public class PayrollService {
 
     private void calculate(PayrollRun run) {
         String orgCode = currentOrgService.orgCode();
+        employeeTransferService.applyApprovedTransfersDue();
+        resignationService.applyDueResignations();
         cancelPendingLeaves(run);
         salaryService.ensureDefaultComponents();
         List<Employee> employees = employeeRepository.findPayrollEmployees(
@@ -217,6 +230,7 @@ public class PayrollService {
         Map<Long, Map<LocalDate, BigDecimal>> attendanceByEmployee = attendanceByEmployee(run);
         Map<Long, List<LeaveRequest>> leavesByEmployee = leavesByEmployee(run);
         PayrollCalendar calendar = new PayrollCalendar(orgCode, run.getPeriodStart(), run.getPeriodEnd());
+        Map<Long, List<ReimbursementRequest>> reimbursementsByEmployee = reimbursementService.allocateApprovedToPayroll(run);
 
         List<PayrollEntry> entries = new ArrayList<>();
         for (Employee employee : employees) {
@@ -283,6 +297,17 @@ public class PayrollService {
                 lines.add(line(component, amount));
             }
 
+            BigDecimal reimbursementAmount = reimbursementsByEmployee.getOrDefault(employee.getId(), List.of()).stream()
+                    .map(ReimbursementRequest::getAmount).reduce(ZERO, BigDecimal::add);
+            for (ReimbursementRequest reimbursement : reimbursementsByEmployee.getOrDefault(employee.getId(), List.of())) {
+                lines.add(new PayrollComponentLineResponse(
+                        "Reimbursement · " + reimbursement.getCategory(),
+                        "REIMB-" + reimbursement.getId(),
+                        SalaryComponentCategory.REIMBURSEMENT,
+                        money(reimbursement.getAmount())
+                ));
+            }
+
             PayrollEntry entry = new PayrollEntry();
             entry.setOrgCode(orgCode);
             entry.setPayrollRun(run);
@@ -303,7 +328,8 @@ public class PayrollService {
             entry.setGrossEarnings(money(gross));
             entry.setTotalDeductions(money(deductions));
             entry.setEmployerContributions(money(employerContributions));
-            entry.setNetPay(money(gross.subtract(deductions)));
+            entry.setReimbursementAmount(money(reimbursementAmount));
+            entry.setNetPay(money(gross.subtract(deductions).add(reimbursementAmount)));
             entry.setComponentLinesJson(writeLines(lines));
             entries.add(entry);
         }
@@ -581,7 +607,8 @@ public class PayrollService {
                 entry.getBankAccountNumber(), money(entry.getAnnualCtc()), entry.getPeriodDays(), entry.getEligibleDays(),
                 entry.getWorkingDays(), entry.getAttendanceDays(), entry.getPaidLeaveDays(), entry.getUnpaidLeaveDays(),
                 entry.getPayableDays(), money(entry.getGrossEarnings()), money(entry.getTotalDeductions()),
-                money(entry.getEmployerContributions()), money(entry.getNetPay()), readLines(entry.getComponentLinesJson()), entry.getCreatedAt());
+                money(entry.getEmployerContributions()), money(entry.getReimbursementAmount()), money(entry.getNetPay()),
+                readLines(entry.getComponentLinesJson()), entry.getCreatedAt());
     }
 
     private String writeLines(List<PayrollComponentLineResponse> lines) {
@@ -640,8 +667,11 @@ public class PayrollService {
         private final Map<Long, Set<DayOfWeek>> employeeWeeklyDays = new HashMap<>();
         private final Set<GroupDayKey> groupWeeklyDays = new HashSet<>();
         private final Set<GroupDateKey> groupExclusions = new HashSet<>();
+        private final Map<Long, List<EmployeeTransferRequest>> transfersByEmployee = new HashMap<>();
 
         private PayrollCalendar(String orgCode, LocalDate from, LocalDate to) {
+            employeeTransferRequestRepository.findByOrgCodeAndStatusOrderByEffectiveDateAsc(orgCode, EmployeeTransferStatus.APPROVED)
+                    .forEach(transfer -> transfersByEmployee.computeIfAbsent(transfer.getEmployee().getId(), ignored -> new ArrayList<>()).add(transfer));
             for (Holiday holiday : holidayRepository.findForCalendarReport(orgCode, from, to)) {
                 holidays.add(new GroupDateKey(holiday.getBranch().getId(), holiday.getDepartment().getId(),
                         holiday.getDesignation().getId(), holiday.getHolidayDate()));
@@ -665,19 +695,33 @@ public class PayrollService {
         }
 
         private boolean isHoliday(Employee employee, LocalDate date) {
-            return employee.getBranch() != null && holidays.contains(new GroupDateKey(employee.getBranch().getId(),
+            var branch = branchAt(employee, date);
+            return branch != null && holidays.contains(new GroupDateKey(branch.getId(),
                     employee.getDepartment().getId(), employee.getDesignation().getId(), date));
         }
 
         private boolean isWeekOff(Employee employee, LocalDate date) {
-            if (employee.getBranch() == null) return false;
+            var branch = branchAt(employee, date);
+            if (branch == null) return false;
             if (employeeDates.containsKey(new EmployeeDateKey(employee.getId(), date))) return true;
             if (employeeWeeklyDays.getOrDefault(employee.getId(), Set.of()).contains(date.getDayOfWeek())) return true;
-            GroupDayKey groupDay = new GroupDayKey(employee.getBranch().getId(), employee.getDepartment().getId(),
+            GroupDayKey groupDay = new GroupDayKey(branch.getId(), employee.getDepartment().getId(),
                     employee.getDesignation().getId(), date.getDayOfWeek());
-            GroupDateKey groupDate = new GroupDateKey(employee.getBranch().getId(), employee.getDepartment().getId(),
+            GroupDateKey groupDate = new GroupDateKey(branch.getId(), employee.getDepartment().getId(),
                     employee.getDesignation().getId(), date);
             return groupWeeklyDays.contains(groupDay) && !groupExclusions.contains(groupDate);
+        }
+
+        private com.payroll.backend.domain.Branch branchAt(Employee employee, LocalDate date) {
+            List<EmployeeTransferRequest> transfers = transfersByEmployee.getOrDefault(employee.getId(), List.of());
+            com.payroll.backend.domain.Branch resolved = null;
+            for (EmployeeTransferRequest transfer : transfers) {
+                if (date.isBefore(transfer.getEffectiveDate())) {
+                    return resolved == null ? transfer.getFromBranch() : resolved;
+                }
+                resolved = transfer.getToBranch();
+            }
+            return resolved == null ? employee.getBranch() : resolved;
         }
     }
 

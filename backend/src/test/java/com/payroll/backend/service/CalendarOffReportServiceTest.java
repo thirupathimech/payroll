@@ -12,6 +12,7 @@ import com.payroll.backend.domain.enums.WeekOffAssignmentType;
 import com.payroll.backend.dto.report.CalendarOffReportRow;
 import com.payroll.backend.dto.report.CalendarOffType;
 import com.payroll.backend.repository.EmployeeRepository;
+import com.payroll.backend.repository.EmployeeTransferRequestRepository;
 import com.payroll.backend.repository.HolidayRepository;
 import com.payroll.backend.repository.WeekOffAssignmentRepository;
 import com.payroll.backend.repository.WeekOffExclusionRepository;
@@ -122,13 +123,14 @@ class CalendarOffReportServiceTest {
 
     private static final class Fixture {
         private final EmployeeRepository employeeRepository = mock(EmployeeRepository.class);
+        private final EmployeeTransferRequestRepository employeeTransferRequestRepository = mock(EmployeeTransferRequestRepository.class);
         private final HolidayRepository holidayRepository = mock(HolidayRepository.class);
         private final WeekOffAssignmentRepository weekOffAssignmentRepository = mock(WeekOffAssignmentRepository.class);
         private final WeekOffExclusionRepository weekOffExclusionRepository = mock(WeekOffExclusionRepository.class);
         private final CurrentOrgService currentOrgService = mock(CurrentOrgService.class);
         private final EmployeeAccessService employeeAccessService = mock(EmployeeAccessService.class);
         private final CalendarOffReportService service = new CalendarOffReportService(
-                employeeRepository, holidayRepository, weekOffAssignmentRepository, weekOffExclusionRepository,
+                employeeRepository, employeeTransferRequestRepository, holidayRepository, weekOffAssignmentRepository, weekOffExclusionRepository,
                 currentOrgService, employeeAccessService
         );
         private final UserPrincipal principal = mock(UserPrincipal.class);
@@ -139,6 +141,7 @@ class CalendarOffReportServiceTest {
 
         private Fixture() {
             when(currentOrgService.orgCode()).thenReturn("ORG");
+            when(employeeTransferRequestRepository.findByOrgCodeAndStatusOrderByEffectiveDateAsc(anyString(), any())).thenReturn(List.of());
             when(employeeAccessService.managedEmployeeIds(principal)).thenReturn(List.of());
             when(employeeAccessService.isLead(principal)).thenReturn(false);
             when(employeeAccessService.branchScopeId(principal)).thenReturn(null);

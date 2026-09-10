@@ -4,5 +4,6 @@ public enum EmploymentStatus {
     ACTIVE,
     ON_LEAVE,
     PROBATION,
+    RESIGNED,
     TERMINATED
 }

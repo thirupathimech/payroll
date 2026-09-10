@@ -58,8 +58,10 @@ public class EmployeeService {
     private final BranchRepository branchRepository;
     private final EmployeeSettingsService employeeSettingsService;
     private final EmployeeAccessService employeeAccessService;
+    private final EmployeeTransferService employeeTransferService;
+    private final ResignationService resignationService;
 
-    @Transactional(readOnly = true)
+    @Transactional
     public PageResponse<EmployeeResponse> search(
             String search,
             EmploymentStatus status,
@@ -68,6 +70,7 @@ public class EmployeeService {
             int size,
             UserPrincipal principal
     ) {
+        applyDueEmploymentChanges();
         if (isEmployee(principal)) {
             return PageResponse.from(new org.springframework.data.domain.PageImpl<>(
                     java.util.List.of(findCurrentEmployee(principal)),
@@ -99,15 +102,17 @@ public class EmployeeService {
                 .map(this::toResponse));
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public EmployeeResponse get(Long id, UserPrincipal principal) {
+        applyDueEmploymentChanges();
         Employee employee = findEmployee(id);
         employeeAccessService.assertCanAccessEmployee(principal, employee);
         return toResponse(employee);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public EmployeeResponse getCurrent(UserPrincipal principal) {
+        applyDueEmploymentChanges();
         return toResponse(findCurrentEmployee(principal));
     }
 
@@ -186,8 +191,9 @@ public class EmployeeService {
         return toResponse(saved);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public EmployeeHierarchyResponse hierarchy(UserPrincipal principal) {
+        applyDueEmploymentChanges();
         Employee current = findCurrentEmployee(principal);
         List<EmployeeHierarchyNodeResponse> ancestors = buildAncestors(current);
         EmployeeHierarchyNodeResponse currentNode = toNode(current);
@@ -195,8 +201,9 @@ public class EmployeeService {
         return new EmployeeHierarchyResponse(currentNode, ancestors, descendants);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public List<EmployeeHierarchyNodeResponse> organizationHierarchy() {
+        applyDueEmploymentChanges();
         String orgCode = currentOrgService.orgCode();
         List<Employee> employees = employeeRepository.findOrganizationHierarchyEmployees(orgCode, EmploymentStatus.TERMINATED);
         if (employees.isEmpty()) {
@@ -252,7 +259,12 @@ public class EmployeeService {
         employee.setBranch(branch);
         employee.setManager(findManager(request.managerId(), null));
         employee.setHrManager(findManager(request.hrManagerId(), null));
-        employee.setStatus(request.status());
+        if (request.status() == EmploymentStatus.RESIGNED && employee.getStatus() != EmploymentStatus.RESIGNED) {
+            throw new BadRequestException("Use the resignation workflow to mark an employee as resigned");
+        }
+        if (employee.getStatus() != EmploymentStatus.RESIGNED) {
+            employee.setStatus(request.status());
+        }
         employee.setDepartment(department);
         employee.setDesignation(designation);
     }
@@ -289,10 +301,6 @@ public class EmployeeService {
         employee.setSecondarySkill(trim(request.secondarySkill()));
         employee.setCertifications(trim(request.certifications()));
         employee.setLanguagesKnown(trim(request.languagesKnown()));
-        employee.setResignationDate(request.resignationDate());
-        employee.setLastWorkingDate(request.lastWorkingDate());
-        employee.setExitReason(trim(request.exitReason()));
-        employee.setRelievingDate(request.relievingDate());
     }
 
     private void saveEducation(Employee employee, List<EmployeeEducationRequest> education) {
@@ -444,6 +452,11 @@ public class EmployeeService {
 
     private List<Long> scopedEmployeeIds(UserPrincipal principal) {
         return employeeAccessService.managedEmployeeIds(principal);
+    }
+
+    private void applyDueEmploymentChanges() {
+        employeeTransferService.applyApprovedTransfersDue();
+        resignationService.applyDueResignations();
     }
 
     private EmployeeHierarchyNodeResponse toNode(Employee employee) {

@@ -1,15 +1,19 @@
 package com.payroll.backend.service;
 
 import com.payroll.backend.domain.Employee;
+import com.payroll.backend.domain.Branch;
+import com.payroll.backend.domain.EmployeeTransferRequest;
 import com.payroll.backend.domain.Holiday;
 import com.payroll.backend.domain.WeekOffAssignment;
 import com.payroll.backend.domain.WeekOffExclusion;
 import com.payroll.backend.domain.enums.EmploymentStatus;
+import com.payroll.backend.domain.enums.EmployeeTransferStatus;
 import com.payroll.backend.domain.enums.WeekOffAssignmentType;
 import com.payroll.backend.dto.report.CalendarOffReportRow;
 import com.payroll.backend.dto.report.CalendarOffType;
 import com.payroll.backend.exception.BadRequestException;
 import com.payroll.backend.repository.EmployeeRepository;
+import com.payroll.backend.repository.EmployeeTransferRequestRepository;
 import com.payroll.backend.repository.HolidayRepository;
 import com.payroll.backend.repository.WeekOffAssignmentRepository;
 import com.payroll.backend.repository.WeekOffExclusionRepository;
@@ -38,6 +42,7 @@ public class CalendarOffReportService {
     private static final long MAX_REPORT_DAYS = 366;
 
     private final EmployeeRepository employeeRepository;
+    private final EmployeeTransferRequestRepository employeeTransferRequestRepository;
     private final HolidayRepository holidayRepository;
     private final WeekOffAssignmentRepository weekOffAssignmentRepository;
     private final WeekOffExclusionRepository weekOffExclusionRepository;
@@ -84,9 +89,13 @@ public class CalendarOffReportService {
             return List.of();
         }
 
+        Map<Long, List<EmployeeTransferRequest>> transfersByEmployee = new HashMap<>();
+        employeeTransferRequestRepository.findByOrgCodeAndStatusOrderByEffectiveDateAsc(
+                        currentOrgService.orgCode(), EmployeeTransferStatus.APPROVED)
+                .forEach(transfer -> transfersByEmployee.computeIfAbsent(transfer.getEmployee().getId(), ignored -> new ArrayList<>()).add(transfer));
         return type == CalendarOffType.HOLIDAY
-                ? holidayRows(employees, from, to)
-                : weekOffRows(employees, from, to);
+                ? holidayRows(employees, from, to, transfersByEmployee)
+                : weekOffRows(employees, from, to, transfersByEmployee);
     }
 
     /**
@@ -105,7 +114,9 @@ public class CalendarOffReportService {
         return calendarOff(type, from, to, null, null, null, employee.getId(), principal);
     }
 
-    private List<CalendarOffReportRow> holidayRows(List<Employee> employees, LocalDate from, LocalDate to) {
+    private List<CalendarOffReportRow> holidayRows(
+            List<Employee> employees, LocalDate from, LocalDate to, Map<Long, List<EmployeeTransferRequest>> transfersByEmployee
+    ) {
         Map<GroupDateKey, Holiday> holidays = new HashMap<>();
         holidayRepository.findForCalendarReport(currentOrgService.orgCode(), from, to)
                 .forEach(holiday -> holidays.put(
@@ -120,25 +131,26 @@ public class CalendarOffReportService {
 
         List<CalendarOffReportRow> rows = new ArrayList<>();
         for (Employee employee : employees) {
-            if (employee.getBranch() == null) {
-                continue;
-            }
             for (LocalDate date = firstEmploymentDate(employee, from); !date.isAfter(to); date = date.plusDays(1)) {
+                Branch branch = branchAt(employee, date, transfersByEmployee);
+                if (branch == null) continue;
                 Holiday holiday = holidays.get(groupDateKey(
-                        employee.getBranch().getId(),
+                        branch.getId(),
                         employee.getDepartment().getId(),
                         employee.getDesignation().getId(),
                         date
                 ));
                 if (holiday != null) {
-                    rows.add(row(employee, date, holiday.getTitle(), "Holiday rule"));
+                    rows.add(row(employee, branch, date, holiday.getTitle(), "Holiday rule"));
                 }
             }
         }
         return sort(rows);
     }
 
-    private List<CalendarOffReportRow> weekOffRows(List<Employee> employees, LocalDate from, LocalDate to) {
+    private List<CalendarOffReportRow> weekOffRows(
+            List<Employee> employees, LocalDate from, LocalDate to, Map<Long, List<EmployeeTransferRequest>> transfersByEmployee
+    ) {
         List<WeekOffAssignment> rules = weekOffAssignmentRepository.findForCalendarReport(
                 currentOrgService.orgCode(),
                 List.of(WeekOffAssignmentType.GROUP_WEEKLY, WeekOffAssignmentType.EMPLOYEE_WEEKLY),
@@ -176,29 +188,22 @@ public class CalendarOffReportService {
 
         List<CalendarOffReportRow> rows = new ArrayList<>();
         for (Employee employee : employees) {
-            if (employee.getBranch() == null) {
-                continue;
-            }
-            GroupDayKey employeeGroup = groupDayKey(
-                    employee.getBranch().getId(),
-                    employee.getDepartment().getId(),
-                    employee.getDesignation().getId(),
-                    null
-            );
             for (LocalDate date = firstEmploymentDate(employee, from); !date.isAfter(to); date = date.plusDays(1)) {
+                Branch branch = branchAt(employee, date, transfersByEmployee);
+                if (branch == null) continue;
                 WeekOffAssignment employeeDate = employeeDates.get(new EmployeeDateKey(employee.getId(), date));
                 if (employeeDate != null) {
-                    rows.add(row(employee, date, "Week off", "Employee date"));
+                    rows.add(row(employee, branch, date, "Week off", "Employee date"));
                     continue;
                 }
                 if (employeeWeeklyDays.getOrDefault(employee.getId(), Set.of()).contains(date.getDayOfWeek())) {
-                    rows.add(row(employee, date, "Week off", "Employee weekly"));
+                    rows.add(row(employee, branch, date, "Week off", "Employee weekly"));
                     continue;
                 }
-                GroupDayKey groupDay = new GroupDayKey(employeeGroup.branchId(), employeeGroup.departmentId(), employeeGroup.designationId(), date.getDayOfWeek());
-                GroupDateKey groupDate = groupDateKey(employeeGroup.branchId(), employeeGroup.departmentId(), employeeGroup.designationId(), date);
+                GroupDayKey groupDay = new GroupDayKey(branch.getId(), employee.getDepartment().getId(), employee.getDesignation().getId(), date.getDayOfWeek());
+                GroupDateKey groupDate = groupDateKey(branch.getId(), employee.getDepartment().getId(), employee.getDesignation().getId(), date);
                 if (groupWeeklyDays.contains(groupDay) && !groupExclusions.contains(groupDate)) {
-                    rows.add(row(employee, date, "Week off", "Group weekly"));
+                    rows.add(row(employee, branch, date, "Week off", "Group weekly"));
                 }
             }
         }
@@ -219,15 +224,15 @@ public class CalendarOffReportService {
                 .toList();
     }
 
-    private CalendarOffReportRow row(Employee employee, LocalDate date, String calendarOff, String appliedVia) {
+    private CalendarOffReportRow row(Employee employee, Branch branch, LocalDate date, String calendarOff, String appliedVia) {
         return new CalendarOffReportRow(
                 date,
                 date.getDayOfWeek().getDisplayName(TextStyle.SHORT, Locale.ENGLISH),
                 employee.getId(),
                 employee.getEmployeeCode(),
                 fullName(employee),
-                employee.getBranch() == null ? null : employee.getBranch().getId(),
-                employee.getBranch() == null ? null : employee.getBranch().getName(),
+                branch.getId(),
+                branch.getName(),
                 employee.getDepartment().getId(),
                 employee.getDepartment().getName(),
                 employee.getDesignation().getId(),
@@ -254,6 +259,17 @@ public class CalendarOffReportService {
         if (ChronoUnit.DAYS.between(from, to) + 1 > MAX_REPORT_DAYS) {
             throw new BadRequestException("Calendar off report supports a maximum date range of 366 days");
         }
+    }
+
+    private Branch branchAt(Employee employee, LocalDate date, Map<Long, List<EmployeeTransferRequest>> transfersByEmployee) {
+        Branch resolved = null;
+        for (EmployeeTransferRequest transfer : transfersByEmployee.getOrDefault(employee.getId(), List.of())) {
+            if (date.isBefore(transfer.getEffectiveDate())) {
+                return resolved == null ? transfer.getFromBranch() : resolved;
+            }
+            resolved = transfer.getToBranch();
+        }
+        return resolved == null ? employee.getBranch() : resolved;
     }
 
     private GroupDateKey groupDateKey(Long branchId, Long departmentId, Long designationId, LocalDate date) {

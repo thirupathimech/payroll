@@ -25,6 +25,7 @@ public record PayrollEntryResponse(
         BigDecimal grossEarnings,
         BigDecimal totalDeductions,
         BigDecimal employerContributions,
+        BigDecimal reimbursementAmount,
         BigDecimal netPay,
         List<PayrollComponentLineResponse> componentLines,
         Instant createdAt

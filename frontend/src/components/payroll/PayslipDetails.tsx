@@ -16,6 +16,7 @@ interface PayslipDetailsProps {
 
 const groups: Array<{ category: SalaryComponentCategory; title: string }> = [
   { category: "EARNING", title: "Earnings" },
+  { category: "REIMBURSEMENT", title: "Business reimbursements" },
   { category: "DEDUCTION", title: "Deductions" },
   { category: "EMPLOYER_CONTRIBUTION", title: "Employer contributions" },
 ];
@@ -103,6 +104,7 @@ export function PayslipDetails({ entry, currency }: PayslipDetailsProps) {
           <section className="bg-moss/[0.04] px-5 py-4">
             <div className="flex justify-between gap-4 text-sm"><span className="font-semibold text-ink/70">Gross earnings</span><span className="font-bold">{formatCurrency(entry.grossEarnings, currency)}</span></div>
             <div className="mt-2 flex justify-between gap-4 text-sm"><span className="font-semibold text-ink/70">Total deductions</span><span className="font-bold">{formatCurrency(entry.totalDeductions, currency)}</span></div>
+            {entry.reimbursementAmount > 0 && <div className="mt-2 flex justify-between gap-4 text-sm"><span className="font-semibold text-ink/70">Business reimbursements</span><span className="font-bold text-emerald-700">+ {formatCurrency(entry.reimbursementAmount, currency)}</span></div>}
             <div className="mt-3 flex justify-between gap-4 border-t border-moss/15 pt-3 text-base"><span className="font-extrabold">Net pay</span><span className="font-extrabold text-fern">{formatCurrency(entry.netPay, currency)}</span></div>
           </section>
         </div>

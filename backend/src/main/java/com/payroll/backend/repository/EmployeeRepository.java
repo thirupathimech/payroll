@@ -43,7 +43,10 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
           and e.joiningDate <= :periodEnd
           and (
             e.status in :currentStatuses
-            or (e.status = com.payroll.backend.domain.enums.EmploymentStatus.TERMINATED
+            or (e.status in (
+                    com.payroll.backend.domain.enums.EmploymentStatus.TERMINATED,
+                    com.payroll.backend.domain.enums.EmploymentStatus.RESIGNED
+                )
                 and e.lastWorkingDate is not null and e.lastWorkingDate >= :periodStart)
           )
         order by e.firstName asc, e.lastName asc, e.id asc

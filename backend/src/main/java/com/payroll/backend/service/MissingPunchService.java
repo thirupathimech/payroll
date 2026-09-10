@@ -3,6 +3,7 @@ package com.payroll.backend.service;
 import com.payroll.backend.domain.AppUser;
 import com.payroll.backend.domain.AttendanceRecord;
 import com.payroll.backend.domain.Employee;
+import com.payroll.backend.domain.enums.EmploymentStatus;
 import com.payroll.backend.domain.MissingPunchRequest;
 import com.payroll.backend.domain.enums.MissingPunchStatus;
 import com.payroll.backend.domain.enums.MissingPunchType;
@@ -76,6 +77,10 @@ public class MissingPunchService {
     @Transactional
     public MissingPunchResponse create(MissingPunchCreateRequest request, UserPrincipal principal) {
         Employee employee = employeeAccessService.findCurrentEmployee(principal);
+        if (employee.getStatus() == EmploymentStatus.TERMINATED || employee.getStatus() == EmploymentStatus.RESIGNED
+                || (employee.getLastWorkingDate() != null && request.punchDate().isAfter(employee.getLastWorkingDate()))) {
+            throw new BadRequestException("A punch cannot be requested after the employee's last working date");
+        }
         validateRequestedPunchTime(request.punchDate(), request.punchTime());
         payrollLockService.assertUnlocked(request.punchDate());
         if (missingPunchRequestRepository.existsByOrgCodeAndEmployeeIdAndPunchDateAndPunchTypeAndStatusIn(

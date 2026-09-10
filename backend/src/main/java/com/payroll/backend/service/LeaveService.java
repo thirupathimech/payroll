@@ -2,6 +2,7 @@ package com.payroll.backend.service;
 
 import com.payroll.backend.domain.AppUser;
 import com.payroll.backend.domain.Employee;
+import com.payroll.backend.domain.enums.EmploymentStatus;
 import com.payroll.backend.domain.LeaveRequest;
 import com.payroll.backend.domain.ShiftAssignment;
 import com.payroll.backend.domain.Shift;
@@ -130,6 +131,7 @@ public class LeaveService {
                 : employeeRepository.findByOrgCodeAndId(orgCode, request.employeeId())
                         .orElseThrow(() -> new ResourceNotFoundException("Employee not found"));
         employeeAccessService.assertCanAccessEmployee(principal, employee);
+        assertWithinEmployment(employee, request.startDate(), request.endDate());
 
         if (leaveRequestRepository.existsByOrgCodeAndEmployeeIdAndStatusInAndStartDateLessThanEqualAndEndDateGreaterThanEqual(
                 orgCode,
@@ -221,6 +223,15 @@ public class LeaveService {
             minutes += requestedWorkingMinutes;
         }
         return new LeaveCalculation(minutes);
+    }
+
+    private void assertWithinEmployment(Employee employee, LocalDate startDate, LocalDate endDate) {
+        if (employee.getStatus() == EmploymentStatus.TERMINATED || employee.getStatus() == EmploymentStatus.RESIGNED) {
+            throw new BadRequestException("A separated employee cannot submit leave");
+        }
+        if (employee.getLastWorkingDate() != null && endDate.isAfter(employee.getLastWorkingDate())) {
+            throw new BadRequestException("Leave cannot extend beyond the employee's approved last working date");
+        }
     }
 
     private int workingMinutesWithin(Shift shift, LocalTime from, LocalTime to) {

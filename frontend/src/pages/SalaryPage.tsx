@@ -44,6 +44,7 @@ const salaryCategoryLabels: Record<SalaryComponentCategory, string> = {
   EARNING: "Earning",
   EMPLOYER_CONTRIBUTION: "Employer contribution",
   DEDUCTION: "Deduction",
+  REIMBURSEMENT: "Reimbursement",
 };
 
 function categoryLabel(category: SalaryComponentCategory) {
@@ -58,6 +59,8 @@ function categoryBadgeClassName(category: SalaryComponentCategory) {
       return "bg-violet-50 text-violet-800";
     case "DEDUCTION":
       return "bg-rose-50 text-rose-800";
+    case "REIMBURSEMENT":
+      return "bg-cyan-50 text-cyan-800";
   }
 }
 

@@ -462,6 +462,46 @@ export const payrollRunApi = {
   myPayslips: async () => (await api.get<PayrollEntry[]>("/payroll/my/payslips")).data,
 };
 
+export const employeeTransferApi = {
+  search: async (params: { search?: string; status?: import("../types").EmployeeTransferStatus | ""; mine?: boolean; page?: number; size?: number }) =>
+    (await api.get<import("../types").PageResponse<import("../types").EmployeeTransferRequest>>("/employee-transfers", { params })).data,
+  create: async (payload: import("../types").EmployeeTransferPayload) =>
+    (await api.post<import("../types").EmployeeTransferRequest>("/employee-transfers", payload)).data,
+  decide: async (id: number, status: "APPROVED" | "REJECTED", reviewerComment?: string) =>
+    (await api.patch<import("../types").EmployeeTransferRequest>(`/employee-transfers/${id}/decision`, { status, reviewerComment })).data,
+  cancel: async (id: number) => (await api.patch<import("../types").EmployeeTransferRequest>(`/employee-transfers/${id}/cancel`)).data,
+};
+
+export const resignationApi = {
+  search: async (params: { search?: string; status?: import("../types").ResignationStatus | ""; mine?: boolean; page?: number; size?: number }) =>
+    (await api.get<import("../types").PageResponse<import("../types").ResignationRequest>>("/resignations", { params })).data,
+  create: async (payload: import("../types").ResignationPayload) =>
+    (await api.post<import("../types").ResignationRequest>("/resignations", payload)).data,
+  decide: async (id: number, payload: { status: "APPROVED" | "REJECTED"; approvedLastWorkingDate?: string; relievingDate?: string; reviewerComment?: string }) =>
+    (await api.patch<import("../types").ResignationRequest>(`/resignations/${id}/decision`, payload)).data,
+  cancel: async (id: number) => (await api.patch<import("../types").ResignationRequest>(`/resignations/${id}/cancel`)).data,
+};
+
+export const reimbursementApi = {
+  search: async (params: { search?: string; status?: import("../types").ReimbursementStatus | ""; mine?: boolean; page?: number; size?: number }) =>
+    (await api.get<import("../types").PageResponse<import("../types").ReimbursementRequest>>("/reimbursements", { params })).data,
+  create: async (payload: import("../types").ReimbursementPayload) =>
+    (await api.post<import("../types").ReimbursementRequest>("/reimbursements", payload)).data,
+  decide: async (id: number, status: "APPROVED" | "REJECTED", reviewerComment?: string) =>
+    (await api.patch<import("../types").ReimbursementRequest>(`/reimbursements/${id}/decision`, { status, reviewerComment })).data,
+  cancel: async (id: number) => (await api.patch<import("../types").ReimbursementRequest>(`/reimbursements/${id}/cancel`)).data,
+  uploadAttachment: async (id: number, file: File) => {
+    const form = new FormData(); form.append("file", file);
+    return (await api.post<import("../types").ReimbursementAttachment>(`/reimbursements/${id}/attachments`, form, { headers: { "Content-Type": "multipart/form-data" } })).data;
+  },
+  downloadAttachment: async (id: number, attachmentId: number) =>
+    (await api.get<Blob>(`/reimbursements/${id}/attachments/${attachmentId}/download`, { responseType: "blob" })).data,
+  previewAttachment: async (id: number, attachmentId: number) =>
+    (await api.get<Blob>(`/reimbursements/${id}/attachments/${attachmentId}/preview`, { responseType: "blob" })).data,
+  deleteAttachment: async (id: number, attachmentId: number) =>
+    (await api.delete<{ message: string }>(`/reimbursements/${id}/attachments/${attachmentId}`)).data,
+};
+
 export const calendarOffReportApi = {
   list: async (params: {
     type: CalendarOffType;

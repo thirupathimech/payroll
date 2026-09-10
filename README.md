@@ -60,6 +60,9 @@ payroll/
 - Organization registration with three-letter org code login
 - Org-scoped data isolation across application tables
 - Employee management
+- Effective-dated branch-transfer requests with HR approval and transfer history
+- Resignation requests with final working/relieving-date approval and payroll-safe separation
+- Reimbursement requests with receipt attachments, review, payroll allocation, and paid-state audit trail
 - Employee documents, profile photos, experience, education, and reporting hierarchy
 - Branch, department, designation, and user management
 - Shift definitions and employee shift assignments

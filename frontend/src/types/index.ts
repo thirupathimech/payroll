@@ -1,5 +1,5 @@
 export type RoleName = "ADMIN" | "HR" | "MANAGER" | "LEAD" | "EMPLOYEE";
-export type EmploymentStatus = "ACTIVE" | "ON_LEAVE" | "PROBATION" | "TERMINATED";
+export type EmploymentStatus = "ACTIVE" | "ON_LEAVE" | "PROBATION" | "RESIGNED" | "TERMINATED";
 export type LeaveStatus = "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
 export type MissingPunchStatus = "PENDING" | "APPROVED" | "REJECTED";
 export type MissingPunchType = "IN" | "OUT";
@@ -55,7 +55,7 @@ export interface HolidayPayload {
 }
 export type WeekDayName = "SUNDAY" | "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURSDAY" | "FRIDAY" | "SATURDAY";
 export type AttendanceMode = "MANUAL" | "PUNCHES";
-export type SalaryComponentCategory = "EARNING" | "EMPLOYER_CONTRIBUTION" | "DEDUCTION";
+export type SalaryComponentCategory = "EARNING" | "EMPLOYER_CONTRIBUTION" | "DEDUCTION" | "REIMBURSEMENT";
 export type SalaryValueType = "PERCENTAGE" | "FIXED";
 export type SalaryUpdateMode = "ADJUST_CURRENT" | "CREATE_REVISION";
 export type PayrollRunStatus = "DRAFT" | "APPROVED" | "LOCKED";
@@ -156,6 +156,7 @@ export interface PayrollEntry {
   grossEarnings: number;
   totalDeductions: number;
   employerContributions: number;
+  reimbursementAmount: number;
   netPay: number;
   componentLines: PayrollComponentLine[];
   createdAt: string;
@@ -536,6 +537,99 @@ export interface MissingPunchPayload {
   punchTime: string;
   punchType: MissingPunchType;
   remark: string;
+}
+
+export type EmployeeTransferStatus = "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
+export interface EmployeeTransferRequest {
+  id: number;
+  employeeId: number;
+  employeeCode: string;
+  employeeName: string;
+  fromBranchId: number;
+  fromBranchName: string;
+  toBranchId: number;
+  toBranchName: string;
+  effectiveDate: string;
+  reason: string;
+  status: EmployeeTransferStatus;
+  requestedByEmail: string;
+  reviewerEmail?: string;
+  reviewerComment?: string;
+  reviewedAt?: string;
+  appliedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface EmployeeTransferPayload {
+  employeeId?: number;
+  toBranchId: number;
+  effectiveDate: string;
+  reason: string;
+}
+
+export type ResignationStatus = "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
+export interface ResignationRequest {
+  id: number;
+  employeeId: number;
+  employeeCode: string;
+  employeeName: string;
+  resignationDate: string;
+  proposedLastWorkingDate: string;
+  approvedLastWorkingDate?: string;
+  relievingDate?: string;
+  reason: string;
+  status: ResignationStatus;
+  requestedByEmail: string;
+  reviewerEmail?: string;
+  reviewerComment?: string;
+  reviewedAt?: string;
+  separatedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface ResignationPayload {
+  employeeId?: number;
+  proposedLastWorkingDate: string;
+  reason: string;
+}
+
+export type ReimbursementStatus = "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED" | "PAID";
+export interface ReimbursementAttachment {
+  id: number;
+  originalFileName: string;
+  fileType: string;
+  fileExtension: string;
+  fileSize: number;
+  uploadedBy: string;
+  uploadedAt: string;
+  previewSupported: boolean;
+}
+export interface ReimbursementRequest {
+  id: number;
+  employeeId: number;
+  employeeCode: string;
+  employeeName: string;
+  expenseDate: string;
+  category: string;
+  amount: number;
+  description: string;
+  status: ReimbursementStatus;
+  requestedByEmail: string;
+  reviewerEmail?: string;
+  reviewerComment?: string;
+  reviewedAt?: string;
+  payrollRunId?: number;
+  paidAt?: string;
+  attachments: ReimbursementAttachment[];
+  createdAt: string;
+  updatedAt: string;
+}
+export interface ReimbursementPayload {
+  employeeId?: number;
+  expenseDate: string;
+  category: string;
+  amount: number;
+  description: string;
 }
 
 export interface DashboardSummary {

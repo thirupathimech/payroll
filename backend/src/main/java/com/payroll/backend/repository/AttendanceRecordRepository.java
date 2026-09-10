@@ -37,7 +37,10 @@ public interface AttendanceRecordRepository extends JpaRepository<AttendanceReco
             where a.orgCode = :orgCode
               and a.attendanceDate = :date
               and a.clockIn is not null
-              and e.status <> com.payroll.backend.domain.enums.EmploymentStatus.TERMINATED
+              and e.status not in (
+                com.payroll.backend.domain.enums.EmploymentStatus.TERMINATED,
+                com.payroll.backend.domain.enums.EmploymentStatus.RESIGNED
+              )
               and (:branchId is null or e.branch.id = :branchId)
               and (:restrict = false or e.id in :employeeIds)
             """)

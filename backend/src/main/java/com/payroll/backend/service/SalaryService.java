@@ -67,6 +67,7 @@ public class SalaryService {
 
     @Transactional
     public SalaryComponentResponse createComponent(SalaryComponentRequest request) {
+        assertNotPayrollGeneratedReimbursement(request.category());
         String orgCode = currentOrgService.orgCode();
         ensureDefaultComponents();
         String code = normalizeCode(request.code());
@@ -84,6 +85,7 @@ public class SalaryService {
 
     @Transactional
     public SalaryComponentResponse updateComponent(Long id, SalaryComponentRequest request) {
+        assertNotPayrollGeneratedReimbursement(request.category());
         String orgCode = currentOrgService.orgCode();
         SalaryComponent component = salaryComponentRepository.findByOrgCodeAndId(orgCode, id)
                 .orElseThrow(() -> new ResourceNotFoundException("Salary component not found"));
@@ -426,6 +428,12 @@ public class SalaryService {
 
     private boolean contributesToCtc(SalaryComponentCategory category) {
         return category == SalaryComponentCategory.EARNING || category == SalaryComponentCategory.EMPLOYER_CONTRIBUTION;
+    }
+
+    private void assertNotPayrollGeneratedReimbursement(SalaryComponentCategory category) {
+        if (category == SalaryComponentCategory.REIMBURSEMENT) {
+            throw new BadRequestException("Reimbursements are generated from approved expense claims and cannot be configured as salary components");
+        }
     }
 
     private boolean defaultEmployeeComponentEnabled(SalaryComponent component) {

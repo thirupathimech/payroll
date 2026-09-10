@@ -88,6 +88,10 @@ public class PayrollEntry extends AuditableEntity {
     @Column(name = "employer_contributions", nullable = false, precision = 14, scale = 2)
     private BigDecimal employerContributions = BigDecimal.ZERO;
 
+    /** Tax-neutral approved business expenses paid along with this payroll. */
+    @Column(name = "reimbursement_amount", nullable = false, precision = 14, scale = 2)
+    private BigDecimal reimbursementAmount = BigDecimal.ZERO;
+
     @Column(name = "net_pay", nullable = false, precision = 14, scale = 2)
     private BigDecimal netPay = BigDecimal.ZERO;
 

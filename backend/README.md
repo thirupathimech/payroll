@@ -131,6 +131,25 @@ Leaves:
 - `POST /api/v1/leaves`
 - `PATCH /api/v1/leaves/{id}/decision`
 
+Employee movements:
+
+- `GET|POST /api/v1/employee-transfers`
+- `PATCH /api/v1/employee-transfers/{id}/decision`
+- `PATCH /api/v1/employee-transfers/{id}/cancel`
+- `GET|POST /api/v1/resignations`
+- `PATCH /api/v1/resignations/{id}/decision`
+- `PATCH /api/v1/resignations/{id}/cancel`
+
+Reimbursements:
+
+- `GET|POST /api/v1/reimbursements`
+- `PATCH /api/v1/reimbursements/{id}/decision`
+- `PATCH /api/v1/reimbursements/{id}/cancel`
+- `POST /api/v1/reimbursements/{id}/attachments`
+- `GET /api/v1/reimbursements/{id}/attachments/{attachmentId}/download`
+- `GET /api/v1/reimbursements/{id}/attachments/{attachmentId}/preview`
+- `DELETE /api/v1/reimbursements/{id}/attachments/{attachmentId}`
+
 Settings:
 
 - `GET /api/v1/settings/company`

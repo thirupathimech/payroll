@@ -3,6 +3,7 @@ package com.payroll.backend.service;
 import com.payroll.backend.domain.AttendanceRecord;
 import com.payroll.backend.domain.AttendanceSetting;
 import com.payroll.backend.domain.Employee;
+import com.payroll.backend.domain.enums.EmploymentStatus;
 import com.payroll.backend.dto.attendance.AttendanceRequest;
 import com.payroll.backend.dto.attendance.AttendanceResponse;
 import com.payroll.backend.dto.attendance.AttendanceSettingsRequest;
@@ -77,6 +78,10 @@ public class AttendanceService {
 
         Employee employee = findEmployee(request.employeeId());
         employeeAccessService.assertCanAccessEmployee(principal, employee);
+        if (employee.getStatus() == EmploymentStatus.TERMINATED || employee.getStatus() == EmploymentStatus.RESIGNED
+                || (employee.getLastWorkingDate() != null && attendanceDate.isAfter(employee.getLastWorkingDate()))) {
+            throw new BadRequestException("Attendance cannot be recorded after an employee's last working date");
+        }
 
         AttendanceRecord attendance = attendanceRecordRepository
                 .findByOrgCodeAndEmployeeIdAndAttendanceDate(currentOrgService.orgCode(), employee.getId(), attendanceDate)

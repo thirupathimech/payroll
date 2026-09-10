@@ -2595,17 +2595,6 @@ export function EmployeesPage() {
             </div>
           </Section>
 
-          {form.status === "TERMINATED" && (
-            <Section title="Exit Information">
-              <div className="grid gap-4 md:grid-cols-2">
-                <Input label="Resignation Date" type="date" value={form.resignationDate} onChange={(event) => setForm({ ...form, resignationDate: event.target.value })} />
-                <Input label="Last Working Date" type="date" value={form.lastWorkingDate} onChange={(event) => setForm({ ...form, lastWorkingDate: event.target.value })} />
-                <Input label="Relieving Date" type="date" value={form.relievingDate} onChange={(event) => setForm({ ...form, relievingDate: event.target.value })} />
-                <Textarea label="Exit Reason" value={form.exitReason} onChange={(event) => setForm({ ...form, exitReason: event.target.value })} />
-              </div>
-            </Section>
-          )}
-
           <div className="sticky bottom-0 flex justify-end gap-3 border-t border-moss/10 bg-shell/95 py-4">
             <Button type="button" variant="secondary" onClick={() => setModalOpen(false)}>
               Cancel
