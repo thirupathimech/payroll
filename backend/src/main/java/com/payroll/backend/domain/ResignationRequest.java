@@ -69,4 +69,10 @@ public class ResignationRequest extends AuditableEntity {
     private String reviewerComment;
 
     private Instant separatedAt;
+
+    @Column(name = "asset_clearance_completed_at")
+    private Instant assetClearanceCompletedAt;
+
+    @Column(name = "asset_clearance_completed_by", length = 160)
+    private String assetClearanceCompletedBy;
 }

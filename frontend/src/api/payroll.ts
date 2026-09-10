@@ -482,6 +482,24 @@ export const resignationApi = {
   cancel: async (id: number) => (await api.patch<import("../types").ResignationRequest>(`/resignations/${id}/cancel`)).data,
 };
 
+export const exitClearanceApi = {
+  catalog: async () => (await api.get<import("../types").AssetCatalogItem[]>("/exit-clearance/assets")).data,
+  createCatalogItem: async (payload: import("../types").AssetCatalogItemPayload) =>
+    (await api.post<import("../types").AssetCatalogItem>("/exit-clearance/assets", payload)).data,
+  updateCatalogItem: async (id: number, payload: import("../types").AssetCatalogItemPayload) =>
+    (await api.put<import("../types").AssetCatalogItem>(`/exit-clearance/assets/${id}`, payload)).data,
+  clearance: async (resignationId: number) =>
+    (await api.get<import("../types").ExitClearance>(`/exit-clearance/resignations/${resignationId}`)).data,
+  releaseAsset: async (resignationId: number, payload: { assetCatalogItemId: number; releasedOn: string; conditionNote?: string }) =>
+    (await api.post<import("../types").ExitClearance>(`/exit-clearance/resignations/${resignationId}/assets`, payload)).data,
+  updateReturn: async (releaseId: number, payload: { returnStatus: import("../types").AssetReturnStatus; returnedOn?: string; recoveryAmount: number; conditionNote?: string }) =>
+    (await api.patch<import("../types").ExitClearance>(`/exit-clearance/assets/release/${releaseId}`, payload)).data,
+  completeClearance: async (resignationId: number) =>
+    (await api.post<import("../types").ExitClearance>(`/exit-clearance/resignations/${resignationId}/complete`)).data,
+  updateSettlement: async (resignationId: number, payload: import("../types").FinalSettlementPayload) =>
+    (await api.put<import("../types").ExitClearance>(`/exit-clearance/resignations/${resignationId}/settlement`, payload)).data,
+};
+
 export const reimbursementApi = {
   search: async (params: { search?: string; status?: import("../types").ReimbursementStatus | ""; mine?: boolean; page?: number; size?: number }) =>
     (await api.get<import("../types").PageResponse<import("../types").ReimbursementRequest>>("/reimbursements", { params })).data,

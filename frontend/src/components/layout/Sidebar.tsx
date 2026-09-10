@@ -18,6 +18,7 @@ import {
   Users,
   Fingerprint,
   FileText,
+  Laptop,
   X,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
@@ -31,6 +32,7 @@ const navItems: Array<{ label: string; path: string; icon: typeof LayoutDashboar
   { label: "Employee Transfers", path: "/employee-transfers", icon: GitBranch, allowedRoles: MANAGER_ROLES },
   { label: "Resignations", path: "/resignations", icon: UserRound, allowedRoles: MANAGER_ROLES },
   { label: "Reimbursements", path: "/reimbursements", icon: WalletCards, allowedRoles: MANAGER_ROLES },
+  { label: "Asset Releases", path: "/asset-releases", icon: Laptop, allowedRoles: HR_ROLES },
   { label: "Salary", path: "/salary", icon: WalletCards, allowedRoles: HR_ROLES },
   { label: "Payroll", path: "/payroll", icon: BadgeDollarSign, allowedRoles: HR_ROLES },
   { label: "Organization Chart", path: "/organization-hierarchy", icon: GitBranch, allowedRoles: ADMIN_ROLES },

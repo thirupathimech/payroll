@@ -37,6 +37,7 @@ public class ResignationService {
     private final CurrentOrgService currentOrgService;
     private final EmployeeAccessService employeeAccessService;
     private final PayrollLockService payrollLockService;
+    private final ExitClearanceService exitClearanceService;
     private final AuditService auditService;
 
     @Transactional
@@ -164,6 +165,7 @@ public class ResignationService {
         for (ResignationRequest resignation : resignations) {
             if (resignation.getSeparatedAt() != null) continue;
             if (!resignation.getApprovedLastWorkingDate().isBefore(LocalDate.now())) continue;
+            if (!exitClearanceService.canSeparate(resignation.getOrgCode(), resignation.getId())) continue;
             Employee employee = resignation.getEmployee();
             if (employee.getStatus() != EmploymentStatus.TERMINATED) {
                 employee.setStatus(EmploymentStatus.RESIGNED);
@@ -209,7 +211,8 @@ public class ResignationService {
                 resignation.getResignationDate(), resignation.getProposedLastWorkingDate(), resignation.getApprovedLastWorkingDate(),
                 resignation.getRelievingDate(), resignation.getReason(), resignation.getStatus(), resignation.getRequestedBy().getEmail(),
                 resignation.getReviewedBy() == null ? null : resignation.getReviewedBy().getEmail(), resignation.getReviewerComment(),
-                resignation.getReviewedAt(), resignation.getSeparatedAt(), resignation.getCreatedAt(), resignation.getUpdatedAt());
+                resignation.getReviewedAt(), resignation.getSeparatedAt(), resignation.getAssetClearanceCompletedAt(),
+                resignation.getAssetClearanceCompletedBy(), resignation.getCreatedAt(), resignation.getUpdatedAt());
     }
 
     private String fullName(Employee employee) {

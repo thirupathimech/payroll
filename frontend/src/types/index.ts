@@ -584,6 +584,8 @@ export interface ResignationRequest {
   reviewerComment?: string;
   reviewedAt?: string;
   separatedAt?: string;
+  assetClearanceCompletedAt?: string;
+  assetClearanceCompletedBy?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -591,6 +593,116 @@ export interface ResignationPayload {
   employeeId?: number;
   proposedLastWorkingDate: string;
   reason: string;
+}
+
+export type AssetReturnStatus = "PENDING" | "RETURNED" | "NOT_RETURNED" | "NOT_REQUIRED";
+
+export interface AssetCatalogItem {
+  id: number;
+  name: string;
+  category?: string;
+  returnable: boolean;
+  defaultRecoveryAmount: number;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AssetCatalogItemPayload {
+  name: string;
+  category?: string;
+  returnable: boolean;
+  defaultRecoveryAmount: number;
+  active: boolean;
+}
+
+export interface AssetRelease {
+  id: number;
+  catalogItemId: number;
+  assetName: string;
+  assetCategory?: string;
+  returnable: boolean;
+  releasedOn: string;
+  returnStatus: AssetReturnStatus;
+  returnedOn?: string;
+  recoveryAmount: number;
+  conditionNote?: string;
+  verifiedBy?: string;
+  verifiedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FinalSettlement {
+  id: number;
+  leaveEncashmentDays: number;
+  leaveEncashmentAmount: number;
+  noticePayRecovery: number;
+  otherEarnings: number;
+  otherDeductions: number;
+  remarks?: string;
+  settled: boolean;
+  settledOn?: string;
+  settledBy?: string;
+  settledAt?: string;
+  updatedAt?: string;
+}
+
+export interface FinalSettlementPayload {
+  leaveEncashmentDays: number;
+  leaveEncashmentAmount: number;
+  noticePayRecovery: number;
+  otherEarnings: number;
+  otherDeductions: number;
+  remarks?: string;
+  settled: boolean;
+  settledOn?: string;
+}
+
+export interface AssetClearanceSummary {
+  totalAssets: number;
+  returnedAssets: number;
+  pendingAssets: number;
+  recoveredAssets: number;
+  assetRecoveryAmount: number;
+  readyToComplete: boolean;
+  completed: boolean;
+  completedAt?: string;
+  completedBy?: string;
+}
+
+export interface ExitEmployee {
+  id: number;
+  employeeCode: string;
+  fullName: string;
+  email: string;
+  joiningDate: string;
+  branchName?: string;
+  departmentName: string;
+  designationTitle: string;
+}
+
+export interface ExitFinancialSummary {
+  finalPayslipNetPay: number;
+  leaveEncashmentAmount: number;
+  otherEarnings: number;
+  totalCredits: number;
+  noticePayRecovery: number;
+  assetRecoveryAmount: number;
+  otherDeductions: number;
+  totalDeductions: number;
+  netSettlementPayable: number;
+}
+
+export interface ExitClearance {
+  resignation: ResignationRequest;
+  employee: ExitEmployee;
+  assetReleases: AssetRelease[];
+  clearance: AssetClearanceSummary;
+  settlement: FinalSettlement;
+  finalPayslip?: PayrollEntry;
+  financialSummary: ExitFinancialSummary;
+  noDuesEligible: boolean;
 }
 
 export type ReimbursementStatus = "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED" | "PAID";

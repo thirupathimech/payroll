@@ -21,6 +21,8 @@ public record ResignationResponse(
         String reviewerComment,
         Instant reviewedAt,
         Instant separatedAt,
+        Instant assetClearanceCompletedAt,
+        String assetClearanceCompletedBy,
         Instant createdAt,
         Instant updatedAt
 ) { }

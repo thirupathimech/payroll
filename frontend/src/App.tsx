@@ -29,6 +29,7 @@ import { MyPayslipsPage } from "./pages/MyPayslipsPage";
 import { EmployeeTransferPage } from "./pages/EmployeeTransferPage";
 import { ResignationPage } from "./pages/ResignationPage";
 import { ReimbursementPage } from "./pages/ReimbursementPage";
+import { ExitClearancePage } from "./pages/ExitClearancePage";
 import { ADMIN_ROLES, HR_ROLES, MANAGER_ROLES } from "./lib/access";
 
 function HomeRoute() {
@@ -56,6 +57,9 @@ export default function App() {
           <Route path="/employee-transfers" element={<EmployeeTransferPage />} />
           <Route path="/resignations" element={<ResignationPage />} />
           <Route path="/reimbursements" element={<ReimbursementPage />} />
+          <Route element={<ProtectedRoute allowedRoles={HR_ROLES} />}>
+            <Route path="/asset-releases" element={<ExitClearancePage />} />
+          </Route>
           <Route path="/attendance" element={<AttendancePage />} />
           <Route path="/attendance/report" element={<AttendanceReportPage />} />
           <Route element={<ProtectedRoute allowedRoles={MANAGER_ROLES} />}>
