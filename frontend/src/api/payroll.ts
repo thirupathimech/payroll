@@ -44,6 +44,12 @@ import type {
   MissingPunchPayload,
   MissingPunchRequest,
   MissingPunchStatus,
+  OvertimePayload,
+  OvertimeEligibility,
+  OvertimePolicy,
+  OvertimePolicyPayload,
+  OvertimeRequest,
+  OvertimeStatus,
   CalendarOffReportRow,
   CalendarOffType,
   EmployeeSalaryPayload,
@@ -329,6 +335,44 @@ export const attendanceApi = {
   },
   decideMissingPunchRequest: async (id: number, status: Exclude<MissingPunchStatus, "PENDING">, reviewerComment?: string) => {
     const { data } = await api.patch<MissingPunchRequest>(`/attendance/missing-punch-requests/${id}/decision`, { status, reviewerComment });
+    return data;
+  },
+};
+
+export const overtimeApi = {
+  search: async (params: { search?: string; status?: OvertimeStatus | ""; mine?: boolean; page?: number; size?: number }) => {
+    const { data } = await api.get<PageResponse<OvertimeRequest>>("/overtime-requests", { params });
+    return data;
+  },
+  create: async (payload: OvertimePayload) => {
+    const { data } = await api.post<OvertimeRequest>("/overtime-requests", payload);
+    return data;
+  },
+  decide: async (id: number, status: "APPROVED" | "REJECTED", reviewerComment?: string) => {
+    const { data } = await api.patch<OvertimeRequest>(`/overtime-requests/${id}/decision`, { status, reviewerComment });
+    return data;
+  },
+  cancel: async (id: number) => {
+    const { data } = await api.patch<OvertimeRequest>(`/overtime-requests/${id}/cancel`);
+    return data;
+  },
+};
+
+export const overtimePolicyApi = {
+  myEligibility: async () => {
+    const { data } = await api.get<OvertimeEligibility>("/overtime-policies/me/eligibility");
+    return data;
+  },
+  list: async () => {
+    const { data } = await api.get<OvertimePolicy[]>("/overtime-policies");
+    return data;
+  },
+  save: async (payload: OvertimePolicyPayload) => {
+    const { data } = await api.post<OvertimePolicy>("/overtime-policies", payload);
+    return data;
+  },
+  deactivate: async (id: number) => {
+    const { data } = await api.delete<{ message: string }>(`/overtime-policies/${id}`);
     return data;
   },
 };

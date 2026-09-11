@@ -9,6 +9,7 @@ import com.payroll.backend.domain.LeaveRequest;
 import com.payroll.backend.domain.PayrollEntry;
 import com.payroll.backend.domain.PayrollRun;
 import com.payroll.backend.domain.ReimbursementRequest;
+import com.payroll.backend.domain.OvertimeRequest;
 import com.payroll.backend.domain.SalaryComponent;
 import com.payroll.backend.domain.WeekOffAssignment;
 import com.payroll.backend.domain.Branch;
@@ -18,6 +19,7 @@ import com.payroll.backend.domain.enums.EmploymentStatus;
 import com.payroll.backend.domain.enums.LeaveStatus;
 import com.payroll.backend.domain.enums.LeaveType;
 import com.payroll.backend.domain.enums.PayrollRunStatus;
+import com.payroll.backend.domain.enums.OvertimePayRateType;
 import com.payroll.backend.domain.enums.SalaryComponentCategory;
 import com.payroll.backend.domain.enums.SalaryValueType;
 import com.payroll.backend.dto.payroll.PayrollRunCreateRequest;
@@ -78,6 +80,7 @@ class PayrollServiceTest {
         CompanySettingsService companySettingsService = mock(CompanySettingsService.class);
         PayrollLockService payrollLockService = mock(PayrollLockService.class);
         ReimbursementService reimbursementService = mock(ReimbursementService.class);
+        OvertimeService overtimeService = mock(OvertimeService.class);
         EmployeeTransferService employeeTransferService = mock(EmployeeTransferService.class);
         ResignationService resignationService = mock(ResignationService.class);
         AtomicReference<List<PayrollEntry>> persistedEntries = new AtomicReference<>(List.of());
@@ -86,7 +89,7 @@ class PayrollServiceTest {
                 runRepository, entryRepository, employeeRepository, transferRepository, employeeComponentRepository, componentRepository,
                 attendanceRepository, leaveRepository, holidayRepository, weekOffRepository, weekOffExclusionRepository,
                 salaryService, orgService, accessService, auditService, companySettingsService, payrollLockService,
-                reimbursementService, employeeTransferService, resignationService, new ObjectMapper()
+                reimbursementService, overtimeService, employeeTransferService, resignationService, new ObjectMapper()
         );
         Employee employee = employee("EMP-1", LocalDate.of(2026, 1, 16));
         ReimbursementRequest reimbursement = new ReimbursementRequest();
@@ -94,6 +97,18 @@ class PayrollServiceTest {
         reimbursement.setEmployee(employee);
         reimbursement.setCategory("Travel");
         reimbursement.setAmount(new BigDecimal("1000.00"));
+        OvertimeRequest overtime = new OvertimeRequest();
+        overtime.setId(98L);
+        overtime.setEmployee(employee);
+        overtime.setApprovedMinutes(120);
+        overtime.setApprovedPayRateType(OvertimePayRateType.SALARY_HOURLY_MULTIPLIER);
+        overtime.setApprovedPayRateValue(new BigDecimal("1.50"));
+        OvertimeRequest fixedRateOvertime = new OvertimeRequest();
+        fixedRateOvertime.setId(97L);
+        fixedRateOvertime.setEmployee(employee);
+        fixedRateOvertime.setApprovedMinutes(60);
+        fixedRateOvertime.setApprovedPayRateType(OvertimePayRateType.FIXED_HOURLY_AMOUNT);
+        fixedRateOvertime.setApprovedPayRateValue(new BigDecimal("100.00"));
         LeaveRequest unpaidLeave = new LeaveRequest();
         unpaidLeave.setEmployee(employee);
         unpaidLeave.setLeaveType(LeaveType.UNPAID);
@@ -125,6 +140,7 @@ class PayrollServiceTest {
         when(orgService.orgCode()).thenReturn(ORG);
         when(transferRepository.findByOrgCodeAndStatusOrderByEffectiveDateAsc(any(), any())).thenReturn(List.of());
         when(reimbursementService.allocateApprovedToPayroll(any())).thenReturn(Map.of(employee.getId(), List.of(reimbursement)));
+        when(overtimeService.allocateApprovedToPayroll(any())).thenReturn(Map.of(employee.getId(), List.of(overtime, fixedRateOvertime)));
         when(companySettingsService.get()).thenReturn(settings());
         when(runRepository.existsByOrgCodeAndPeriodStartAndPeriodEnd(ORG, LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 31))).thenReturn(false);
         when(runRepository.save(any(PayrollRun.class))).thenAnswer(invocation -> {
@@ -174,10 +190,15 @@ class PayrollServiceTest {
             assertThat(entry.attendanceDays()).isEqualByComparingTo("12.38");
             assertThat(entry.unpaidLeaveDays()).isEqualByComparingTo("2.62");
             assertThat(entry.payableDays()).isEqualByComparingTo("13.38");
-            assertThat(entry.grossEarnings()).isEqualByComparingTo("4316.13");
+            assertThat(entry.grossEarnings()).isEqualByComparingTo("4666.13");
             assertThat(entry.totalDeductions()).isEqualByComparingTo("431.61");
             assertThat(entry.reimbursementAmount()).isEqualByComparingTo("1000.00");
-            assertThat(entry.netPay()).isEqualByComparingTo("4884.52");
+            assertThat(entry.netPay()).isEqualByComparingTo("5234.52");
+            assertThat(entry.componentLines()).anySatisfy(line -> {
+                assertThat(line.code()).isEqualTo("OT-PAY");
+                assertThat(line.category()).isEqualTo(SalaryComponentCategory.EARNING);
+                assertThat(line.amount()).isEqualByComparingTo("350.00");
+            });
             assertThat(entry.componentLines()).anySatisfy(line -> {
                 assertThat(line.category()).isEqualTo(SalaryComponentCategory.REIMBURSEMENT);
                 assertThat(line.amount()).isEqualByComparingTo("1000.00");

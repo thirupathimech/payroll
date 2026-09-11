@@ -3,6 +3,7 @@ export type EmploymentStatus = "ACTIVE" | "ON_LEAVE" | "PROBATION" | "RESIGNED" 
 export type LeaveStatus = "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
 export type MissingPunchStatus = "PENDING" | "APPROVED" | "REJECTED";
 export type MissingPunchType = "IN" | "OUT";
+export type OvertimeStatus = "PENDING" | "APPROVED" | "PAID" | "REJECTED" | "CANCELLED";
 export type LeaveType = "ANNUAL" | "SICK" | "CASUAL" | "MATERNITY" | "PATERNITY" | "UNPAID";
 export type WeekOffAssignmentType = "GROUP_WEEKLY" | "EMPLOYEE_DATE" | "EMPLOYEE_WEEKLY";
 export type CalendarOffType = "HOLIDAY" | "WEEK_OFF";
@@ -537,6 +538,66 @@ export interface MissingPunchPayload {
   punchTime: string;
   punchType: MissingPunchType;
   remark: string;
+}
+
+export interface OvertimeRequest {
+  id: number;
+  employeeId: number;
+  employeeCode: string;
+  employeeName: string;
+  overtimeDate: string;
+  requestedMinutes: number;
+  punchOvertimeMinutes: number;
+  eligibleMinutes: number;
+  approvedMinutes?: number;
+  reason?: string;
+  status: OvertimeStatus;
+  requestedByEmail: string;
+  reviewerEmail?: string;
+  reviewerComment?: string;
+  reviewedAt?: string;
+  payrollRunId?: number;
+  paidAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OvertimePayload {
+  employeeId?: number;
+  overtimeDate: string;
+  requestedMinutes: number;
+  reason?: string;
+}
+
+export type OvertimePayRateType = "FIXED_HOURLY_AMOUNT" | "SALARY_HOURLY_MULTIPLIER";
+
+export interface OvertimePolicy {
+  id: number;
+  branchId: number;
+  branchName: string;
+  departmentId: number;
+  departmentName: string;
+  designationId: number;
+  designationTitle: string;
+  payRateType: OvertimePayRateType;
+  payRateValue: number;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OvertimePolicyPayload {
+  branchId: number;
+  departmentId: number;
+  designationId: number;
+  payRateType: OvertimePayRateType;
+  payRateValue: number;
+}
+
+export interface OvertimeEligibility {
+  eligible: boolean;
+  payRateType?: OvertimePayRateType;
+  payRateValue?: number;
 }
 
 export type EmployeeTransferStatus = "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";

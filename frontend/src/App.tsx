@@ -29,6 +29,8 @@ import { MyPayslipsPage } from "./pages/MyPayslipsPage";
 import { EmployeeTransferPage } from "./pages/EmployeeTransferPage";
 import { ResignationPage } from "./pages/ResignationPage";
 import { ReimbursementPage } from "./pages/ReimbursementPage";
+import { OvertimePage } from "./pages/OvertimePage";
+import { OvertimePolicyPage } from "./pages/OvertimePolicyPage";
 import { ExitClearancePage } from "./pages/ExitClearancePage";
 import { ADMIN_ROLES, HR_ROLES, MANAGER_ROLES } from "./lib/access";
 
@@ -57,6 +59,7 @@ export default function App() {
           <Route path="/employee-transfers" element={<EmployeeTransferPage />} />
           <Route path="/resignations" element={<ResignationPage />} />
           <Route path="/reimbursements" element={<ReimbursementPage />} />
+          <Route path="/overtime-requests" element={<OvertimePage />} />
           <Route element={<ProtectedRoute allowedRoles={HR_ROLES} />}>
             <Route path="/asset-releases" element={<ExitClearancePage />} />
           </Route>
@@ -79,6 +82,7 @@ export default function App() {
             <Route path="/departments" element={<DepartmentsPage />} />
             <Route path="/designations" element={<DesignationsPage />} />
             <Route path="/shifts" element={<ShiftManagementPage />} />
+            <Route path="/overtime-policies" element={<OvertimePolicyPage />} />
           </Route>
           <Route element={<ProtectedRoute allowedRoles={MANAGER_ROLES} />}>
             <Route path="/week-off-assignments" element={<WeekOffAssignmentPage />} />

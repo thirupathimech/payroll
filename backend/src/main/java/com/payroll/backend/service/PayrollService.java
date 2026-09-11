@@ -12,6 +12,7 @@ import com.payroll.backend.domain.LeaveRequest;
 import com.payroll.backend.domain.PayrollEntry;
 import com.payroll.backend.domain.PayrollRun;
 import com.payroll.backend.domain.ReimbursementRequest;
+import com.payroll.backend.domain.OvertimeRequest;
 import com.payroll.backend.domain.SalaryComponent;
 import com.payroll.backend.domain.WeekOffAssignment;
 import com.payroll.backend.domain.WeekOffExclusion;
@@ -19,6 +20,7 @@ import com.payroll.backend.domain.enums.EmploymentStatus;
 import com.payroll.backend.domain.enums.EmployeeTransferStatus;
 import com.payroll.backend.domain.enums.LeaveStatus;
 import com.payroll.backend.domain.enums.LeaveType;
+import com.payroll.backend.domain.enums.OvertimePayRateType;
 import com.payroll.backend.domain.enums.PayrollRunStatus;
 import com.payroll.backend.domain.enums.SalaryComponentCategory;
 import com.payroll.backend.domain.enums.SalaryValueType;
@@ -98,6 +100,7 @@ public class PayrollService {
     private final CompanySettingsService companySettingsService;
     private final PayrollLockService payrollLockService;
     private final ReimbursementService reimbursementService;
+    private final OvertimeService overtimeService;
     private final EmployeeTransferService employeeTransferService;
     private final ResignationService resignationService;
     private final ObjectMapper objectMapper;
@@ -146,6 +149,7 @@ public class PayrollService {
         requireStatus(run, PayrollRunStatus.DRAFT, "Only draft payroll can be recalculated");
         payrollLockService.assertUnlocked(run.getPeriodStart(), run.getPeriodEnd());
         reimbursementService.releaseDraftPayrollReservations(run.getId());
+        overtimeService.releaseDraftPayrollReservations(run.getId());
         payrollEntryRepository.deleteByOrgCodeAndPayrollRunId(currentOrgService.orgCode(), run.getId());
         payrollEntryRepository.flush();
         calculate(run);
@@ -178,6 +182,7 @@ public class PayrollService {
         run.setLockedAt(Instant.now());
         payrollRunRepository.save(run);
         reimbursementService.markPayrollReimbursementsPaid(run);
+        overtimeService.markPayrollOvertimePaid(run);
         auditService.log("PAYROLL_RUN_LOCKED", "PayrollRun", run.getId(), run.getPeriodStart().toString());
         return toRunResponse(run, entriesForRun(run));
     }
@@ -187,6 +192,7 @@ public class PayrollService {
         PayrollRun run = findRun(id);
         requireStatus(run, PayrollRunStatus.DRAFT, "Only a draft payroll can be deleted");
         reimbursementService.releaseDraftPayrollReservations(run.getId());
+        overtimeService.releaseDraftPayrollReservations(run.getId());
         payrollEntryRepository.deleteByOrgCodeAndPayrollRunId(currentOrgService.orgCode(), run.getId());
         payrollRunRepository.delete(run);
         auditService.log("PAYROLL_RUN_DELETED", "PayrollRun", id, run.getPeriodStart().toString());
@@ -233,6 +239,7 @@ public class PayrollService {
         Map<Long, List<LeaveRequest>> leavesByEmployee = leavesByEmployee(run);
         PayrollCalendar calendar = new PayrollCalendar(orgCode, run.getPeriodStart(), run.getPeriodEnd());
         Map<Long, List<ReimbursementRequest>> reimbursementsByEmployee = reimbursementService.allocateApprovedToPayroll(run);
+        Map<Long, List<OvertimeRequest>> overtimeByEmployee = overtimeService.allocateApprovedToPayroll(run);
 
         List<PayrollEntry> entries = new ArrayList<>();
         for (Employee employee : employees) {
@@ -265,21 +272,34 @@ public class PayrollService {
 
             List<PayrollComponentLineResponse> lines = new ArrayList<>();
             BigDecimal gross = ZERO;
+            BigDecimal standardPeriodEarnings = ZERO;
             BigDecimal employerContributions = ZERO;
             for (ResolvedComponent component : resolvedSalaryComponents) {
                 if (!component.enabled()) {
                     continue;
                 }
-                BigDecimal amount = annualAmount(component, annualCtc)
-                        .divide(BigDecimal.valueOf(payPeriodsPerYear(run)), 8, RoundingMode.HALF_UP)
+                BigDecimal periodAmount = annualAmount(component, annualCtc)
+                        .divide(BigDecimal.valueOf(payPeriodsPerYear(run)), 8, RoundingMode.HALF_UP);
+                BigDecimal amount = periodAmount
                         .multiply(proration).setScale(2, RoundingMode.HALF_UP);
                 if (component.category() == SalaryComponentCategory.EARNING) {
                     gross = gross.add(amount);
+                    standardPeriodEarnings = standardPeriodEarnings.add(periodAmount);
                     lines.add(line(component, amount));
                 } else if (component.category() == SalaryComponentCategory.EMPLOYER_CONTRIBUTION) {
                     employerContributions = employerContributions.add(amount);
                     lines.add(line(component, amount));
                 }
+            }
+
+            BigDecimal overtimeAmount = overtimePay(
+                    overtimeByEmployee.getOrDefault(employee.getId(), List.of()), standardPeriodEarnings, attendance.workingDays()
+            );
+            if (overtimeAmount.signum() > 0) {
+                gross = gross.add(overtimeAmount);
+                lines.add(new PayrollComponentLineResponse(
+                        "Overtime Pay", "OT-PAY", SalaryComponentCategory.EARNING, overtimeAmount
+                ));
             }
 
             BigDecimal deductions = ZERO;
@@ -560,6 +580,31 @@ public class PayrollService {
         return component.valueType() == SalaryValueType.PERCENTAGE
                 ? base.multiply(component.value()).divide(HUNDRED, 8, RoundingMode.HALF_UP)
                 : component.value();
+    }
+
+    private BigDecimal overtimePay(
+            List<OvertimeRequest> overtimeRequests, BigDecimal standardPeriodEarnings, BigDecimal workingDays
+    ) {
+        BigDecimal scheduledMinutes = workingDays.multiply(STANDARD_WORKDAY_MINUTES);
+        return money(overtimeRequests.stream()
+                .filter(request -> request.getApprovedMinutes() != null)
+                .map(request -> hourlyRate(request, standardPeriodEarnings, scheduledMinutes)
+                        .multiply(BigDecimal.valueOf(request.getApprovedMinutes()))
+                        .divide(BigDecimal.valueOf(60), 8, RoundingMode.HALF_UP))
+                .reduce(BigDecimal.ZERO, BigDecimal::add));
+    }
+
+    private BigDecimal hourlyRate(OvertimeRequest request, BigDecimal standardPeriodEarnings, BigDecimal scheduledMinutes) {
+        if (request.getApprovedPayRateType() == OvertimePayRateType.SALARY_HOURLY_MULTIPLIER
+                && request.getApprovedPayRateValue() != null && scheduledMinutes.signum() > 0) {
+            return standardPeriodEarnings.divide(scheduledMinutes, 8, RoundingMode.HALF_UP)
+                    .multiply(BigDecimal.valueOf(60)).multiply(request.getApprovedPayRateValue());
+        }
+        if (request.getApprovedHourlyRate() != null) {
+            return request.getApprovedHourlyRate();
+        }
+        return request.getApprovedPayRateType() == OvertimePayRateType.FIXED_HOURLY_AMOUNT
+                && request.getApprovedPayRateValue() != null ? request.getApprovedPayRateValue() : ZERO;
     }
 
     private PayrollComponentLineResponse line(ResolvedComponent component, BigDecimal amount) {

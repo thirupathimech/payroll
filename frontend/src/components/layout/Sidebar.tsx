@@ -1,27 +1,48 @@
 import { clsx } from "clsx";
+import { useEffect, useState } from "react";
 import {
+  ArrowRightLeft,
+  Badge,
+  BadgeIndianRupee,
   BadgeDollarSign,
-  WalletCards,
+  Banknote,
+  Building,
   Building2,
-  CalendarDays,
+  CalendarClock,
   CalendarOff,
   CalendarHeart,
+  CalendarPlus,
+  ChartNoAxesColumnIncreasing,
+  Clock,
   Clock3,
-  ClipboardList,
-  GitBranch,
+  ClipboardPlus,
+  Contact,
+  ContactRound,
+  DoorOpen,
+  Fingerprint,
+  Landmark,
   LayoutDashboard,
   LogOut,
+  Network,
+  PackageCheck,
+  Receipt,
+  ReceiptText,
+  Route,
+  ScanLine,
+  ScrollText,
   Settings,
-  ShieldCheck,
+  SlidersHorizontal,
+  Timer,
+  TimerReset,
+  Umbrella,
   UserCog,
-  UserRound,
+  UserMinus,
   Users,
-  Fingerprint,
-  FileText,
-  Laptop,
+  WalletCards,
   X,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
+import { overtimePolicyApi } from "../../api/payroll";
 import { useAuth } from "../../auth/AuthContext";
 import { ADMIN_ROLES, HR_ROLES, MANAGER_ROLES, hasRoleAccess } from "../../lib/access";
 import type { RoleName } from "../../types";
@@ -29,40 +50,43 @@ import type { RoleName } from "../../types";
 const navItems: Array<{ label: string; path: string; icon: typeof LayoutDashboard; allowedRoles?: RoleName[] }> = [
   { label: "Dashboard", path: "/", icon: LayoutDashboard },
   { label: "Employees", path: "/employees", icon: Users },
-  { label: "Employee Transfers", path: "/employee-transfers", icon: GitBranch, allowedRoles: MANAGER_ROLES },
-  { label: "Resignations", path: "/resignations", icon: UserRound, allowedRoles: MANAGER_ROLES },
-  { label: "Reimbursements", path: "/reimbursements", icon: WalletCards, allowedRoles: MANAGER_ROLES },
-  { label: "Asset Releases", path: "/asset-releases", icon: Laptop, allowedRoles: HR_ROLES },
-  { label: "Salary", path: "/salary", icon: WalletCards, allowedRoles: HR_ROLES },
-  { label: "Payroll", path: "/payroll", icon: BadgeDollarSign, allowedRoles: HR_ROLES },
-  { label: "Organization Chart", path: "/organization-hierarchy", icon: GitBranch, allowedRoles: ADMIN_ROLES },
+  { label: "Employee Transfers", path: "/employee-transfers", icon: ArrowRightLeft, allowedRoles: MANAGER_ROLES },
+  { label: "Resignations", path: "/resignations", icon: UserMinus, allowedRoles: MANAGER_ROLES },
+  { label: "Reimbursements", path: "/reimbursements", icon: ReceiptText, allowedRoles: MANAGER_ROLES },
+  { label: "Overtime Requests", path: "/overtime-requests", icon: Timer, allowedRoles: MANAGER_ROLES },
+  { label: "OT Eligibility & Rates", path: "/overtime-policies", icon: BadgeIndianRupee, allowedRoles: HR_ROLES },
+  { label: "Asset Releases", path: "/asset-releases", icon: PackageCheck, allowedRoles: HR_ROLES },
+  { label: "Salary", path: "/salary", icon: Landmark, allowedRoles: HR_ROLES },
+  { label: "Payroll", path: "/payroll", icon: Banknote, allowedRoles: HR_ROLES },
+  { label: "Organization Chart", path: "/organization-hierarchy", icon: Network, allowedRoles: ADMIN_ROLES },
   { label: "Users", path: "/users", icon: UserCog, allowedRoles: ADMIN_ROLES },
-  { label: "Branches", path: "/branches", icon: GitBranch, allowedRoles: HR_ROLES },
-  { label: "Departments", path: "/departments", icon: Building2, allowedRoles: HR_ROLES },
-  { label: "Designations", path: "/designations", icon: ClipboardList, allowedRoles: HR_ROLES },
+  { label: "Branches", path: "/branches", icon: Building2, allowedRoles: HR_ROLES },
+  { label: "Departments", path: "/departments", icon: Building, allowedRoles: HR_ROLES },
+  { label: "Designations", path: "/designations", icon: Badge, allowedRoles: HR_ROLES },
   { label: "Shift Management", path: "/shifts", icon: Clock3, allowedRoles: HR_ROLES },
-  { label: "Shift Assignment", path: "/shift-assignments", icon: CalendarDays, allowedRoles: MANAGER_ROLES },
+  { label: "Shift Assignment", path: "/shift-assignments", icon: CalendarClock, allowedRoles: MANAGER_ROLES },
   { label: "Week Off Assignment", path: "/week-off-assignments", icon: CalendarOff, allowedRoles: MANAGER_ROLES },
   { label: "Holiday Configuration", path: "/holidays", icon: CalendarHeart, allowedRoles: MANAGER_ROLES },
-  { label: "Leaves", path: "/leaves", icon: CalendarDays, allowedRoles: MANAGER_ROLES },
-  { label: "Missing Punch Requests", path: "/missing-punch-requests", icon: Fingerprint, allowedRoles: MANAGER_ROLES },
+  { label: "Leaves", path: "/leaves", icon: ClipboardPlus, allowedRoles: MANAGER_ROLES },
+  { label: "Missing Punch Requests", path: "/missing-punch-requests", icon: ScanLine, allowedRoles: MANAGER_ROLES },
   { label: "Attendance", path: "/attendance", icon: Fingerprint, allowedRoles: MANAGER_ROLES },
-  { label: "Employee Attendance", path: "/attendance/report", icon: ClipboardList, allowedRoles: MANAGER_ROLES },
-  { label: "Reports", path: "/reports", icon: FileText, allowedRoles: MANAGER_ROLES },
+  { label: "Employee Attendance", path: "/attendance/report", icon: ContactRound, allowedRoles: MANAGER_ROLES },
+  { label: "Reports", path: "/reports", icon: ChartNoAxesColumnIncreasing, allowedRoles: MANAGER_ROLES },
   { label: "Settings", path: "/settings", icon: Settings, allowedRoles: ADMIN_ROLES },
-  { label: "System Configuration", path: "/system-configuration", icon: Settings, allowedRoles: ADMIN_ROLES },
-  { label: "Audit Logs", path: "/audit-logs", icon: ShieldCheck, allowedRoles: ADMIN_ROLES },
+  { label: "System Configuration", path: "/system-configuration", icon: SlidersHorizontal, allowedRoles: ADMIN_ROLES },
+  { label: "Audit Logs", path: "/audit-logs", icon: ScrollText, allowedRoles: ADMIN_ROLES },
 ];
 
 const personnelItems: Array<{ label: string; path: string; icon: typeof LayoutDashboard }> = [
-  { label: "My Profile", path: "/employees", icon: UserRound },
-  { label: "Apply Leave", path: "/leaves", icon: CalendarDays },
+  { label: "My Profile", path: "/employees", icon: Contact },
+  { label: "Apply Leave", path: "/leaves", icon: CalendarPlus },
   { label: "Missing Punch", path: "/missing-punch-requests", icon: Fingerprint },
-  { label: "Transfer Request", path: "/employee-transfers", icon: GitBranch },
-  { label: "Resignation", path: "/resignations", icon: UserRound },
-  { label: "Reimbursements", path: "/reimbursements", icon: WalletCards },
-  { label: "My Shift", path: "/shift-assignments", icon: Clock3 },
-  { label: "My Holidays & Week Off", path: "/my-calendar-off", icon: CalendarOff },
+  { label: "Transfer Request", path: "/employee-transfers", icon: Route },
+  { label: "Resignation", path: "/resignations", icon: DoorOpen },
+  { label: "Reimbursements", path: "/reimbursements", icon: Receipt },
+  { label: "Overtime Requests", path: "/overtime-requests", icon: TimerReset },
+  { label: "My Shift", path: "/shift-assignments", icon: Clock },
+  { label: "My Holidays & Week Off", path: "/my-calendar-off", icon: Umbrella },
   { label: "My Payslips", path: "/my-payslips", icon: WalletCards },
 ];
 
@@ -73,8 +97,23 @@ interface SidebarProps {
 
 export function Sidebar({ open, onClose }: SidebarProps) {
   const { user, viewMode, logout } = useAuth();
-  const visibleItems =
-    viewMode === "personnel" ? personnelItems : navItems.filter((item) => hasRoleAccess(user, item.allowedRoles));
+  const [overtimeEligible, setOvertimeEligible] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    if (!user) {
+      setOvertimeEligible(false);
+      return () => { active = false; };
+    }
+    overtimePolicyApi.myEligibility()
+      .then((eligibility) => { if (active) setOvertimeEligible(eligibility.eligible); })
+      .catch(() => { if (active) setOvertimeEligible(false); });
+    return () => { active = false; };
+  }, [user?.id]);
+
+  const visibleItems = viewMode === "personnel"
+    ? personnelItems.filter((item) => item.path !== "/overtime-requests" || overtimeEligible)
+    : navItems.filter((item) => hasRoleAccess(user, item.allowedRoles));
 
   return (
     <>
