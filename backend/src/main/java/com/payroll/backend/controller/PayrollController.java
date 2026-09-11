@@ -41,8 +41,11 @@ public class PayrollController {
 
     @PostMapping("/runs")
     @PreAuthorize("hasAnyRole('ADMIN','HR')")
-    public PayrollRunResponse create(@Valid @RequestBody PayrollRunCreateRequest request) {
-        return payrollService.create(request);
+    public PayrollRunResponse create(
+            @Valid @RequestBody PayrollRunCreateRequest request,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return payrollService.create(request, principal);
     }
 
     @PostMapping("/runs/{id}/recalculate")

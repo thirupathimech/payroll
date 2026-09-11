@@ -114,6 +114,9 @@ public class ReimbursementService {
         if (request.status() != ReimbursementStatus.APPROVED && request.status() != ReimbursementStatus.REJECTED) {
             throw new BadRequestException("Reimbursement decision must be APPROVED or REJECTED");
         }
+        if (request.status() == ReimbursementStatus.APPROVED) {
+            ApprovalPolicy.assertCanApproveRequest(principal, reimbursement.getRequestedBy());
+        }
         reimbursement.setStatus(request.status());
         reimbursement.setReviewerComment(blankToNull(request.reviewerComment()));
         reimbursement.setReviewedBy(currentUser(principal));

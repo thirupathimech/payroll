@@ -103,6 +103,7 @@ public class ExitClearanceService {
     @Transactional
     public ExitClearanceResponse releaseAsset(Long resignationId, AssetReleaseCreateRequest request, UserPrincipal principal) {
         ResignationRequest resignation = editableApprovedResignation(resignationId);
+        ApprovalPolicy.assertCanApproveRequest(principal, resignation.getRequestedBy());
         AssetCatalogItem asset = assetCatalogItemRepository.findByOrgCodeAndId(currentOrgService.orgCode(), request.assetCatalogItemId())
                 .orElseThrow(() -> new ResourceNotFoundException("Asset catalog item not found"));
         if (!asset.isActive()) throw new BadRequestException("Inactive asset catalog items cannot be released");
@@ -130,6 +131,7 @@ public class ExitClearanceService {
         EmployeeAssetRelease release = employeeAssetReleaseRepository.findForUpdate(currentOrgService.orgCode(), releaseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Asset release not found"));
         assertNotSeparated(release.getResignation());
+        ApprovalPolicy.assertCanApproveRequest(principal, release.getResignation().getRequestedBy());
         validateReturnUpdate(release, request);
 
         release.setReturnStatus(request.returnStatus());
@@ -153,6 +155,7 @@ public class ExitClearanceService {
     @Transactional
     public ExitClearanceResponse completeAssetClearance(Long resignationId, UserPrincipal principal) {
         ResignationRequest resignation = editableApprovedResignation(resignationId);
+        ApprovalPolicy.assertCanApproveRequest(principal, resignation.getRequestedBy());
         List<EmployeeAssetRelease> releases = employeeAssetReleaseRepository.findForResignation(currentOrgService.orgCode(), resignationId);
         ClearanceNumbers numbers = clearanceNumbers(releases);
         if (!numbers.readyToComplete()) {
@@ -169,6 +172,7 @@ public class ExitClearanceService {
     @Transactional
     public ExitClearanceResponse updateSettlement(Long resignationId, FinalSettlementRequest request, UserPrincipal principal) {
         ResignationRequest resignation = editableApprovedResignation(resignationId);
+        ApprovalPolicy.assertCanApproveRequest(principal, resignation.getRequestedBy());
         List<EmployeeAssetRelease> releases = employeeAssetReleaseRepository.findForResignation(currentOrgService.orgCode(), resignationId);
         ClearanceNumbers numbers = clearanceNumbers(releases);
         boolean clearanceCompleted = resignation.getAssetClearanceCompletedAt() != null && numbers.readyToComplete();

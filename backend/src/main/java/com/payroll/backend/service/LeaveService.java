@@ -169,6 +169,9 @@ public class LeaveService {
         if (request.status() == LeaveStatus.PENDING) {
             throw new BadRequestException("Decision status must be APPROVED, REJECTED, or CANCELLED");
         }
+        if (request.status() == LeaveStatus.APPROVED) {
+            ApprovalPolicy.assertCanApproveEmployeeRequest(principal, leaveRequest.getEmployee());
+        }
 
         AppUser reviewer = currentUser();
         leaveRequest.setStatus(request.status());

@@ -103,6 +103,7 @@ public class ResignationService {
         LocalDate finalLastWorkingDate = request.approvedLastWorkingDate() == null
                 ? resignation.getProposedLastWorkingDate() : request.approvedLastWorkingDate();
         if (request.status() == ResignationStatus.APPROVED) {
+            ApprovalPolicy.assertCanApproveRequest(principal, resignation.getRequestedBy());
             if (finalLastWorkingDate.isBefore(resignation.getResignationDate())) {
                 throw new BadRequestException("Approved last working date cannot be before resignation date");
             }

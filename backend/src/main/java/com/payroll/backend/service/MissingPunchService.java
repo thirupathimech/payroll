@@ -135,6 +135,7 @@ public class MissingPunchService {
             throw new BadRequestException("Decision status must be APPROVED or REJECTED");
         }
         if (request.status() == MissingPunchStatus.APPROVED) {
+            ApprovalPolicy.assertCanApproveEmployeeRequest(principal, missingPunchRequest.getEmployee());
             applyRequestedPunch(missingPunchRequest);
         }
 

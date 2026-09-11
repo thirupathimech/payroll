@@ -33,7 +33,9 @@ import com.payroll.backend.repository.PayrollRunRepository;
 import com.payroll.backend.repository.SalaryComponentRepository;
 import com.payroll.backend.repository.WeekOffAssignmentRepository;
 import com.payroll.backend.repository.WeekOffExclusionRepository;
+import com.payroll.backend.security.UserPrincipal;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -156,7 +158,7 @@ class PayrollServiceTest {
         doNothing().when(salaryService).ensureDefaultComponents();
         doNothing().when(auditService).log(any(), any(), any(), any());
 
-        var response = service.create(new PayrollRunCreateRequest(2026, 1));
+        var response = service.create(new PayrollRunCreateRequest(2026, 1), hrPrincipal());
 
         assertThat(response.status()).isEqualTo(PayrollRunStatus.DRAFT);
         assertThat(response.periodStart()).isEqualTo(LocalDate.of(2026, 1, 1));
@@ -189,6 +191,11 @@ class PayrollServiceTest {
                 null, null, null, null, null, null, null, "INR", "Asia/Kolkata",
                 31, "MONTHLY", 1, "MONDAY", null, Instant.now()
         );
+    }
+
+    private static UserPrincipal hrPrincipal() {
+        return new UserPrincipal(7L, ORG, "hr", "hr@example.test", "HR User", "EMP-1", "",
+                List.of(new SimpleGrantedAuthority("ROLE_HR")), true);
     }
 
     private static AttendanceRecord attendance(Employee employee, LocalDate date) {

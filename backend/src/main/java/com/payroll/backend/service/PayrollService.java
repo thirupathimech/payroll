@@ -115,7 +115,7 @@ public class PayrollService {
     }
 
     @Transactional
-    public PayrollRunResponse create(PayrollRunCreateRequest request) {
+    public PayrollRunResponse create(PayrollRunCreateRequest request, UserPrincipal principal) {
         String orgCode = currentOrgService.orgCode();
         CompanySettingsResponse settings = companySettingsService.get();
         PayrollPeriod period = resolvePeriod(request, settings);
@@ -132,6 +132,7 @@ public class PayrollService {
         run.setPeriodEnd(period.end());
         run.setPayrollFrequency(period.frequency());
         run.setDisbursementDate(nextDisbursementDate(period.end(), settings.payrollDisbursementDay()));
+        run.setCreatedBy(principal.email());
         run.setStatus(PayrollRunStatus.DRAFT);
         PayrollRun saved = payrollRunRepository.save(run);
         calculate(saved);
@@ -159,6 +160,7 @@ public class PayrollService {
         if (run.getEmployeeCount() == null || run.getEmployeeCount() == 0) {
             throw new BadRequestException("Payroll with no employees cannot be approved");
         }
+        ApprovalPolicy.assertCanApprovePayroll(principal, run.getCreatedBy());
         run.setStatus(PayrollRunStatus.APPROVED);
         run.setApprovedBy(principal.email());
         run.setApprovedAt(Instant.now());

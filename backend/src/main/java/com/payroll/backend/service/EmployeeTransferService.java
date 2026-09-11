@@ -119,6 +119,9 @@ public class EmployeeTransferService {
         if (request.status() == EmployeeTransferStatus.APPROVED && !transfer.getToBranch().isActive()) {
             throw new BadRequestException("The destination branch is inactive");
         }
+        if (request.status() == EmployeeTransferStatus.APPROVED) {
+            ApprovalPolicy.assertCanApproveRequest(principal, transfer.getRequestedBy());
+        }
         transfer.setStatus(request.status());
         transfer.setReviewerComment(blankToNull(request.reviewerComment()));
         transfer.setReviewedBy(currentUser(principal));

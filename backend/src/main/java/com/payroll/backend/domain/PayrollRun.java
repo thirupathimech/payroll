@@ -53,6 +53,9 @@ public class PayrollRun extends AuditableEntity {
     @Column(name = "disbursement_date")
     private LocalDate disbursementDate;
 
+    @Column(name = "created_by", length = 160)
+    private String createdBy;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private PayrollRunStatus status = PayrollRunStatus.DRAFT;

@@ -473,6 +473,7 @@ CREATE TABLE payroll_runs (
     period_end DATE NOT NULL,
     payroll_frequency VARCHAR(20) NOT NULL DEFAULT 'MONTHLY',
     disbursement_date DATE,
+    created_by VARCHAR(160),
     status VARCHAR(20) NOT NULL,
     employee_count INT NOT NULL DEFAULT 0,
     gross_earnings DECIMAL(14, 2) NOT NULL DEFAULT 0,
